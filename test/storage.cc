@@ -1,11 +1,12 @@
-#include "gtest/gtest.h"
+#define CATCH_CONFIG_MAIN
+#include "catch.hpp"
 
-TEST(storage, True)
+TEST_CASE("Equal", "storage")
 {
-  EXPECT_EQ(1, 1);
+  REQUIRE(1 == 1);
 }
 
-TEST(storage, False)
+TEST_CASE("Not Equal", "storage")
 {
-  EXPECT_NE(1, 2);
+  REQUIRE(1 != 2);
 }

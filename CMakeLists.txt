@@ -4,8 +4,8 @@ project(CheeseBase CXX)
 
 add_subdirectory(src)
 
-option(WITH_TESTS "compile unit tests" OFF)
-if(WITH_TESTS)
+option(TESTS "compile unit tests" OFF)
+if(TESTS)
   enable_testing()
   add_subdirectory(test)
-endif(WITH_TESTS)
+endif(TESTS)
