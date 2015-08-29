@@ -15,10 +15,10 @@ Storage::~Storage()
 
 ReadPtr Storage::load(const uint64_t page_nr)
 {
-  return ReadPtr(nullptr, shared_lock<shared_timed_mutex>{});
+  return ReadPtr(new byte[kPageSize], shared_lock<shared_timed_mutex>{});
 }
 
-void Storage::store(const uint64_t offset, const void * const buf, const size_t size)
+void Storage::store(const uint64_t offset, const byte * const buf, const size_t size)
 {}
 
 } // namespace cheesebase

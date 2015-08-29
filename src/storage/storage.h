@@ -6,8 +6,9 @@
 
 #pragma once
 
+#include "../common/common.h"
+
 #include <string>
-#include <cstdint>
 #include <shared_mutex>
 
 namespace cheesebase {
@@ -15,7 +16,7 @@ namespace cheesebase {
 // Combination of pointer and lock.
 class ReadPtr {
 public:
-  ReadPtr(const void* const ptr,
+  ReadPtr(const byte* const ptr,
           std::shared_lock<std::shared_timed_mutex>&& lock)
     : ptr(ptr), lock(std::move(lock))
   {};
@@ -25,10 +26,9 @@ public:
   ReadPtr& operator=(const ReadPtr&) = delete;
   ReadPtr(ReadPtr&&) = default;
   ReadPtr& operator=(ReadPtr&&) = default;
-
-  const void* const ptr;
-
+  const byte* data() const { return ptr; };
 private:
+  const byte* const ptr;
   std::shared_lock<std::shared_timed_mutex> lock;
 };
 
@@ -56,7 +56,7 @@ public:
   // handle consistency of the database.
   // The write is guaranteed to be all-or-nothing. On return of the function
   // the journal has been written and persistence of the write is guaranteed.
-  void store(const uint64_t offset, const void* const buf, const size_t size);
+  void store(const uint64_t offset, const byte* const buf, const size_t size);
 
 private:
 
