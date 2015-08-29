@@ -30,7 +30,7 @@ SCENARIO("stored data can be read")
       AND_WHEN("same data is loaded")
       {
         array<byte, size> loaded;
-        int to_read{ size };
+        size_t to_read{ size };
         size_t pos{ 0 };
         while (to_read > 0) {
           auto page = store.load(pageNr(offset + pos));
@@ -38,9 +38,9 @@ SCENARIO("stored data can be read")
                                to_read,
                                kPageSize - pageOffset(offset + pos));
 
-          copy_n(loaded.data() + pos,
+          copy_n(page->begin() + pageOffset(offset + pos),
                  curr_read,
-                 page.data() + pageOffset(offset + pos));
+                 loaded.begin() + pos);
 
           pos += curr_read;
           to_read -= curr_read;

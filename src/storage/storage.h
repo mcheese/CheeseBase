@@ -10,25 +10,33 @@
 
 #include <string>
 #include <shared_mutex>
+#include <array>
 
 namespace cheesebase {
 
-// Combination of pointer and lock.
-class ReadPtr {
+using Page = std::array<byte, kPageSize>;
+
+// Read-locked reference of a Page.
+class PageReadRef {
 public:
-  ReadPtr(const byte* const ptr,
-          std::shared_lock<std::shared_timed_mutex>&& lock)
-    : ptr(ptr), lock(std::move(lock))
+  PageReadRef(const Page& page,
+              std::shared_lock<std::shared_timed_mutex>&& lock)
+    : page(page), lock(std::move(lock))
   {};
 
   // non-copyable, movable
-  ReadPtr(const ReadPtr&) = delete;
-  ReadPtr& operator=(const ReadPtr&) = delete;
-  ReadPtr(ReadPtr&&) = default;
-  ReadPtr& operator=(ReadPtr&&) = default;
-  const byte* data() const { return ptr; };
+  PageReadRef(const PageReadRef&) = delete;
+  PageReadRef& operator=(const PageReadRef&) = delete;
+  PageReadRef(PageReadRef&&) = default;
+  PageReadRef& operator=(PageReadRef&&) = default;
+
+  // access methods
+  const Page& operator*() const { return page; };
+  const Page* operator->() const { return &page; };
+  const Page& get() const { return page; };
+
 private:
-  const byte* const ptr;
+  const Page& page;
   std::shared_lock<std::shared_timed_mutex> lock;
 };
 
@@ -45,13 +53,13 @@ public:
   // Destroy the object. Flushes out writes and closes the DB file.
   ~Storage();
 
-  // Get a memory page. Reads the requested page in the cache (if needed) and
-  // returns a ReadPtr object holding a pointer and locked read mutex for the
-  // memory page. The pointed data is guaranteed to be valid for the lifetime
-  // of the ReadPtr object.
-  ReadPtr load(const uint64_t page_nr);
+  // Get a DB page. Reads the requested page in the cache (if needed) and
+  // returns a PageReadRef object holding a read-locked reference of the page.
+  // The referenced page is guaranteed to be valid and unchanged for the
+  // lifetime of the object.
+  PageReadRef load(const uint64_t page_nr);
 
-  // Write data to the DB. The write position can overlap memory pages. Old
+  // Write data to the DB. The write position can overlap multiple pages. Old
   // data is overwritten and the file extended if needed. The caller has to
   // handle consistency of the database.
   // The write is guaranteed to be all-or-nothing. On return of the function
