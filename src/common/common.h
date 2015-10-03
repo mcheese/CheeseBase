@@ -1,4 +1,3 @@
-// Copyright 2015 Max 'Cheese'.
 // Licensed under the Apache License 2.0 (see LICENSE file).
 
 // Common types, constants and functions.
@@ -11,17 +10,18 @@ using byte = unsigned char;
 
 namespace cheesebase {
 
-const size_t kPageSizePower{ 14 };
-const size_t kPageSize{ 1u << kPageSizePower };
+// size of a memory page
+const size_t k_page_size_power{ 14 };
+const size_t k_page_size{ 1u << k_page_size_power };
 
-constexpr uint64_t pageNr(const uint64_t addr)
+constexpr uint64_t page_nr(const uint64_t addr) noexcept
 {
-  return addr >> kPageSizePower;
+  return addr >> k_page_size_power;
 };
 
-constexpr size_t pageOffset(const uint64_t addr)
+constexpr uint64_t page_offset(const uint64_t addr) noexcept
 {
-  return static_cast<size_t>(addr) & (kPageSize - 1);
+  return addr & static_cast<uint64_t>(k_page_size - 1);
 };
 
 }

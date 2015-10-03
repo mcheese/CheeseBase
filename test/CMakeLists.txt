@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.2)
 
+include_directories(../src/)
+
 # tests
 add_executable(test-storage storage.cc)
 target_link_libraries(test-storage cheesebase)

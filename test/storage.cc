@@ -1,7 +1,7 @@
 #define CATCH_CONFIG_MAIN
 #include "catch.hpp"
-#include "../src/storage/storage.h"
-#include "../src/common/common.h"
+#include "storage/storage.h"
+#include "common/common.h"
 
 #include <array>
 #include <algorithm>
@@ -33,12 +33,12 @@ SCENARIO("stored data can be read")
         size_t to_read{ size };
         size_t pos{ 0 };
         while (to_read > 0) {
-          auto page = store.load(pageNr(offset + pos));
+          auto page = store.load(page_nr(offset + pos));
           auto curr_read = std::min<size_t>(
                                to_read,
-                               kPageSize - pageOffset(offset + pos));
+                               k_page_size - page_offset(offset + pos));
 
-          copy_n(page->begin() + pageOffset(offset + pos),
+          copy_n(page->begin() + page_offset(offset + pos),
                  curr_read,
                  loaded.begin() + pos);
 

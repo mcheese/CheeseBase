@@ -1,4 +1,3 @@
-// Copyright 2015 Max 'Cheese'.
 // Licensed under the Apache License 2.0 (see LICENSE file).
 
 // Manage storage of the database. Hold a DB file and provide load/store
@@ -6,7 +5,7 @@
 
 #pragma once
 
-#include "../common/common.h"
+#include "common/common.h"
 
 #include <string>
 #include <shared_mutex>
@@ -14,50 +13,51 @@
 
 namespace cheesebase {
 
-using Page = std::array<byte, kPageSize>;
+using Page = std::array<byte, k_page_size>;
 
-// Read-locked reference of a Page.
-class PageReadRef {
+// Read-locked reference of a page.
+class PageRef {
 public:
-  PageReadRef(const Page& page,
-              std::shared_lock<std::shared_timed_mutex>&& lock)
-    : page(page), lock(std::move(lock))
+  PageRef(const Page& page,
+          std::shared_lock<std::shared_timed_mutex>&& lock)
+    : m_page(page)
+    , m_lock(std::move(lock))
   {};
 
-  // non-copyable, movable
-  PageReadRef(const PageReadRef&) = delete;
-  PageReadRef& operator=(const PageReadRef&) = delete;
-  PageReadRef(PageReadRef&&) = default;
-  PageReadRef& operator=(PageReadRef&&) = default;
+  // non-copyable and movable
+  PageRef(const PageRef&) = delete;
+  PageRef& operator=(const PageRef&) = delete;
+  PageRef(PageRef&&) = default;
+  PageRef& operator=(PageRef&&) = default;
 
-  // access methods
-  const Page& operator*() const { return page; };
-  const Page* operator->() const { return &page; };
-  const Page& get() const { return page; };
+  const Page& operator*() const { return m_page; };
+  const Page* operator->() const { return &m_page; };
+  const Page& get() const { return m_page; };
 
 private:
-  const Page& page;
-  std::shared_lock<std::shared_timed_mutex> lock;
+  const Page& m_page;
+  std::shared_lock<std::shared_timed_mutex> m_lock;
 };
 
 // Disk representation of a database instance. Opens DB file and journal on
 // construction. Provides load/store access backed by a cache.
 class Storage {
 public:
+  // Open existing or create new DB file.
   enum class Mode { open, create };
 
   // Create a Storage associated with a DB and journal file. Opens an existing
   // database or creates a new one bases on "mode" argument.
-  Storage(const std::string& filename, Mode mode);
+  Storage(const std::string& filename, const Mode mode);
 
-  // Destroy the object. Flushes out writes and closes the DB file.
+  // Flushes open writes and closes the DB file.
   ~Storage();
 
   // Get a DB page. Reads the requested page in the cache (if needed) and
   // returns a PageReadRef object holding a read-locked reference of the page.
   // The referenced page is guaranteed to be valid and unchanged for the
   // lifetime of the object.
-  PageReadRef load(const uint64_t page_nr);
+  PageRef load(const uint64_t page_nr);
 
   // Write data to the DB. The write position can overlap multiple pages. Old
   // data is overwritten and the file extended if needed. The caller has to
