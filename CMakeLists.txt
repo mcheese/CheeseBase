@@ -5,6 +5,7 @@ project(CheeseBase CXX)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+include_directories(external/GSL/include)
 add_subdirectory(src)
 
 option(TESTS "compile unit tests" OFF)
