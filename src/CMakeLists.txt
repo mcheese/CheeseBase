@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.2)
 
 set(COMMON
   common/common.h
+  common/log.h
+  common/log.cc
 )
 
 set(STORAGE
