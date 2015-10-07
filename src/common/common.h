@@ -6,6 +6,15 @@
 
 #include <cstdint>
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable: 4245)
+#include <gsl.h>
+#pragma warning(pop)
+#else
+#include <gsl.h>
+#endif
+
 using byte = unsigned char;
 
 namespace cheesebase {

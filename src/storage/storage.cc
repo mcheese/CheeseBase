@@ -6,7 +6,7 @@ using namespace std;
 
 namespace cheesebase {
 
-Storage::Storage(const string& filename, const Mode mode)
+Storage::Storage(const string& filename, const OpenMode mode)
 {
   filename; mode;
 }

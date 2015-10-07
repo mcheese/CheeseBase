@@ -43,12 +43,16 @@ private:
 // construction. Provides load/store access backed by a cache.
 class Storage {
 public:
-  // Open existing or create new DB file.
-  enum class Mode { open, create };
+  enum class OpenMode {
+    create_new,    // Creates new DB if it does not exist.
+    create_always, // Creates new DB, always. Overwrite existing DB.
+    open_existing, // Opens DB if it exists.
+    open_always    // Opens DB, always. Creates new DB if it does not exist.
+  };
 
   // Create a Storage associated with a DB and journal file. Opens an existing
   // database or creates a new one bases on "mode" argument.
-  Storage(const std::string& filename, const Mode mode);
+  Storage(const std::string& filename, const OpenMode mode);
 
   // Flushes open writes and closes the DB file.
   ~Storage();

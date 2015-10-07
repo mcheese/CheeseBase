@@ -13,7 +13,7 @@ SCENARIO("stored data can be read")
 {
   GIVEN("A Storage and data")
   {
-    Storage store{ "test", Storage::Mode::create };
+    Storage store{ "test", Storage::OpenMode::create_always };
     const size_t size{ 500 };
     const size_t offset{ 50'000 };
     vector<byte> data;

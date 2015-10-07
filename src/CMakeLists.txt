@@ -9,6 +9,8 @@ set(COMMON
 set(STORAGE
   storage/storage.h
   storage/storage.cc
+  storage/fileio.h
+  storage/fileio.cc
 )
 
 source_group( src\\common  FILES ${COMMON}  )
