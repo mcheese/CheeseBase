@@ -11,9 +11,12 @@ namespace cheesebase {
 
 using namespace std;
 
-const auto log_file{ "cheesebase.log" };
+static const auto log_file{ "cheesebase.log" };
 
 bool Log::bad{ false };
+Log::LogLevel Log::notify_level{ Log::LogLevel::info };
+Log::LogLevel Log::write_level{ Log::LogLevel::warn };
+Log::LogLevel Log::log_level{ std::max(notify_level, write_level) };
 
 std::ofstream Log::open_log_file()
 {
