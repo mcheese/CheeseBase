@@ -8,7 +8,9 @@
 #include "storage.h"
 
 #ifdef _WIN32
+#define NOMINMAX // min() and max() macros leak otherwise...
 #include <Windows.h>
+#undef NOMINMAX
 using AsyncStruct = OVERLAPPED;
 using Handle = HANDLE;
 #else
@@ -19,12 +21,12 @@ namespace cheesebase {
 
 class FileIO {
 public:
-  struct file_error   : public std::exception {};
-  struct bad_argument : public std::exception {};
+  struct file_error : public std::exception { const char* what() const noexcept { return "file_error"; } };
+  struct bad_argument : public std::exception { const char* what() const noexcept { return "bad_argument"; } };
 
   class AsyncReq {
   public:
-
+    AsyncReq() = default;
     AsyncReq(std::unique_ptr<AsyncStruct>&& op, Handle handle,
              const uint64_t expected);
     ~AsyncReq();
@@ -32,15 +34,14 @@ public:
     // Non-copyable, movable.
     AsyncReq(const AsyncReq&) = delete;
     AsyncReq& operator=(const AsyncReq&) = delete;
-    AsyncReq(AsyncReq&&) = default;
-    AsyncReq& operator=(AsyncReq&&) = default;
+    AsyncReq(AsyncReq&& r) = default;
+    AsyncReq& operator=(AsyncReq&& r) = default;
 
     void wait();
 
   private:
-    bool m_done{ false };
-    const Handle m_handle;
-    const uint64_t m_expected;
+    Handle m_handle;
+    uint64_t m_expected;
     std::unique_ptr<AsyncStruct> m_async_struct;
   };
 
