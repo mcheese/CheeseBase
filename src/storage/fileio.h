@@ -21,22 +21,21 @@ namespace cheesebase {
 
 class FileIO {
 public:
-  struct file_error : public std::exception { const char* what() const noexcept { return "file_error"; } };
-  struct bad_argument : public std::exception { const char* what() const noexcept { return "bad_argument"; } };
+  DEF_EXCEPTION(file_error);
+  DEF_EXCEPTION(bad_argument);
 
+  // Holds an asynchronous request and can wait for its completion.
   class AsyncReq {
   public:
     AsyncReq() = default;
-    AsyncReq(std::unique_ptr<AsyncStruct>&& op, Handle handle,
+    explicit AsyncReq(std::unique_ptr<AsyncStruct>&& op, Handle handle,
              const uint64_t expected);
+    // Calls wait() if not already called.
     ~AsyncReq();
 
-    // Non-copyable, movable.
-    AsyncReq(const AsyncReq&) = delete;
-    AsyncReq& operator=(const AsyncReq&) = delete;
-    AsyncReq(AsyncReq&& r) = default;
-    AsyncReq& operator=(AsyncReq&& r) = default;
+    MOVE_ONLY(AsyncReq)
 
+    // Waits for completion of asynchronous request.
     void wait();
 
   private:

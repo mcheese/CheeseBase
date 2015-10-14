@@ -15,6 +15,17 @@
 #include <gsl.h>
 #endif
 
+#define MOVE_ONLY(T) \
+T(const T&) = delete; \
+T& operator=(const T&) = delete; \
+T(T&&) = default; \
+T& operator=(T&&) = default;
+
+#define DEF_EXCEPTION(NAME) \
+struct NAME : public std::exception { \
+  const char* what() const noexcept { return #NAME; } \
+};                                 
+
 using byte = unsigned char;
 
 namespace cheesebase {
