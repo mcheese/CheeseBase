@@ -34,7 +34,8 @@ void fill_overlapped(OVERLAPPED* o, const uint64_t offset)
 void write_file(HANDLE handle, const gsl::array_view<byte> buffer,
                 OVERLAPPED* o)
 {
-  if (!::WriteFile(handle, buffer.data(), gsl::narrow<DWORD>(buffer.bytes()), NULL, o)) {
+  if (!::WriteFile(handle, buffer.data(), gsl::narrow<DWORD>(buffer.bytes()),
+                   NULL, o)) {
     auto err = ::GetLastError();
     if (err != ERROR_IO_PENDING) {
       auto offs = static_cast<uint64_t>(o->Offset)
@@ -49,7 +50,8 @@ void write_file(HANDLE handle, const gsl::array_view<byte> buffer,
 
 void read_file(HANDLE handle, gsl::array_view<byte> buffer, OVERLAPPED* o)
 {
-  if (!::ReadFile(handle, buffer.data(), gsl::narrow<DWORD>(buffer.bytes()), NULL, o)) {
+  if (!::ReadFile(handle, buffer.data(), gsl::narrow<DWORD>(buffer.bytes()),
+                  NULL, o)) {
     auto err = ::GetLastError();
     if (err != ERROR_IO_PENDING) {
       auto offs = static_cast<uint64_t>(o->Offset)
