@@ -184,7 +184,7 @@ FileIO::AsyncReq FileIO::read_async(const uint64_t offset,
 }
 
 FileIO::AsyncReq FileIO::write_async(const uint64_t offset,
-                                     const gsl::array_view<byte> buffer) 
+                                     const gsl::array_view<byte> buffer)
 {
   auto o = std::make_unique<OVERLAPPED>();
   fill_overlapped(o.get(), offset);
