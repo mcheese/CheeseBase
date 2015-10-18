@@ -17,12 +17,13 @@ Storage::~Storage()
 PageRef Storage::load(const uint64_t page_nr)
 {
   page_nr;
-  return PageRef(*(new Page()), shared_lock<shared_timed_mutex>{});
+  return PageRef{ PageView{ new byte[k_page_size], k_page_size },
+                  shared_lock<shared_timed_mutex>{} };
 }
 
-void Storage::store(const uint64_t offset, const byte* const buf, const size_t size)
+void Storage::store(const uint64_t offset, gsl::array_view<const byte> data)
 {
-  offset; buf; size;
+  offset; data;
 }
 
 } // namespace cheesebase

@@ -13,29 +13,25 @@
 
 namespace cheesebase {
 
-using Page = std::array<byte, k_page_size>;
+using PageView = gsl::array_view<byte, k_page_size>;
 
 // Read-locked reference of a page.
 class PageRef {
 public:
-  PageRef(const Page& page,
+  PageRef(PageView page,
           std::shared_lock<std::shared_timed_mutex>&& lock)
     : m_page(page)
     , m_lock(std::move(lock))
   {};
 
-  // non-copyable and movable
-  PageRef(const PageRef&) = delete;
-  PageRef& operator=(const PageRef&) = delete;
-  PageRef(PageRef&&) = default;
-  PageRef& operator=(PageRef&&) = default;
+  MOVE_ONLY(PageRef);
 
-  const Page& operator*() const { return m_page; };
-  const Page* operator->() const { return &m_page; };
-  const Page& get() const { return m_page; };
+  const PageView& operator*() const { return m_page; };
+  const PageView* operator->() const { return &m_page; };
+  const PageView& get() const { return m_page; };
 
 private:
-  const Page& m_page;
+  const PageView m_page;
   std::shared_lock<std::shared_timed_mutex> m_lock;
 };
 
@@ -68,7 +64,7 @@ public:
   // handle consistency of the database.
   // The write is guaranteed to be all-or-nothing. On return of the function
   // the journal has been written and persistence of the write is guaranteed.
-  void store(const uint64_t offset, const byte* const buf, const size_t size);
+  void store(const uint64_t offset, gsl::array_view<const byte> data);
 
 private:
 
