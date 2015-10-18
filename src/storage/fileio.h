@@ -29,7 +29,7 @@ public:
   public:
     AsyncReq() = default;
     explicit AsyncReq(std::unique_ptr<AsyncStruct>&& op, Handle handle,
-             const uint64_t expected);
+                      const size_t expected);
     // Calls wait() if not already called.
     ~AsyncReq();
 
@@ -40,7 +40,7 @@ public:
 
   private:
     Handle m_handle;
-    uint64_t m_expected;
+    size_t m_expected;
     std::unique_ptr<AsyncStruct> m_async_struct;
   };
 
@@ -52,7 +52,7 @@ public:
   void read(const uint64_t offset, gsl::array_view<byte> buffer) const;
   
   // Write content of buffer into the file starting at offset.
-  void write(const uint64_t offset, const gsl::array_view<byte> buffer);
+  void write(const uint64_t offset, gsl::array_view<const byte> buffer);
 
   // Resize the file to size
   void resize(const uint64_t size);
@@ -66,7 +66,7 @@ public:
 
   // Queue write request. Use returned object to wait() for completion.
   AsyncReq write_async(const uint64_t offset,
-                       const gsl::array_view<byte> buffer);
+                       const gsl::array_view<const byte> buffer);
 
 private:
   uint64_t m_size;
