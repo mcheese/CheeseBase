@@ -17,4 +17,5 @@ source_group( src\\common  FILES ${COMMON}  )
 source_group( src\\storage FILES ${STORAGE} )
 
 add_library(cheesebase ${COMMON} ${STORAGE})
-include_directories(./)
+target_link_libraries(cheesebase ${Boost_LIBRARIES})
+
