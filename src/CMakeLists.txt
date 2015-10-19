@@ -11,6 +11,8 @@ set(STORAGE
   storage/storage.cc
   storage/fileio.h
   storage/fileio.cc
+  storage/cache.h
+  storage/cache.cc
 )
 
 source_group( src\\common  FILES ${COMMON}  )

@@ -24,7 +24,7 @@ SCENARIO("Writing and reading from files")
 {
   GIVEN("A FileIO object with an new file")
   {
-    FileIO fileio{ "temp", Storage::OpenMode::create_always };
+    FileIO fileio{ "temp", OpenMode::create_always };
     REQUIRE(fileio.size() == 0);
     
     WHEN("file is resized")
@@ -60,7 +60,7 @@ SCENARIO("Writing and reading from files")
       const size_t offset{ 2048 };
       const size_t n{ 4 };
       auto data = get_random_vector(size * n);
-      FileIO::AsyncReq reqs[n];
+      AsyncReq reqs[n];
       for (size_t i = 0; i < n; ++i) {
         reqs[i] = fileio.write_async(offset + size*i, { data.data() + size*i, size });
       }

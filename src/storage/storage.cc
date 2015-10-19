@@ -2,23 +2,20 @@
 
 #include "storage.h"
 
-using namespace std;
+#include "fileio.h"
 
 namespace cheesebase {
 
-Storage::Storage(const string& filename, const OpenMode mode)
-{
-  filename; mode;
-}
+Storage::Storage(const std::string& filename, const OpenMode mode)
+  : m_cache(filename, mode)
+{}
 
 Storage::~Storage()
 {}
 
-PageRef Storage::load(const uint64_t page_nr)
+ReadRef Storage::load(const uint64_t page_nr)
 {
-  page_nr;
-  return PageRef{ PageView{ new byte[k_page_size], k_page_size },
-                  shared_lock<shared_timed_mutex>{} };
+  return m_cache.read(page_nr);
 }
 
 void Storage::store(const uint64_t offset, gsl::array_view<const byte> data)

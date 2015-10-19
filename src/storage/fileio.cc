@@ -5,14 +5,14 @@
 
 namespace cheesebase {
 
-FileIO::AsyncReq::AsyncReq(std::unique_ptr<AsyncStruct>&& op,
+AsyncReq::AsyncReq(std::unique_ptr<AsyncStruct>&& op,
                            Handle handle, const size_t expected)
   : m_async_struct(move(op))
   , m_handle(handle)
   , m_expected(expected)
 {}
 
-FileIO::AsyncReq::~AsyncReq()
+AsyncReq::~AsyncReq()
 {
   if (m_async_struct) wait();
 }
@@ -94,14 +94,14 @@ uint64_t get_size(HANDLE handle)
 
 } // anonymous namespace
 
-FileIO::FileIO(const std::string& filename, Storage::OpenMode mode)
+FileIO::FileIO(const std::string& filename, OpenMode mode)
 {
   DWORD open_arg;
   switch (mode) {
-  case Storage::OpenMode::create_new:    open_arg = CREATE_NEW;    break;
-  case Storage::OpenMode::create_always: open_arg = CREATE_ALWAYS; break;
-  case Storage::OpenMode::open_existing: open_arg = OPEN_EXISTING; break;
-  case Storage::OpenMode::open_always:   open_arg = OPEN_ALWAYS;   break;
+  case OpenMode::create_new:    open_arg = CREATE_NEW;    break;
+  case OpenMode::create_always: open_arg = CREATE_ALWAYS; break;
+  case OpenMode::open_existing: open_arg = OPEN_EXISTING; break;
+  case OpenMode::open_always:   open_arg = OPEN_ALWAYS;   break;
   default: throw bad_argument{};
   }
 
@@ -127,7 +127,7 @@ FileIO::~FileIO()
   ::CloseHandle(m_file_handle);
 }
 
-void FileIO::AsyncReq::wait()
+void AsyncReq::wait()
 {
   if (m_async_struct) {
     wait_overlapped(m_handle, m_async_struct.get(), m_expected);
@@ -172,7 +172,7 @@ void FileIO::resize(const uint64_t size)
   }
 }
 
-FileIO::AsyncReq FileIO::read_async(const uint64_t offset,
+AsyncReq FileIO::read_async(const uint64_t offset,
                                     gsl::array_view<byte> buffer) const
 {
   auto o = std::make_unique<OVERLAPPED>();
@@ -181,7 +181,7 @@ FileIO::AsyncReq FileIO::read_async(const uint64_t offset,
   return AsyncReq{ std::move(o), m_file_handle, buffer.bytes() };
 }
 
-FileIO::AsyncReq FileIO::write_async(const uint64_t offset,
+AsyncReq FileIO::write_async(const uint64_t offset,
                                      gsl::array_view<const byte> buffer)
 {
   auto o = std::make_unique<OVERLAPPED>();

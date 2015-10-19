@@ -6,46 +6,16 @@
 #pragma once
 
 #include "common/common.h"
+#include "cache.h"
 
 #include <string>
-#include <shared_mutex>
-#include <array>
 
 namespace cheesebase {
-
-using PageView = gsl::array_view<byte, k_page_size>;
-
-// Read-locked reference of a page.
-class PageRef {
-public:
-  PageRef(PageView page,
-          std::shared_lock<std::shared_timed_mutex>&& lock)
-    : m_page(page)
-    , m_lock(std::move(lock))
-  {};
-
-  MOVE_ONLY(PageRef);
-
-  const PageView& operator*() const { return m_page; };
-  const PageView* operator->() const { return &m_page; };
-  const PageView& get() const { return m_page; };
-
-private:
-  const PageView m_page;
-  std::shared_lock<std::shared_timed_mutex> m_lock;
-};
 
 // Disk representation of a database instance. Opens DB file and journal on
 // construction. Provides load/store access backed by a cache.
 class Storage {
 public:
-  enum class OpenMode {
-    create_new,    // Creates new DB if it does not exist.
-    create_always, // Creates new DB, always. Overwrite existing DB.
-    open_existing, // Opens DB if it exists.
-    open_always    // Opens DB, always. Creates new DB if it does not exist.
-  };
-
   // Create a Storage associated with a DB and journal file. Opens an existing
   // database or creates a new one bases on "mode" argument.
   Storage(const std::string& filename, const OpenMode mode);
@@ -57,7 +27,7 @@ public:
   // returns a PageReadRef object holding a read-locked reference of the page.
   // The referenced page is guaranteed to be valid and unchanged for the
   // lifetime of the object.
-  PageRef load(const uint64_t page_nr);
+  ReadRef load(const uint64_t page_nr);
 
   // Write data to the DB. The write position can overlap multiple pages. Old
   // data is overwritten and the file extended if needed. The caller has to
@@ -67,7 +37,7 @@ public:
   void store(const uint64_t offset, gsl::array_view<const byte> data);
 
 private:
-
+  Cache m_cache;
 };
 
 } // namespace cheesebase
