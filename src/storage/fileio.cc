@@ -34,7 +34,8 @@ void fill_overlapped(OVERLAPPED* o, const uint64_t offset)
 void write_file(HANDLE handle, gsl::array_view<const byte> buffer,
                 OVERLAPPED* o)
 {
-  if (!::WriteFile(handle, buffer.data(), gsl::narrow<DWORD>(buffer.bytes()), NULL, o)) {
+  if (!::WriteFile(handle, buffer.data(), gsl::narrow<DWORD>(buffer.bytes()),
+                   NULL, o)) {
     auto err = ::GetLastError();
     if (err != ERROR_IO_PENDING) {
       auto offs = static_cast<uint64_t>(o->Offset)
@@ -49,7 +50,8 @@ void write_file(HANDLE handle, gsl::array_view<const byte> buffer,
 
 void read_file(HANDLE handle, gsl::array_view<byte> buffer, OVERLAPPED* o)
 {
-  if (!::ReadFile(handle, buffer.data(), gsl::narrow<DWORD>(buffer.bytes()), NULL, o)) {
+  if (!::ReadFile(handle, buffer.data(), gsl::narrow<DWORD>(buffer.bytes()),
+                  NULL, o)) {
     auto err = ::GetLastError();
     if (err != ERROR_IO_PENDING) {
       auto offs = static_cast<uint64_t>(o->Offset)
@@ -173,7 +175,7 @@ void FileIO::resize(const uint64_t size)
 }
 
 AsyncReq FileIO::read_async(const uint64_t offset,
-                                    gsl::array_view<byte> buffer) const
+                            gsl::array_view<byte> buffer) const
 {
   auto o = std::make_unique<OVERLAPPED>();
   fill_overlapped(o.get(), offset);
@@ -182,7 +184,7 @@ AsyncReq FileIO::read_async(const uint64_t offset,
 }
 
 AsyncReq FileIO::write_async(const uint64_t offset,
-                                     gsl::array_view<const byte> buffer)
+                             gsl::array_view<const byte> buffer)
 {
   auto o = std::make_unique<OVERLAPPED>();
   fill_overlapped(o.get(), offset);
