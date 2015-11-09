@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.1)
 add_executable(test-storage 
   main.cc
   fileio.cc
+  inc_prio_queue.cc
 )
 
 target_link_libraries(test-storage cheesebase)

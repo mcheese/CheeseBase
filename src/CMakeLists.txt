@@ -2,17 +2,14 @@ cmake_minimum_required(VERSION 3.1)
 
 set(COMMON
   common/common.h
-  common/log.h
-  common/log.cc
+  common/log.h common/log.cc
 )
 
 set(STORAGE
-  storage/storage.h
-  storage/storage.cc
-  storage/fileio.h
-  storage/fileio.cc
-  storage/cache.h
-  storage/cache.cc
+  storage/storage.h storage/storage.cc
+  storage/fileio.h storage/fileio.cc
+  storage/cache.h storage/cache.cc
+  storage/inc_prio_queue.h
 )
 
 source_group( src\\common  FILES ${COMMON}  )
