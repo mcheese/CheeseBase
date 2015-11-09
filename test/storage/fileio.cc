@@ -15,7 +15,7 @@ vector<byte> get_random_vector(const size_t size)
   mt19937 mt{ rd() };
 
   uniform_int_distribution<short> dist(numeric_limits<byte>::min(), numeric_limits<byte>::max());
-  for (int i = 0; i < size; ++i)
+  for (size_t i = 0; i < size; ++i)
     v.push_back(static_cast<byte>(dist(mt)));
   return v;
 }
