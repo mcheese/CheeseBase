@@ -7,14 +7,14 @@
 
 namespace cheesebase { 
 
-Cache::Cache(const std::string& fn, const OpenMode m)
+Cache::Cache(const std::string& fn, OpenMode m)
   : m_file(fn, m)
 {}
 
 Cache::~Cache()
 {}
 
-ReadRef Cache::read(const uint64_t page_nr)
+ReadRef Cache::read(uint64_t page_nr)
 {
   boost::shared_lock<RwMutex> cache_s_lck{ m_pages_mtx };
   auto p = m_pages.find(page_nr);
@@ -46,7 +46,7 @@ ReadRef Cache::read(const uint64_t page_nr)
   }
 }
 
-WriteRef Cache::write(const uint64_t page_nr)
+WriteRef Cache::write(uint64_t page_nr)
 {
   return WriteRef{ *m_pages[page_nr].data,
                    boost::unique_lock<RwMutex>{*m_pages[page_nr].mtx} };

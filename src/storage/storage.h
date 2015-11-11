@@ -18,7 +18,7 @@ class Storage {
 public:
   // Create a Storage associated with a DB and journal file. Opens an existing
   // database or creates a new one bases on "mode" argument.
-  Storage(const std::string& filename, const OpenMode mode);
+  Storage(const std::string& filename, OpenMode mode);
 
   // Flushes open writes and closes the DB file.
   ~Storage();
@@ -27,14 +27,14 @@ public:
   // returns a PageReadRef object holding a read-locked reference of the page.
   // The referenced page is guaranteed to be valid and unchanged for the
   // lifetime of the object.
-  ReadRef load(const uint64_t page_nr);
+  ReadRef load(uint64_t page_nr);
 
   // Write data to the DB. The write position can overlap multiple pages. Old
   // data is overwritten and the file extended if needed. The caller has to
   // handle consistency of the database.
   // The write is guaranteed to be all-or-nothing. On return of the function
   // the journal has been written and persistence of the write is guaranteed.
-  void store(const uint64_t offset, gsl::array_view<const byte> data);
+  void store(uint64_t offset, gsl::span<const byte> data);
 
 private:
   Cache m_cache;

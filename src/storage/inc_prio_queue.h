@@ -14,9 +14,9 @@ namespace cheesebase {
 template<typename Index, class Value>
 class IncPrioQueue {
 public:
-  IncPrioQueue(size_t reserve = 10)
+  IncPrioQueue(size_t reserve = 16)
   {
-    m_data.reserve(10);
+    m_data.reserve(reserve);
   }
 
   // Insert element into queue with regards to priority.
@@ -109,7 +109,7 @@ private:
     Expects(pos < m_data.size());
 
     const auto size = m_data.size();
-    while (true) {
+    for (;;) {
       auto c = childs(pos);
       size_t child;
       if (c.second >= size) {

@@ -1,12 +1,14 @@
 #include "catch.hpp"
 
 #include "storage/fileio.h"
+#include <gsl.h>
 #include <random>
+
 
 using namespace std;
 using namespace cheesebase;
 
-void put_random_bytes(gsl::array_view<byte> memory)
+void put_random_bytes(gsl::span<byte> memory)
 {
   random_device rd;
   mt19937 mt{ rd() };
@@ -17,7 +19,7 @@ void put_random_bytes(gsl::array_view<byte> memory)
 }
 
 const size_t page_size = 1024 * 4;
-gsl::array_view<byte> page_align(gsl::array_view<byte> in)
+gsl::span<byte> page_align(gsl::span<byte> in)
 {
   Expects(in.bytes() >= page_size * 2 - 1);
   auto inc_ptr = (uintptr_t)in.data() + page_size - 1;
@@ -25,7 +27,6 @@ gsl::array_view<byte> page_align(gsl::array_view<byte> in)
   auto new_size = in.bytes() - offset;
   return in.sub(offset, new_size - (new_size % page_size));
 }
-
 
 SCENARIO("Writing and reading from files")
 {

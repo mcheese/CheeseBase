@@ -5,8 +5,8 @@
 
 namespace cheesebase {
 
-AsyncReq::AsyncReq(std::unique_ptr<AsyncStruct>&& op,
-                           Handle handle, const size_t expected)
+AsyncReq::AsyncReq(std::unique_ptr<AsyncStruct> op, Handle handle,
+                   size_t expected)
   : m_async_struct(move(op))
   , m_handle(handle)
   , m_expected(expected)
@@ -31,7 +31,7 @@ void fill_overlapped(OVERLAPPED* o, const uint64_t offset)
   o->hEvent = ::CreateEvent(NULL, TRUE, FALSE, NULL);
 }
 
-void write_file(HANDLE handle, gsl::array_view<const byte> buffer,
+void write_file(HANDLE handle, gsl::span<const byte> buffer,
                 OVERLAPPED* o)
 {
   if (!::WriteFile(handle, buffer.data(), gsl::narrow<DWORD>(buffer.bytes()),
@@ -48,7 +48,7 @@ void write_file(HANDLE handle, gsl::array_view<const byte> buffer,
   }
 }
 
-void read_file(HANDLE handle, gsl::array_view<byte> buffer, OVERLAPPED* o)
+void read_file(HANDLE handle, gsl::span<byte> buffer, OVERLAPPED* o)
 {
   if (!::ReadFile(handle, buffer.data(), gsl::narrow<DWORD>(buffer.bytes()),
                   NULL, o)) {
@@ -97,8 +97,8 @@ uint64_t get_size(HANDLE handle)
 } // anonymous namespace
 
 FileIO::FileIO(const std::string& filename,
-               const OpenMode mode,
-               const bool direct)
+               OpenMode mode,
+               bool direct)
 {
   DWORD open_arg;
   switch (mode) {
@@ -142,7 +142,7 @@ void AsyncReq::wait()
   }
 }
 
-void FileIO::read(const uint64_t offset, gsl::array_view<byte> buffer) const
+void FileIO::read(uint64_t offset, gsl::span<byte> buffer) const
 {
   OVERLAPPED o;
   fill_overlapped(&o, offset);
@@ -150,7 +150,7 @@ void FileIO::read(const uint64_t offset, gsl::array_view<byte> buffer) const
   wait_overlapped(m_file_handle, &o, buffer.bytes());
 }
 
-void FileIO::write(const uint64_t offset, gsl::array_view<const byte> buffer)
+void FileIO::write(uint64_t offset, gsl::span<const byte> buffer)
 {
   OVERLAPPED o;
   fill_overlapped(&o, offset);
@@ -158,7 +158,7 @@ void FileIO::write(const uint64_t offset, gsl::array_view<const byte> buffer)
   wait_overlapped(m_file_handle, &o, buffer.bytes());
 }
 
-void FileIO::resize(const uint64_t size)
+void FileIO::resize(uint64_t size)
 {
   LARGE_INTEGER li;
   li.QuadPart = size;
@@ -178,22 +178,22 @@ void FileIO::resize(const uint64_t size)
   }
 }
 
-AsyncReq FileIO::read_async(const uint64_t offset,
-                            gsl::array_view<byte> buffer) const
+AsyncReq FileIO::read_async(uint64_t offset, gsl::span<byte> buffer) const
 {
   auto o = std::make_unique<OVERLAPPED>();
   fill_overlapped(o.get(), offset);
   read_file(m_file_handle, buffer, o.get());
-  return AsyncReq{ std::move(o), m_file_handle, buffer.bytes() };
+  return AsyncReq{ std::move(o), m_file_handle,
+                   gsl::narrow_cast<size_t>(buffer.bytes()) };
 }
 
-AsyncReq FileIO::write_async(const uint64_t offset,
-                             gsl::array_view<const byte> buffer)
+AsyncReq FileIO::write_async(uint64_t offset, gsl::span<const byte> buffer)
 {
   auto o = std::make_unique<OVERLAPPED>();
   fill_overlapped(o.get(), offset);
   write_file(m_file_handle, buffer, o.get());
-  return AsyncReq{ std::move(o), m_file_handle, buffer.bytes() };
+  return AsyncReq{ std::move(o), m_file_handle,
+                   gsl::narrow_cast<size_t>(buffer.bytes()) };
 }
 
 uint64_t FileIO::size() const

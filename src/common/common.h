@@ -6,14 +6,7 @@
 
 #include <cstdint>
 
-#ifdef _MSC_VER
-#pragma warning(push)
-#pragma warning(disable: 4245)
 #include <gsl.h>
-#pragma warning(pop)
-#else
-#include <gsl.h>
-#endif
 
 #define MOVE_ONLY(T) \
   T(T const&) = delete; \

@@ -12,8 +12,8 @@
 
 namespace cheesebase {
 
-using PageView = gsl::array_view<const byte, k_page_size>;
-using PageWriteView = gsl::array_view<byte, k_page_size>;
+using PageView = gsl::span<const byte, k_page_size>;
+using PageWriteView = gsl::span<byte, k_page_size>;
 using RwMutex = boost::upgrade_mutex;
 
 // Read-locked reference of a page.
@@ -40,11 +40,11 @@ using WriteRef = LockedRef<PageWriteView, boost::unique_lock<RwMutex>>;
 
 class Cache {
 public:
-  Cache(const std::string& filename, const OpenMode mode);
+  Cache(const std::string& filename, OpenMode mode);
   ~Cache();
 
-  ReadRef read(const uint64_t page_nr);
-  WriteRef write(const uint64_t page_nr);
+  ReadRef read(uint64_t page_nr);
+  WriteRef write(uint64_t page_nr);
 
 private:
   struct Page {
