@@ -96,7 +96,9 @@ uint64_t get_size(HANDLE handle)
 
 } // anonymous namespace
 
-FileIO::FileIO(const std::string& filename, OpenMode mode)
+FileIO::FileIO(const std::string& filename,
+               const OpenMode mode,
+               const bool direct)
 {
   DWORD open_arg;
   switch (mode) {
@@ -113,7 +115,9 @@ FileIO::FileIO(const std::string& filename, OpenMode mode)
                   FILE_SHARE_WRITE | FILE_SHARE_READ, // share mode
                   NULL,                               // security
                   open_arg,                           // create or open
-                  FILE_FLAG_OVERLAPPED,               // attributes
+                  FILE_FLAG_OVERLAPPED                // attributes
+                  | (direct ? FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH
+                            : NULL),
                   NULL);                              // template
 
   if (m_file_handle == INVALID_HANDLE_VALUE) {

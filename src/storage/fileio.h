@@ -52,7 +52,12 @@ public:
   DEF_EXCEPTION(file_error);
   DEF_EXCEPTION(bad_argument);
 
-  FileIO(const std::string& filename, OpenMode mode);
+  // Opens file with mode specified. If direct is true the file is opened
+  // with direct disk access (no buffering and write through) and all further
+  // offsets and sizes need to be multiple of the sector size.
+  FileIO(const std::string& filename,
+         const OpenMode mode,
+         const bool direct = false);
   ~FileIO();
   
   // Read part of file starting at offset into buffer. The size of the buffer
