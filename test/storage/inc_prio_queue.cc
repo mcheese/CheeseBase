@@ -74,7 +74,7 @@ SCENARIO("Queue and enqueue")
       }
     }
   }
-  
+
   GIVEN("An empty IncPrioQueue with move-only-value")
   {
     IncPrioQueue<size_t, std::unique_ptr<std::string>> q{};
