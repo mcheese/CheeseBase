@@ -5,7 +5,10 @@ project(CheeseBase CXX)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Boost COMPONENTS thread REQUIRED)
+add_definitions(-DBOOST_ALL_NO_LIB)
+set(Boost_USE_STATIC_LIBS ON)
+
+find_package(Boost COMPONENTS system thread REQUIRED)
 include_directories(
   src
   external/GSL/include

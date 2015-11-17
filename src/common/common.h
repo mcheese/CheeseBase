@@ -27,6 +27,8 @@ namespace cheesebase {
 const size_t k_page_size_power{ 14 };
 const size_t k_page_size{ 1u << k_page_size_power };
 
+const size_t k_default_cache_size{ k_page_size * 1024 * 10 }; // 40 MB - test
+
 constexpr uint64_t page_nr(const uint64_t addr) noexcept
 {
   return addr >> k_page_size_power;

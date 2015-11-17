@@ -7,7 +7,7 @@
 namespace cheesebase {
 
 Storage::Storage(const std::string& filename, OpenMode mode)
-  : m_cache(filename, mode)
+  : m_cache(filename, mode, k_default_cache_size / k_page_size)
 {}
 
 Storage::~Storage()
