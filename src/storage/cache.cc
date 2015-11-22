@@ -8,7 +8,7 @@
 namespace cheesebase { 
 
 Cache::Cache(const std::string& fn, OpenMode m, size_t nr_pages)
-  : m_file(fn, m)
+  : m_disk_worker(fn, m)
   , m_memory(k_page_size * (nr_pages + 1) - 1)
   , m_pages(std::make_unique<Page[]>(nr_pages))
 {
@@ -30,73 +30,72 @@ Cache::Cache(const std::string& fn, OpenMode m, size_t nr_pages)
 Cache::~Cache()
 {}
 
-ReadRef Cache::read(uint64_t page_nr)
+ReadRef Cache::read(PageNr page_nr)
 {
-  return get_page<PageView, ShLock<UgMutex>>(page_nr);
+  return get_page<PageReadView, ShLock<UgMutex>>(page_nr);
 }
 
-WriteRef Cache::write(uint64_t page_nr)
+WriteRef Cache::write(PageNr page_nr)
 {
-  return WriteRef{ m_map[page_nr]->data,
-                   ExLock<UgMutex>{m_map[page_nr]->mutex} };
+  return get_page<PageWriteView, ExLock<UgMutex>>(page_nr);
 }
 
-std::pair<gsl::not_null<Cache::Page*>, ExLock<UgMutex>>
+std::pair<Cache::Page&, ExLock<UgMutex>>
 Cache::get_free_page(const ExLock<UgMutex>& map_lck)
 {
   ExLock<Mutex> lck{ m_pages_mtx };
-  auto p = m_least_recent;
-  std::pair<Page*, ExLock<UgMutex>> ret{ p, ExLock<UgMutex>(p->mutex) };
+  auto& p = *m_least_recent;
+  std::pair<Page&, ExLock<UgMutex>> ret{ p, ExLock<UgMutex>(p.mutex) };
   free_page(p, ret.second, map_lck);
   bump_page(p, lck);
 
   return ret;
 }
 
-void Cache::bump_page(gsl::not_null<Page*> p, const ExLock<Mutex>& lck)
+void Cache::bump_page(Page& p, const ExLock<Mutex>& lck)
 {
   Expects(lck.mutex() == &m_pages_mtx);
   Expects(lck.owns_lock());
 
   // check if already most recent
-  if (!p->more_recent)
+  if (!p.more_recent)
     return;
 
   // remove from list
-  if (p->less_recent) {
-    Expects(p->less_recent->more_recent == p);
-    p->less_recent->more_recent = p->more_recent;
+  if (p.less_recent) {
+    Expects(p.less_recent->more_recent == &p);
+    p.less_recent->more_recent = p.more_recent;
   } else {
-    Expects(m_least_recent == p);
-    m_least_recent = p->more_recent;
+    Expects(m_least_recent == &p);
+    m_least_recent = p.more_recent;
   }
-  Expects(p->more_recent->less_recent == p);
-  p->more_recent->less_recent = p->less_recent;
+  Expects(p.more_recent->less_recent == &p);
+  p.more_recent->less_recent = p.less_recent;
 
   // insert at start
-  Expects(m_most_recent != p);
-  p->less_recent = m_most_recent;
-  m_most_recent->more_recent = p;
-  p->more_recent = nullptr;
-  m_most_recent = p;
+  Expects(m_most_recent != &p);
+  p.less_recent = m_most_recent;
+  m_most_recent->more_recent = &p;
+  p.more_recent = nullptr;
+  m_most_recent = &p;
 }
 
-void Cache::free_page(gsl::not_null<Page*> p,
+void Cache::free_page(Page& p,
                       const ExLock<UgMutex>& page_lck,
                       const ExLock<UgMutex>& map_lck)
 {
-  Expects(page_lck.mutex() == &p->mutex);
+  Expects(page_lck.mutex() == &p.mutex);
   Expects(page_lck.owns_lock());
   Expects(map_lck.mutex() == &m_map_mtx);
   Expects(map_lck.owns_lock());
 
-  if (p->changed != 0) m_disk_worker->writeback(p);
-  m_map.erase(p->page_nr);
-  p->page_nr = 0;
+  if (p.changed != 0) m_disk_worker.write(p.data, page_addr(p.page_nr));
+  m_map.erase(p.page_nr);
+  p.page_nr = 0;
 }
 
 template<class View, class Lock>
-LockedRef<View, Lock> Cache::get_page(uint64_t page_nr)
+LockedRef<View, Lock> Cache::get_page(PageNr page_nr)
 {
   // acquire read access for map
   ShLock<UgMutex> cache_s_lck{ m_map_mtx };
@@ -104,7 +103,7 @@ LockedRef<View, Lock> Cache::get_page(uint64_t page_nr)
   auto p = m_map.find(page_nr);
   if (p != m_map.end()) {
     // page found, lock and return it
-    return{ p->second->data, Lock{p->second->mutex} };
+    return{ p->second.data, Lock{ p->second.mutex } };
 
   } else {
     // page not found, create it
@@ -117,27 +116,27 @@ LockedRef<View, Lock> Cache::get_page(uint64_t page_nr)
     // there might be a saved page now
     p = m_map.find(page_nr);
     if (p != m_map.end()) {
-      return{ p->second->data, Lock{p->second->mutex} };
+      return{ p->second.data, Lock{ p->second.mutex } };
     }
 
     // upgrade to exclusive access and insert/construct the page
     ExLock<UgMutex> cache_x_lck{ std::move(cache_u_lck) };
 
     // get a free page
-    auto emplaced = m_map.insert(page_nr, get_free_page(cache_x_lck));
-    Expects(emplaced.second == true);
-    auto& page = emplaced.first->second;
+    auto new_page = get_free_page(cache_x_lck);
+    auto& page_x_lck = new_page.second;
+    auto& page = new_page.first;
+    auto inserted = m_map.insert({ page_nr, page });
+    Expects(inserted.second == true);
 
     // just need exclusive page lock for writing content, unlock the cache
-    ExLock<UgMutex> page_x_lck{ page->mutex };
     cache_x_lck.unlock();
 
-    m_file.read(page_nr * k_page_size, page->data);
+    m_disk_worker.read(page.data, page_addr(page_nr));
 
     // downgrade the exclusive page lock to shared ATOMICALLY
-    return{ page->data, ShLock<UgMutex>{ std::move(page_x_lck)} };
+    return{ page.data, Lock{ std::move(page_x_lck)} };
   }  
-  return nullptr;
 }
 
 } // namespace cheesebase

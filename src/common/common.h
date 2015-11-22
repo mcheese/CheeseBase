@@ -5,7 +5,6 @@
 #pragma once
 
 #include <cstdint>
-
 #include <gsl.h>
 
 #define MOVE_ONLY(T) \
@@ -29,14 +28,26 @@ const size_t k_page_size{ 1u << k_page_size_power };
 
 const size_t k_default_cache_size{ k_page_size * 1024 * 10 }; // 40 MB - test
 
-constexpr uint64_t page_nr(const uint64_t addr) noexcept
+using PageReadView = gsl::span<const byte, k_page_size>;
+using PageWriteView = gsl::span<byte, k_page_size>;
+
+using PageNr = uint64_t;
+using Addr = uint64_t;
+using Offset = uint64_t;
+
+constexpr PageNr page_nr(Addr addr) noexcept
 {
   return addr >> k_page_size_power;
-};
+}
 
-constexpr uint64_t page_offset(const uint64_t addr) noexcept
+constexpr Offset page_offset(Addr addr) noexcept
 {
   return addr & static_cast<uint64_t>(k_page_size - 1);
-};
+}
+
+constexpr Addr page_addr(PageNr nr) noexcept
+{
+  return nr * k_page_size;
+}
 
 }

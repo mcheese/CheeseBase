@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.1)
 
 set(COMMON
   common/common.h
+  common/sync.h
   common/log.h common/log.cc
 )
 
@@ -10,6 +11,7 @@ set(STORAGE
   storage/fileio.h storage/fileio.cc
   storage/cache.h storage/cache.cc
   storage/inc_prio_queue.h
+  storage/disk_worker.h storage/disk_worker.cc
 )
 
 source_group( src\\common  FILES ${COMMON}  )
