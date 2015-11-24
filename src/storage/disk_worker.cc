@@ -5,7 +5,7 @@
 namespace cheesebase {
 
 DiskWorker::DiskWorker(const std::string& filename, OpenMode mode)
-  : m_fileio(filename, mode)
+  : m_fileio(filename, mode, true)
   , m_async(std::async(std::launch::async, [this]() { loop(); }))
 {}
 
@@ -63,6 +63,8 @@ void DiskWorker::write(gsl::span<const byte> buffer, Addr disk_addr)
 
 void DiskWorker::read(gsl::span<byte> buffer, Addr disk_addr)
 {
+  if (disk_addr >= m_fileio.size()) return;
+
   ExLock<Mutex> lck{ m_queue_mtx };
   Cond cb;
   m_queue.enqueue(disk_addr,
