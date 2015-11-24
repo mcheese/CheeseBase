@@ -93,7 +93,7 @@ void Cache::free_page(Page& p,
 
   if (p.changed != 0) m_disk_worker.write(p.data, page_addr(p.page_nr));
   m_map.erase(p.page_nr);
-  p.page_nr = 0;
+  p.page_nr = static_cast<PageNr>(-1);
 }
 
 template<class Lock>
@@ -105,6 +105,7 @@ std::pair<Cache::Page&, Lock> Cache::get_page(PageNr page_nr)
   auto p = m_map.find(page_nr);
   if (p != m_map.end()) {
     // page found, lock and return it
+    bump_page(p->second, ExLock<Mutex>(m_pages_mtx));
     return{ p->second, Lock{ p->second.mutex } };
 
   } else {
@@ -118,6 +119,7 @@ std::pair<Cache::Page&, Lock> Cache::get_page(PageNr page_nr)
     // there might be a saved page now
     p = m_map.find(page_nr);
     if (p != m_map.end()) {
+      bump_page(p->second, ExLock<Mutex>(m_pages_mtx));
       return{ p->second, Lock{ p->second.mutex } };
     }
 
@@ -134,6 +136,7 @@ std::pair<Cache::Page&, Lock> Cache::get_page(PageNr page_nr)
     // just need exclusive page lock for writing content, unlock the cache
     cache_x_lck.unlock();
 
+    page.page_nr = page_nr;
     m_disk_worker.read(page.data, page_addr(page_nr));
 
     // downgrade the exclusive page lock to shared ATOMICALLY

@@ -85,7 +85,7 @@ private:
   struct Page {
     UgMutex mutex;
     gsl::span<byte> data;
-    PageNr page_nr{ 0 };
+    PageNr page_nr{ static_cast<PageNr>(-1) };
     Page* less_recent;
     Page* more_recent;
     bool changed{ false };
