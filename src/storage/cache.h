@@ -1,7 +1,7 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
 
-// Queue read/write requests to the file that get executed by a single thread
-// in optimal order.
+// Provides memory pages to read and write from. Recently requested pages are
+// cached. Writable pages are marked and later written back to disk.
 
 #pragma once
 
@@ -12,26 +12,66 @@
 namespace cheesebase {
 
 // Read-locked reference of a page.
-template<class View, class Lock>
-class LockedRef {
+class ReadRef {
 public:
-  LockedRef(View page, Lock lock) : m_page(page), m_lock(std::move(lock))
+  ReadRef(PageReadView page, ShLock<UgMutex> lock)
+    : m_page(page), m_lock(std::move(lock))
   {};
 
-  MOVE_ONLY(LockedRef);
+  MOVE_ONLY(ReadRef);
 
-  const View& operator*() const { return m_page; };
-  const View* operator->() const { return &m_page; };
-  const View& get() const { return m_page; };
+  PageReadView get() const { return m_page; };
 
 private:
-  const View m_page;
-  Lock m_lock;
+  const PageReadView m_page;
+  ShLock<UgMutex> m_lock;
 };
 
-using ReadRef = LockedRef<PageReadView, ShLock<UgMutex>>;
-using WriteRef = LockedRef<PageWriteView, ExLock<UgMutex>>;
+// Write-locked reference of a page.
+class WriteRef {
+public:
+  WriteRef(PageWriteView page, bool& changed, UgLock<UgMutex> lock)
+    : m_page(page), m_changed(changed), m_lock(std::move(lock))
+  {};
 
+  MOVE_ONLY(WriteRef);
+
+  // Get a readable page view, does not change lock state
+  PageReadView get_read() const { return m_page; };
+  
+  // Upgrade to exclusive access and return writable page view
+  PageWriteView get_write()
+  {
+    if (!m_exclusive) upgrade();
+    return m_page;
+  }
+  
+  // Upgrade lock to exclusive access
+  void upgrade()
+  {
+    if (!m_exclusive) {
+      m_changed = true;
+      m_exclusive = true;
+      m_xlock = std::move(m_lock);
+    }
+  }
+
+  // Downgrade lock to upgradeable access
+  void downgrade()
+  {
+    if (m_exclusive) {
+      m_exclusive = false;
+      m_lock = std::move(m_xlock);
+    }
+  }
+
+private:
+  bool m_exclusive{ false };
+  const PageWriteView m_page;
+  bool& m_changed;
+  UgLock<UgMutex> m_lock;
+  ExLock<UgMutex> m_xlock;
+};
 
 class Cache {
 public:
@@ -48,12 +88,12 @@ private:
     PageNr page_nr{ 0 };
     Page* less_recent;
     Page* more_recent;
-    int changed{ 0 };
+    bool changed{ false };
   };
 
   // return specific page, creates it if not found
-  template<class View, class Lock>
-  LockedRef<View, Lock> get_page(PageNr page_nr);
+  template<class Lock>
+  std::pair<Page&, Lock> get_page(PageNr page_nr);
 
   // return an unused page, may free the least recently used page
   std::pair<Page&, ExLock<UgMutex>>

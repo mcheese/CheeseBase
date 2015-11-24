@@ -32,12 +32,14 @@ Cache::~Cache()
 
 ReadRef Cache::read(PageNr page_nr)
 {
-  return get_page<PageReadView, ShLock<UgMutex>>(page_nr);
+  auto p = get_page<ShLock<UgMutex>>(page_nr);
+  return{ p.first.data, std::move(p.second) };
 }
 
 WriteRef Cache::write(PageNr page_nr)
 {
-  return get_page<PageWriteView, ExLock<UgMutex>>(page_nr);
+  auto p = get_page<ExLock<UgMutex>>(page_nr);
+  return{ p.first.data, p.first.changed, std::move(p.second) };
 }
 
 std::pair<Cache::Page&, ExLock<UgMutex>>
@@ -94,8 +96,8 @@ void Cache::free_page(Page& p,
   p.page_nr = 0;
 }
 
-template<class View, class Lock>
-LockedRef<View, Lock> Cache::get_page(PageNr page_nr)
+template<class Lock>
+std::pair<Cache::Page&, Lock> Cache::get_page(PageNr page_nr)
 {
   // acquire read access for map
   ShLock<UgMutex> cache_s_lck{ m_map_mtx };
@@ -103,7 +105,7 @@ LockedRef<View, Lock> Cache::get_page(PageNr page_nr)
   auto p = m_map.find(page_nr);
   if (p != m_map.end()) {
     // page found, lock and return it
-    return{ p->second.data, Lock{ p->second.mutex } };
+    return{ p->second, Lock{ p->second.mutex } };
 
   } else {
     // page not found, create it
@@ -116,7 +118,7 @@ LockedRef<View, Lock> Cache::get_page(PageNr page_nr)
     // there might be a saved page now
     p = m_map.find(page_nr);
     if (p != m_map.end()) {
-      return{ p->second.data, Lock{ p->second.mutex } };
+      return{ p->second, Lock{ p->second.mutex } };
     }
 
     // upgrade to exclusive access and insert/construct the page
@@ -135,7 +137,7 @@ LockedRef<View, Lock> Cache::get_page(PageNr page_nr)
     m_disk_worker.read(page.data, page_addr(page_nr));
 
     // downgrade the exclusive page lock to shared ATOMICALLY
-    return{ page.data, Lock{ std::move(page_x_lck)} };
+    return{ page, Lock{ std::move(page_x_lck)} };
   }  
 }
 
