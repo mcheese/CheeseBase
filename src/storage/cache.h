@@ -79,7 +79,7 @@ public:
 private:
   struct Page {
     UgMutex mutex;
-    gsl::span<byte> data;
+    gsl::span<Byte> data;
     PageNr page_nr{static_cast<PageNr>(-1)};
     Page* less_recent;
     Page* more_recent;
@@ -102,7 +102,7 @@ private:
                  const ExLock<UgMutex>& map_lck);
 
   DiskWorker m_disk_worker;
-  std::vector<byte> m_memory;
+  std::vector<Byte> m_memory;
 
   Mutex m_pages_mtx;
   std::unique_ptr<Page[]> m_pages;

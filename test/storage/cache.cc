@@ -14,12 +14,13 @@ SCENARIO("Reading and writing to cache.") {
       const std::string test{"ABCDEFGHIJKLMNOP"};
       {
         auto p = cache.write(page);
-        std::copy(test.begin(), test.end(), p.get_write().data() + offset);
+        copy({test}, p.get_write().sub(offset));
       }
 
       THEN("same data can be read") {
         auto p = cache.read(page);
-        REQUIRE(std::equal(test.begin(), test.end(), p.get().data() + offset));
+        REQUIRE(
+            std::equal(test.begin(), test.end(), p.get().sub(offset).cbegin()));
       }
 
       AND_WHEN("many other pages are read") {
@@ -27,8 +28,8 @@ SCENARIO("Reading and writing to cache.") {
 
         THEN("same data can sill be read") {
           auto p = cache.read(page);
-          REQUIRE(
-              std::equal(test.begin(), test.end(), p.get().data() + offset));
+          REQUIRE(std::equal(test.begin(), test.end(),
+                             p.get().sub(offset).cbegin()));
         }
       }
     }

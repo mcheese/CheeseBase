@@ -25,12 +25,12 @@ void DiskWorker::loop() {
       lck.unlock();
 
       if (req->which() == 0) {
-        auto& wreq = boost::get<DiskReq<gsl::span<const byte>>>(*req);
+        auto& wreq = boost::get<DiskReq<gsl::span<const Byte>>>(*req);
         last = m_fileio.write_async(wreq.offset, wreq.buffer);
         if (cond) cond->notify_all();
         cond = wreq.cb;
       } else {
-        auto& rreq = boost::get<DiskReq<gsl::span<byte>>>(*req);
+        auto& rreq = boost::get<DiskReq<gsl::span<Byte>>>(*req);
         last = m_fileio.read_async(rreq.offset, rreq.buffer);
         if (cond) cond->notify_all();
         cond = rreq.cb;
@@ -46,7 +46,7 @@ void DiskWorker::loop() {
   }
 }
 
-void DiskWorker::write(gsl::span<const byte> buffer, Addr disk_addr) {
+void DiskWorker::write(gsl::span<const Byte> buffer, Addr disk_addr) {
   ExLock<Mutex> lck{m_queue_mtx};
   Cond cb;
   m_queue.enqueue(disk_addr, std::make_unique<DiskReqVar>(
@@ -55,7 +55,7 @@ void DiskWorker::write(gsl::span<const byte> buffer, Addr disk_addr) {
   cb.wait(lck);
 }
 
-void DiskWorker::read(gsl::span<byte> buffer, Addr disk_addr) {
+void DiskWorker::read(gsl::span<Byte> buffer, Addr disk_addr) {
   if (disk_addr >= m_fileio.size()) return;
 
   ExLock<Mutex> lck{m_queue_mtx};

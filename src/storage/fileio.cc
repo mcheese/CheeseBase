@@ -26,7 +26,7 @@ void fill_overlapped(OVERLAPPED* o, const uint64_t offset) {
   o->hEvent = ::CreateEvent(NULL, TRUE, FALSE, NULL);
 }
 
-void write_file(HANDLE handle, gsl::span<const byte> buffer, OVERLAPPED* o) {
+void write_file(HANDLE handle, gsl::span<const Byte> buffer, OVERLAPPED* o) {
   if (!::WriteFile(handle, buffer.data(), gsl::narrow<DWORD>(buffer.bytes()),
                    NULL, o)) {
     auto err = ::GetLastError();
@@ -40,7 +40,7 @@ void write_file(HANDLE handle, gsl::span<const byte> buffer, OVERLAPPED* o) {
   }
 }
 
-void read_file(HANDLE handle, gsl::span<byte> buffer, OVERLAPPED* o) {
+void read_file(HANDLE handle, gsl::span<Byte> buffer, OVERLAPPED* o) {
   if (!::ReadFile(handle, buffer.data(), gsl::narrow<DWORD>(buffer.bytes()),
                   NULL, o)) {
     auto err = ::GetLastError();
@@ -129,14 +129,14 @@ void AsyncReq::wait() {
   }
 }
 
-void FileIO::read(uint64_t offset, gsl::span<byte> buffer) const {
+void FileIO::read(uint64_t offset, gsl::span<Byte> buffer) const {
   OVERLAPPED o;
   fill_overlapped(&o, offset);
   read_file(m_file_handle, buffer, &o);
   wait_overlapped(m_file_handle, &o, buffer.bytes());
 }
 
-void FileIO::write(uint64_t offset, gsl::span<const byte> buffer) {
+void FileIO::write(uint64_t offset, gsl::span<const Byte> buffer) {
   OVERLAPPED o;
   fill_overlapped(&o, offset);
   write_file(m_file_handle, buffer, &o);
@@ -160,7 +160,7 @@ void FileIO::resize(uint64_t size) {
   }
 }
 
-AsyncReq FileIO::read_async(uint64_t offset, gsl::span<byte> buffer) const {
+AsyncReq FileIO::read_async(uint64_t offset, gsl::span<Byte> buffer) const {
   auto o = std::make_unique<OVERLAPPED>();
   fill_overlapped(o.get(), offset);
   read_file(m_file_handle, buffer, o.get());
@@ -168,7 +168,7 @@ AsyncReq FileIO::read_async(uint64_t offset, gsl::span<byte> buffer) const {
                   gsl::narrow_cast<size_t>(buffer.bytes())};
 }
 
-AsyncReq FileIO::write_async(uint64_t offset, gsl::span<const byte> buffer) {
+AsyncReq FileIO::write_async(uint64_t offset, gsl::span<const Byte> buffer) {
   auto o = std::make_unique<OVERLAPPED>();
   fill_overlapped(o.get(), offset);
   write_file(m_file_handle, buffer, o.get());

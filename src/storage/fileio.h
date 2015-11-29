@@ -59,10 +59,10 @@ public:
 
   // Read part of file starting at offset into buffer. The size of the buffer
   // array view is read.
-  void read(uint64_t offset, gsl::span<byte> buffer) const;
+  void read(uint64_t offset, gsl::span<Byte> buffer) const;
 
   // Write content of buffer into the file starting at offset.
-  void write(uint64_t offset, gsl::span<const byte> buffer);
+  void write(uint64_t offset, gsl::span<const Byte> buffer);
 
   // Resize the file to size
   void resize(uint64_t size);
@@ -71,10 +71,10 @@ public:
   uint64_t size() const;
 
   // Queue read request. Use returned object to wait() for completion.
-  AsyncReq read_async(uint64_t offset, gsl::span<byte> buffer) const;
+  AsyncReq read_async(uint64_t offset, gsl::span<Byte> buffer) const;
 
   // Queue write request. Use returned object to wait() for completion.
-  AsyncReq write_async(uint64_t offset, gsl::span<const byte> buffer);
+  AsyncReq write_async(uint64_t offset, gsl::span<const Byte> buffer);
 
 private:
   uint64_t m_size;

@@ -15,7 +15,7 @@ Cache::Cache(const std::string& fn, OpenMode m, size_t nr_pages)
   auto padding = (overlap == 0 ? 0 : k_page_size - overlap);
 
   for (size_t i = 0; i < nr_pages; ++i) {
-    m_pages[i].data = gsl::span<byte>(
+    m_pages[i].data = gsl::span<Byte>(
         m_memory.data() + padding + (k_page_size * i), k_page_size);
 
     m_pages[i].less_recent = (i > 0 ? &m_pages[i - 1] : nullptr);

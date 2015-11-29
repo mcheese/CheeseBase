@@ -17,8 +17,8 @@ public:
   DiskWorker(const std::string& filename, OpenMode mode);
   ~DiskWorker();
 
-  void write(gsl::span<const byte> buffer, Addr disk_addr);
-  void read(gsl::span<byte> buffer, Addr disk_addr);
+  void write(gsl::span<const Byte> buffer, Addr disk_addr);
+  void read(gsl::span<Byte> buffer, Addr disk_addr);
 
 private:
   template <typename View>
@@ -27,8 +27,8 @@ private:
     View buffer;
     Cond* cb;
   };
-  using DiskWriteReq = DiskReq<gsl::span<const byte>>;
-  using DiskReadReq = DiskReq<gsl::span<byte>>;
+  using DiskWriteReq = DiskReq<gsl::span<const Byte>>;
+  using DiskReadReq = DiskReq<gsl::span<Byte>>;
   using DiskReqVar = boost::variant<DiskWriteReq, DiskReadReq>;
 
   // core loop processing disk requests

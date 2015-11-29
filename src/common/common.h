@@ -14,15 +14,11 @@
   T& operator=(T&&) = default;
 
 #define DEF_EXCEPTION(NAME)                                                    \
-  \
-struct NAME : public std::exception{const char *                               \
-                                    what() const noexcept {return #NAME;       \
-  }                                                                            \
-  \
-}                                                                         \
-  ;
+  struct NAME : public std::exception {                                        \
+    const char* what() const noexcept { return #NAME; }                        \
+  };
 
-using byte = unsigned char;
+using Byte = char;
 
 namespace cheesebase {
 
@@ -32,8 +28,8 @@ const size_t k_page_size{1u << k_page_size_power};
 
 const size_t k_default_cache_size{k_page_size * 1024 * 10}; // 40 MB - test
 
-using PageReadView = gsl::span<const byte, k_page_size>;
-using PageWriteView = gsl::span<byte, k_page_size>;
+using PageReadView = gsl::span<const Byte, k_page_size>;
+using PageWriteView = gsl::span<Byte, k_page_size>;
 
 using PageNr = uint64_t;
 using Addr = uint64_t;
@@ -54,11 +50,12 @@ void copy(gsl::span<const T> from, gsl::span<T> to) {
   Expects(from.size() <= to.size());
   auto output = to.begin();
   auto input = from.cbegin();
-  while (input != from.cend() && output != to.end()) i {
-      *result = *input;
-      ++result;
+  while (input != from.cend() && output != to.end()) {
+      *output = *input;
+      ++output;
       ++input;
     }
   Ensures(input == from.cend());
 }
-}
+
+} // namespace cheesebase
