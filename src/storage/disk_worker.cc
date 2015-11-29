@@ -5,23 +5,20 @@
 namespace cheesebase {
 
 DiskWorker::DiskWorker(const std::string& filename, OpenMode mode)
-  : m_fileio(filename, mode, true)
-  , m_async(std::async(std::launch::async, [this]() { loop(); }))
-{}
+    : m_fileio(filename, mode, true)
+    , m_async(std::async(std::launch::async, [this]() { loop(); })) {}
 
-DiskWorker::~DiskWorker()
-{
+DiskWorker::~DiskWorker() {
   m_run = false;
   m_queue_notify.notify_all();
 }
 
-void DiskWorker::loop()
-{
-  ExLock<Mutex> lck{ m_queue_mtx };
+void DiskWorker::loop() {
+  ExLock<Mutex> lck{m_queue_mtx};
 
   while (m_run) {
     AsyncReq last{};
-    Cond* cond{ nullptr };
+    Cond* cond{nullptr};
 
     while (m_queue.size() > 0) {
       auto req = m_queue.dequeue();
@@ -49,28 +46,22 @@ void DiskWorker::loop()
   }
 }
 
-void DiskWorker::write(gsl::span<const byte> buffer, Addr disk_addr)
-{
-  ExLock<Mutex> lck{ m_queue_mtx };
+void DiskWorker::write(gsl::span<const byte> buffer, Addr disk_addr) {
+  ExLock<Mutex> lck{m_queue_mtx};
   Cond cb;
-  m_queue.enqueue(disk_addr,
-                  std::make_unique<DiskReqVar>(DiskWriteReq({ disk_addr,
-                                                              buffer,
-                                                              &cb })));
+  m_queue.enqueue(disk_addr, std::make_unique<DiskReqVar>(
+                                 DiskWriteReq({disk_addr, buffer, &cb})));
   m_queue_notify.notify_all();
   cb.wait(lck);
 }
 
-void DiskWorker::read(gsl::span<byte> buffer, Addr disk_addr)
-{
+void DiskWorker::read(gsl::span<byte> buffer, Addr disk_addr) {
   if (disk_addr >= m_fileio.size()) return;
 
-  ExLock<Mutex> lck{ m_queue_mtx };
+  ExLock<Mutex> lck{m_queue_mtx};
   Cond cb;
-  m_queue.enqueue(disk_addr,
-                  std::make_unique<DiskReqVar>(DiskReadReq({ disk_addr,
-                                                             buffer,
-                                                             &cb })));
+  m_queue.enqueue(disk_addr, std::make_unique<DiskReqVar>(
+                                 DiskReadReq({disk_addr, buffer, &cb})));
   m_queue_notify.notify_all();
   cb.wait(lck);
 }

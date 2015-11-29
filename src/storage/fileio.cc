@@ -7,13 +7,9 @@ namespace cheesebase {
 
 AsyncReq::AsyncReq(std::unique_ptr<AsyncStruct> op, Handle handle,
                    size_t expected)
-  : m_async_struct(move(op))
-  , m_handle(handle)
-  , m_expected(expected)
-{}
+    : m_async_struct(move(op)), m_handle(handle), m_expected(expected) {}
 
-AsyncReq::~AsyncReq()
-{
+AsyncReq::~AsyncReq() {
   if (m_async_struct) wait();
 }
 
@@ -23,68 +19,58 @@ AsyncReq::~AsyncReq()
 
 namespace {
 
-void fill_overlapped(OVERLAPPED* o, const uint64_t offset)
-{
+void fill_overlapped(OVERLAPPED* o, const uint64_t offset) {
   memset(o, 0, sizeof(*o));
   o->Offset = static_cast<uint32_t>(offset);
   o->OffsetHigh = static_cast<uint32_t>(offset >> 32);
   o->hEvent = ::CreateEvent(NULL, TRUE, FALSE, NULL);
 }
 
-void write_file(HANDLE handle, gsl::span<const byte> buffer,
-                OVERLAPPED* o)
-{
+void write_file(HANDLE handle, gsl::span<const byte> buffer, OVERLAPPED* o) {
   if (!::WriteFile(handle, buffer.data(), gsl::narrow<DWORD>(buffer.bytes()),
                    NULL, o)) {
     auto err = ::GetLastError();
     if (err != ERROR_IO_PENDING) {
-      auto offs = static_cast<uint64_t>(o->Offset)
-                  + (static_cast<uint64_t>(o->OffsetHigh) << 32);
-      LOG_ERROR
-        << "WriteFile() failed for size " << buffer.bytes()
-        << " at offset " << offs << " with 0x" << std::hex << err;
+      auto offs = static_cast<uint64_t>(o->Offset) +
+                  (static_cast<uint64_t>(o->OffsetHigh) << 32);
+      LOG_ERROR << "WriteFile() failed for size " << buffer.bytes()
+                << " at offset " << offs << " with 0x" << std::hex << err;
       throw FileIO::file_error{};
     }
   }
 }
 
-void read_file(HANDLE handle, gsl::span<byte> buffer, OVERLAPPED* o)
-{
+void read_file(HANDLE handle, gsl::span<byte> buffer, OVERLAPPED* o) {
   if (!::ReadFile(handle, buffer.data(), gsl::narrow<DWORD>(buffer.bytes()),
                   NULL, o)) {
     auto err = ::GetLastError();
     if (err != ERROR_IO_PENDING) {
-      auto offs = static_cast<uint64_t>(o->Offset)
-                  + (static_cast<uint64_t>(o->OffsetHigh) << 32);
-      LOG_ERROR
-        << "ReadFile() failed for size " << buffer.bytes()
-        << " at offset " << offs << " with 0x" << std::hex << err;
+      auto offs = static_cast<uint64_t>(o->Offset) +
+                  (static_cast<uint64_t>(o->OffsetHigh) << 32);
+      LOG_ERROR << "ReadFile() failed for size " << buffer.bytes()
+                << " at offset " << offs << " with 0x" << std::hex << err;
       throw FileIO::file_error{};
     }
   }
 }
 
-void wait_overlapped(HANDLE handle, OVERLAPPED* o, const uint64_t expected)
-{
-   DWORD bytes;
-   if (!::GetOverlappedResult(handle, o, &bytes, TRUE)) {
+void wait_overlapped(HANDLE handle, OVERLAPPED* o, const uint64_t expected) {
+  DWORD bytes;
+  if (!::GetOverlappedResult(handle, o, &bytes, TRUE)) {
     auto err = ::GetLastError();
-    auto offs = static_cast<uint64_t>(o->Offset)
-                + (static_cast<uint64_t>(o->OffsetHigh) << 32);
-    LOG_ERROR
-      << "GetOverlappedResult() failed for size " << expected
-      << " at offset " << offs << " with 0x" << std::hex << err;
+    auto offs = static_cast<uint64_t>(o->Offset) +
+                (static_cast<uint64_t>(o->OffsetHigh) << 32);
+    LOG_ERROR << "GetOverlappedResult() failed for size " << expected
+              << " at offset " << offs << " with 0x" << std::hex << err;
     throw FileIO::file_error{};
   }
   if (bytes != expected) {
-    LOG_ERROR
-      << "FileIO request transferred " << bytes
-      << " bytes while trying to transfer " << expected << " bytes";
+    LOG_ERROR << "FileIO request transferred " << bytes
+              << " bytes while trying to transfer " << expected << " bytes";
     throw FileIO::file_error{};
   }
 }
-uint64_t get_size(HANDLE handle)
-{
+uint64_t get_size(HANDLE handle) {
   LARGE_INTEGER size;
   if (!::GetFileSizeEx(handle, &size)) {
     auto err = ::GetLastError();
@@ -96,45 +82,46 @@ uint64_t get_size(HANDLE handle)
 
 } // anonymous namespace
 
-FileIO::FileIO(const std::string& filename,
-               OpenMode mode,
-               bool direct)
-{
+FileIO::FileIO(const std::string& filename, OpenMode mode, bool direct) {
   DWORD open_arg;
   switch (mode) {
-  case OpenMode::create_new:    open_arg = CREATE_NEW;    break;
-  case OpenMode::create_always: open_arg = CREATE_ALWAYS; break;
-  case OpenMode::open_existing: open_arg = OPEN_EXISTING; break;
-  case OpenMode::open_always:   open_arg = OPEN_ALWAYS;   break;
-  default: throw bad_argument{};
+  case OpenMode::create_new:
+    open_arg = CREATE_NEW;
+    break;
+  case OpenMode::create_always:
+    open_arg = CREATE_ALWAYS;
+    break;
+  case OpenMode::open_existing:
+    open_arg = OPEN_EXISTING;
+    break;
+  case OpenMode::open_always:
+    open_arg = OPEN_ALWAYS;
+    break;
+  default:
+    throw bad_argument{};
   }
 
-  m_file_handle =
-    ::CreateFileA(filename.c_str(),                   // filename
-                  GENERIC_WRITE | GENERIC_READ,       // desired access
-                  FILE_SHARE_WRITE | FILE_SHARE_READ, // share mode
-                  NULL,                               // security
-                  open_arg,                           // create or open
-                  FILE_FLAG_OVERLAPPED                // attributes
-                  | (direct ? FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH
-                            : NULL),
-                  NULL);                              // template
+  m_file_handle = ::CreateFileA(
+      filename.c_str(),                   // filename
+      GENERIC_WRITE | GENERIC_READ,       // desired access
+      FILE_SHARE_WRITE | FILE_SHARE_READ, // share mode
+      NULL,                               // security
+      open_arg,                           // create or open
+      FILE_FLAG_OVERLAPPED                // attributes
+          | (direct ? FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH : NULL),
+      NULL); // template
 
   if (m_file_handle == INVALID_HANDLE_VALUE) {
     auto err = ::GetLastError();
-    LOG_ERROR << "CreateFile() failed for " << filename
-              << " with 0x" << std::hex << err;
+    LOG_ERROR << "CreateFile() failed for " << filename << " with 0x"
+              << std::hex << err;
     throw file_error{};
   }
 }
 
-FileIO::~FileIO()
-{
-  ::CloseHandle(m_file_handle);
-}
+FileIO::~FileIO() { ::CloseHandle(m_file_handle); }
 
-void AsyncReq::wait()
-{
+void AsyncReq::wait() {
   if (m_async_struct) {
     wait_overlapped(m_handle, m_async_struct.get(), m_expected);
     ::CloseHandle(m_async_struct->hEvent);
@@ -142,64 +129,54 @@ void AsyncReq::wait()
   }
 }
 
-void FileIO::read(uint64_t offset, gsl::span<byte> buffer) const
-{
+void FileIO::read(uint64_t offset, gsl::span<byte> buffer) const {
   OVERLAPPED o;
   fill_overlapped(&o, offset);
   read_file(m_file_handle, buffer, &o);
   wait_overlapped(m_file_handle, &o, buffer.bytes());
 }
 
-void FileIO::write(uint64_t offset, gsl::span<const byte> buffer)
-{
+void FileIO::write(uint64_t offset, gsl::span<const byte> buffer) {
   OVERLAPPED o;
   fill_overlapped(&o, offset);
   write_file(m_file_handle, buffer, &o);
   wait_overlapped(m_file_handle, &o, buffer.bytes());
 }
 
-void FileIO::resize(uint64_t size)
-{
+void FileIO::resize(uint64_t size) {
   LARGE_INTEGER li;
   li.QuadPart = size;
   if (!::SetFilePointerEx(m_file_handle, li, NULL, FILE_BEGIN)) {
     auto err = ::GetLastError();
-    LOG_ERROR
-      << "SetFilePointer() failed for size " << size
-      << " with 0x" << std::hex << err;
+    LOG_ERROR << "SetFilePointer() failed for size " << size << " with 0x"
+              << std::hex << err;
     throw file_error{};
   }
   if (!::SetEndOfFile(m_file_handle)) {
     auto err = ::GetLastError();
-    LOG_ERROR
-      << "SetEndOfFile() failed for position " << size
-      << " with 0x" << std::hex << err;
+    LOG_ERROR << "SetEndOfFile() failed for position " << size << " with 0x"
+              << std::hex << err;
     throw file_error{};
   }
 }
 
-AsyncReq FileIO::read_async(uint64_t offset, gsl::span<byte> buffer) const
-{
+AsyncReq FileIO::read_async(uint64_t offset, gsl::span<byte> buffer) const {
   auto o = std::make_unique<OVERLAPPED>();
   fill_overlapped(o.get(), offset);
   read_file(m_file_handle, buffer, o.get());
-  return AsyncReq{ std::move(o), m_file_handle,
-                   gsl::narrow_cast<size_t>(buffer.bytes()) };
+  return AsyncReq{std::move(o), m_file_handle,
+                  gsl::narrow_cast<size_t>(buffer.bytes())};
 }
 
-AsyncReq FileIO::write_async(uint64_t offset, gsl::span<const byte> buffer)
-{
+AsyncReq FileIO::write_async(uint64_t offset, gsl::span<const byte> buffer) {
   auto o = std::make_unique<OVERLAPPED>();
   fill_overlapped(o.get(), offset);
   write_file(m_file_handle, buffer, o.get());
-  return AsyncReq{ std::move(o), m_file_handle,
-                   gsl::narrow_cast<size_t>(buffer.bytes()) };
+  return AsyncReq{std::move(o), m_file_handle,
+                  gsl::narrow_cast<size_t>(buffer.bytes())};
 }
 
-uint64_t FileIO::size() const
-{
-  return get_size(m_file_handle);
-}
+uint64_t FileIO::size() const { return get_size(m_file_handle); }
 
 #else
 ///////////////////////////////////////////////////////////////////////////////

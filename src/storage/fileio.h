@@ -26,7 +26,6 @@ enum class OpenMode {
   open_always    // Opens DB, always. Creates new DB if it does not exist.
 };
 
-
 // Holds an asynchronous request and can wait for its completion.
 class AsyncReq {
 public:
@@ -55,15 +54,13 @@ public:
   // Opens file with mode specified. If direct is true the file is opened
   // with direct disk access (no buffering and write through) and all further
   // offsets and sizes need to be multiple of the sector size.
-  FileIO(const std::string& filename,
-         OpenMode mode,
-         bool direct = false);
+  FileIO(const std::string& filename, OpenMode mode, bool direct = false);
   ~FileIO();
-  
+
   // Read part of file starting at offset into buffer. The size of the buffer
   // array view is read.
   void read(uint64_t offset, gsl::span<byte> buffer) const;
-  
+
   // Write content of buffer into the file starting at offset.
   void write(uint64_t offset, gsl::span<const byte> buffer);
 

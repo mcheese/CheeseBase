@@ -5,27 +5,32 @@
 #include <sstream>
 #include <fstream>
 
-#define LOG_ERROR \
-if (::cheesebase::Log::LogLevel::error > ::cheesebase::Log::get_log_level()); \
-else ::cheesebase::Log(::cheesebase::Log::LogLevel::error).get()
+#define LOG_ERROR                                                              \
+  \
+if(::cheesebase::Log::LogLevel::error > ::cheesebase::Log::get_log_level());   \
+  \
+else::cheesebase::Log(::cheesebase::Log::LogLevel::error)                      \
+      .get()
 
-#define LOG_WARN \
-if (::cheesebase::Log::LogLevel::warn > ::cheesebase::Log::get_log_level()); \
-else ::cheesebase::Log(::cheesebase::Log::LogLevel::warn).get()
+#define LOG_WARN                                                               \
+  \
+if(::cheesebase::Log::LogLevel::warn > ::cheesebase::Log::get_log_level());    \
+  \
+else::cheesebase::Log(::cheesebase::Log::LogLevel::warn)                       \
+      .get()
 
-#define LOG_INFO \
-if (::cheesebase::Log::LogLevel::info > ::cheesebase::Log::get_log_level()); \
-else ::cheesebase::Log(::cheesebase::Log::LogLevel::info).get()
+#define LOG_INFO                                                               \
+  \
+if(::cheesebase::Log::LogLevel::info > ::cheesebase::Log::get_log_level());    \
+  \
+else::cheesebase::Log(::cheesebase::Log::LogLevel::info)                       \
+      .get()
 
 namespace cheesebase {
 
 class Log {
 public:
-  enum LogLevel {
-    error,
-    warn,
-    info
-  };
+  enum LogLevel { error, warn, info };
 
   Log(LogLevel level);
   ~Log();

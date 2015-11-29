@@ -15,8 +15,7 @@ namespace cheesebase {
 class ReadRef {
 public:
   ReadRef(PageReadView page, ShLock<UgMutex> lock)
-    : m_page(page), m_lock(std::move(lock))
-  {};
+      : m_page(page), m_lock(std::move(lock)){};
 
   MOVE_ONLY(ReadRef);
 
@@ -31,24 +30,21 @@ private:
 class WriteRef {
 public:
   WriteRef(PageWriteView page, bool& changed, UgLock<UgMutex> lock)
-    : m_page(page), m_changed(changed), m_lock(std::move(lock))
-  {};
+      : m_page(page), m_changed(changed), m_lock(std::move(lock)){};
 
   MOVE_ONLY(WriteRef);
 
   // Get a readable page view, does not change lock state
   PageReadView get_read() const { return m_page; };
-  
+
   // Upgrade to exclusive access and return writable page view
-  PageWriteView get_write()
-  {
+  PageWriteView get_write() {
     if (!m_exclusive) upgrade();
     return m_page;
   }
-  
+
   // Upgrade lock to exclusive access
-  void upgrade()
-  {
+  void upgrade() {
     if (!m_exclusive) {
       m_changed = true;
       m_exclusive = true;
@@ -57,8 +53,7 @@ public:
   }
 
   // Downgrade lock to upgradeable access
-  void downgrade()
-  {
+  void downgrade() {
     if (m_exclusive) {
       m_exclusive = false;
       m_lock = std::move(m_xlock);
@@ -66,7 +61,7 @@ public:
   }
 
 private:
-  bool m_exclusive{ false };
+  bool m_exclusive{false};
   const PageWriteView m_page;
   bool& m_changed;
   UgLock<UgMutex> m_lock;
@@ -85,26 +80,25 @@ private:
   struct Page {
     UgMutex mutex;
     gsl::span<byte> data;
-    PageNr page_nr{ static_cast<PageNr>(-1) };
+    PageNr page_nr{static_cast<PageNr>(-1)};
     Page* less_recent;
     Page* more_recent;
-    bool changed{ false };
+    bool changed{false};
   };
 
   // return specific page, creates it if not found
-  template<class Lock>
+  template <class Lock>
   std::pair<Page&, Lock> get_page(PageNr page_nr);
 
   // return an unused page, may free the least recently used page
   std::pair<Page&, ExLock<UgMutex>>
-    get_free_page(const ExLock<UgMutex>& map_lck);
+  get_free_page(const ExLock<UgMutex>& map_lck);
 
   // mark p as most recently used (move to front of list)
   void bump_page(Page& p, const ExLock<Mutex>& lck);
-  
+
   // ensure write to disk and remove from map
-  void free_page(Page& p,
-                 const ExLock<UgMutex>& page_lck,
+  void free_page(Page& p, const ExLock<UgMutex>& page_lck,
                  const ExLock<UgMutex>& map_lck);
 
   DiskWorker m_disk_worker;

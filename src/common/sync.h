@@ -14,9 +14,11 @@ namespace cheesebase {
 using Mutex = boost::mutex;
 using RwMutex = boost::shared_mutex;
 using UgMutex = boost::upgrade_mutex;
-template<class M> using ExLock = boost::unique_lock<M>;
-template<class M> using ShLock = boost::shared_lock<M>;
-template<class M> using UgLock = boost::upgrade_lock<M>;
+template <class M>
+using ExLock = boost::unique_lock<M>;
+template <class M>
+using ShLock = boost::shared_lock<M>;
+template <class M>
+using UgLock = boost::upgrade_lock<M>;
 using Cond = boost::condition_variable;
-
 }

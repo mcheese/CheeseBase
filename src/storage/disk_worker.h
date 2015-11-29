@@ -21,7 +21,7 @@ public:
   void read(gsl::span<byte> buffer, Addr disk_addr);
 
 private:
-  template<typename View>
+  template <typename View>
   struct DiskReq {
     Addr offset;
     View buffer;
