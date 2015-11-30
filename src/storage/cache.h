@@ -11,62 +11,26 @@
 
 namespace cheesebase {
 
-// Read-locked reference of a page.
-class ReadRef {
+// Locked reference of a page.
+template <class View, class Lock>
+class PageRef {
 public:
-  ReadRef(PageReadView page, ShLock<UgMutex> lock)
+  PageRef(View page, Lock lock)
       : m_page(page), m_lock(std::move(lock)){};
 
-  MOVE_ONLY(ReadRef);
+  MOVE_ONLY(PageRef);
 
-  PageReadView get() const { return m_page; };
-
-private:
-  const PageReadView m_page;
-  ShLock<UgMutex> m_lock;
-};
-
-// Write-locked reference of a page.
-class WriteRef {
-public:
-  WriteRef(PageWriteView page, bool& changed, UgLock<UgMutex> lock)
-      : m_page(page), m_changed(changed), m_lock(std::move(lock)){};
-
-  MOVE_ONLY(WriteRef);
-
-  // Get a readable page view, does not change lock state
-  PageReadView get_read() const { return m_page; };
-
-  // Upgrade to exclusive access and return writable page view
-  PageWriteView get_write() {
-    if (!m_exclusive) upgrade();
-    return m_page;
-  }
-
-  // Upgrade lock to exclusive access
-  void upgrade() {
-    if (!m_exclusive) {
-      m_changed = true;
-      m_exclusive = true;
-      m_xlock = std::move(m_lock);
-    }
-  }
-
-  // Downgrade lock to upgradeable access
-  void downgrade() {
-    if (m_exclusive) {
-      m_exclusive = false;
-      m_lock = std::move(m_xlock);
-    }
-  }
+  View get() const { return m_page; };
+  View operator*() const { return m_page; };
+  const View* operator->() const { return &m_page; };
 
 private:
-  bool m_exclusive{false};
-  const PageWriteView m_page;
-  bool& m_changed;
-  UgLock<UgMutex> m_lock;
-  ExLock<UgMutex> m_xlock;
+  const View m_page;
+  Lock m_lock;
 };
+
+using ReadRef = PageRef<PageReadView, ShLock<RwMutex>>;
+using WriteRef = PageRef<PageWriteView, ExLock<RwMutex>>;
 
 class Cache {
 public:
@@ -78,7 +42,7 @@ public:
 
 private:
   struct Page {
-    UgMutex mutex;
+    RwMutex mutex;
     gsl::span<Byte> data;
     PageNr page_nr{static_cast<PageNr>(-1)};
     Page* less_recent;
@@ -91,15 +55,15 @@ private:
   std::pair<Page&, Lock> get_page(PageNr page_nr);
 
   // return an unused page, may free the least recently used page
-  std::pair<Page&, ExLock<UgMutex>>
-  get_free_page(const ExLock<UgMutex>& map_lck);
+  std::pair<Page&, ExLock<RwMutex>>
+  get_free_page(const ExLock<RwMutex>& map_lck);
 
   // mark p as most recently used (move to front of list)
   void bump_page(Page& p, const ExLock<Mutex>& lck);
 
   // ensure write to disk and remove from map
-  void free_page(Page& p, const ExLock<UgMutex>& page_lck,
-                 const ExLock<UgMutex>& map_lck);
+  void free_page(Page& p, const ExLock<RwMutex>& page_lck,
+                 const ExLock<RwMutex>& map_lck);
 
   DiskWorker m_disk_worker;
   std::vector<Byte> m_memory;
@@ -109,7 +73,7 @@ private:
   Page* m_least_recent;
   Page* m_most_recent;
 
-  UgMutex m_map_mtx;
+  RwMutex m_map_mtx;
   std::unordered_map<PageNr, Page&> m_map;
 };
 

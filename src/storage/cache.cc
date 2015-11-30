@@ -28,20 +28,21 @@ Cache::Cache(const std::string& fn, OpenMode m, size_t nr_pages)
 Cache::~Cache() {}
 
 ReadRef Cache::read(PageNr page_nr) {
-  auto p = get_page<ShLock<UgMutex>>(page_nr);
+  auto p = get_page<ShLock<RwMutex>>(page_nr);
   return {p.first.data, std::move(p.second)};
 }
 
 WriteRef Cache::write(PageNr page_nr) {
-  auto p = get_page<ExLock<UgMutex>>(page_nr);
-  return {p.first.data, p.first.changed, std::move(p.second)};
+  auto p = get_page<ExLock<RwMutex>>(page_nr);
+  p.first.changed = true;
+  return {p.first.data, std::move(p.second)};
 }
 
-std::pair<Cache::Page&, ExLock<UgMutex>>
-Cache::get_free_page(const ExLock<UgMutex>& map_lck) {
+std::pair<Cache::Page&, ExLock<RwMutex>>
+Cache::get_free_page(const ExLock<RwMutex>& map_lck) {
   ExLock<Mutex> lck{m_pages_mtx};
   auto& p = *m_least_recent;
-  std::pair<Page&, ExLock<UgMutex>> ret{p, ExLock<UgMutex>(p.mutex)};
+  std::pair<Page&, ExLock<RwMutex>> ret{p, ExLock<RwMutex>(p.mutex)};
   free_page(p, ret.second, map_lck);
   bump_page(p, lck);
 
@@ -74,8 +75,8 @@ void Cache::bump_page(Page& p, const ExLock<Mutex>& lck) {
   m_most_recent = &p;
 }
 
-void Cache::free_page(Page& p, const ExLock<UgMutex>& page_lck,
-                      const ExLock<UgMutex>& map_lck) {
+void Cache::free_page(Page& p, const ExLock<RwMutex>& page_lck,
+                      const ExLock<RwMutex>& map_lck) {
   Expects(page_lck.mutex() == &p.mutex);
   Expects(page_lck.owns_lock());
   Expects(map_lck.mutex() == &m_map_mtx);
@@ -89,7 +90,7 @@ void Cache::free_page(Page& p, const ExLock<UgMutex>& page_lck,
 template <class Lock>
 std::pair<Cache::Page&, Lock> Cache::get_page(PageNr page_nr) {
   // acquire read access for map
-  ShLock<UgMutex> cache_s_lck{m_map_mtx};
+  ShLock<RwMutex> cache_s_lck{m_map_mtx};
 
   auto p = m_map.find(page_nr);
   if (p != m_map.end()) {
@@ -99,10 +100,9 @@ std::pair<Cache::Page&, Lock> Cache::get_page(PageNr page_nr) {
   } else {
     // page not found, create it
 
-    // switch to upgrade lock on map
+    // switch to write lock on map
     cache_s_lck.unlock();
-    UgLock<UgMutex> cache_u_lck{m_map_mtx};
-    // now we have access which we can atomically upgrade to exclusive later
+    ExLock<RwMutex> cache_x_lck{m_map_mtx};
 
     // there might be a saved page now
     p = m_map.find(page_nr);
@@ -110,9 +110,6 @@ std::pair<Cache::Page&, Lock> Cache::get_page(PageNr page_nr) {
       bump_page(p->second, ExLock<Mutex>(m_pages_mtx));
       return {p->second, Lock{p->second.mutex}};
     }
-
-    // upgrade to exclusive access and insert/construct the page
-    ExLock<UgMutex> cache_x_lck{std::move(cache_u_lck)};
 
     // get a free page
     auto new_page = get_free_page(cache_x_lck);

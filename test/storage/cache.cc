@@ -14,7 +14,7 @@ SCENARIO("Reading and writing to cache.") {
       const std::string test{"ABCDEFGHIJKLMNOP"};
       {
         auto p = cache.write(page);
-        copy({test}, p.get_write().sub(offset));
+        copy({test}, p->sub(offset));
       }
 
       THEN("same data can be read") {

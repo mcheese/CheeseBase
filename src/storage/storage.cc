@@ -13,7 +13,7 @@ ReadRef Storage::load(PageNr page_nr) { return m_cache.read(page_nr); }
 
 void Storage::store(Write write) {
   auto p = m_cache.write(page_nr(write.addr));
-  copy(write.data, p.get_write().sub(page_offset(write.addr)));
+  copy(write.data, p->sub(page_offset(write.addr)));
 }
 
 void Storage::store(std::vector<Write>& transaction) {
@@ -28,7 +28,7 @@ void Storage::store(std::vector<Write>& transaction) {
     auto nr = page_nr(it->addr);
     auto ref = m_cache.write(nr);
     do {
-      copy(it->data, ref.get_write().sub(page_offset(it->addr)));
+      copy(it->data, ref->sub(page_offset(it->addr)));
       ++it;
     } while (it != transaction.end() && nr == page_nr(it->addr));
   }
