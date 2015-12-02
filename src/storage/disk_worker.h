@@ -1,5 +1,7 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
 
+#pragma once
+
 #include "fileio.h"
 #include "inc_prio_queue.h"
 #include "common/sync.h"
