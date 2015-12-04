@@ -6,21 +6,21 @@ using namespace cheesebase;
 
 SCENARIO("Reading and writing to cache.") {
   GIVEN("A cache") {
-    Cache cache{"test.db", OpenMode::create_always, 8};
+    Cache cache{ "test.db", OpenMode::create_always, 8 };
 
     WHEN("data is written to a page") {
-      const PageNr page{5};
-      const size_t offset{100};
-      const std::string test{"ABCDEFGHIJKLMNOP"};
+      const PageNr page{ 5 };
+      const size_t offset{ 100 };
+      const std::string test{ "ABCDEFGHIJKLMNOP" };
       {
         auto p = cache.write(page);
-        copy({test}, p->sub(offset));
+        copy({ test }, p->subspan(offset));
       }
 
       THEN("same data can be read") {
         auto p = cache.read(page);
-        REQUIRE(
-            std::equal(test.begin(), test.end(), p.get().sub(offset).cbegin()));
+        REQUIRE(std::equal(test.begin(), test.end(),
+                           p.get().subspan(offset).cbegin()));
       }
 
       AND_WHEN("many other pages are read") {
@@ -29,7 +29,7 @@ SCENARIO("Reading and writing to cache.") {
         THEN("same data can sill be read") {
           auto p = cache.read(page);
           REQUIRE(std::equal(test.begin(), test.end(),
-                             p.get().sub(offset).cbegin()));
+                             p.get().subspan(offset).cbegin()));
         }
       }
     }

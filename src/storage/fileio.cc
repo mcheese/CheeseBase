@@ -1,7 +1,7 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
 
-#include "fileio.h"
 #include "common/log.h"
+#include "fileio.h"
 
 namespace cheesebase {
 
@@ -27,13 +27,13 @@ void fill_overlapped(OVERLAPPED* o, const uint64_t offset) {
 }
 
 void write_file(HANDLE handle, gsl::span<const Byte> buffer, OVERLAPPED* o) {
-  if (!::WriteFile(handle, buffer.data(), gsl::narrow<DWORD>(buffer.bytes()),
-                   NULL, o)) {
+  if (!::WriteFile(handle, buffer.data(),
+                   gsl::narrow<DWORD>(buffer.size_bytes()), NULL, o)) {
     auto err = ::GetLastError();
     if (err != ERROR_IO_PENDING) {
       auto offs = static_cast<uint64_t>(o->Offset) +
                   (static_cast<uint64_t>(o->OffsetHigh) << 32);
-      LOG_ERROR << "WriteFile() failed for size " << buffer.bytes()
+      LOG_ERROR << "WriteFile() failed for size " << buffer.size_bytes()
                 << " at offset " << offs << " with 0x" << std::hex << err;
       throw FileIO::file_error{};
     }
@@ -41,13 +41,13 @@ void write_file(HANDLE handle, gsl::span<const Byte> buffer, OVERLAPPED* o) {
 }
 
 void read_file(HANDLE handle, gsl::span<Byte> buffer, OVERLAPPED* o) {
-  if (!::ReadFile(handle, buffer.data(), gsl::narrow<DWORD>(buffer.bytes()),
-                  NULL, o)) {
+  if (!::ReadFile(handle, buffer.data(),
+                  gsl::narrow<DWORD>(buffer.size_bytes()), NULL, o)) {
     auto err = ::GetLastError();
     if (err != ERROR_IO_PENDING) {
       auto offs = static_cast<uint64_t>(o->Offset) +
                   (static_cast<uint64_t>(o->OffsetHigh) << 32);
-      LOG_ERROR << "ReadFile() failed for size " << buffer.bytes()
+      LOG_ERROR << "ReadFile() failed for size " << buffer.size_bytes()
                 << " at offset " << offs << " with 0x" << std::hex << err;
       throw FileIO::file_error{};
     }
@@ -133,14 +133,14 @@ void FileIO::read(uint64_t offset, gsl::span<Byte> buffer) const {
   OVERLAPPED o;
   fill_overlapped(&o, offset);
   read_file(m_file_handle, buffer, &o);
-  wait_overlapped(m_file_handle, &o, buffer.bytes());
+  wait_overlapped(m_file_handle, &o, buffer.size_bytes());
 }
 
 void FileIO::write(uint64_t offset, gsl::span<const Byte> buffer) {
   OVERLAPPED o;
   fill_overlapped(&o, offset);
   write_file(m_file_handle, buffer, &o);
-  wait_overlapped(m_file_handle, &o, buffer.bytes());
+  wait_overlapped(m_file_handle, &o, buffer.size_bytes());
 }
 
 void FileIO::resize(uint64_t size) {
@@ -164,16 +164,16 @@ AsyncReq FileIO::read_async(uint64_t offset, gsl::span<Byte> buffer) const {
   auto o = std::make_unique<OVERLAPPED>();
   fill_overlapped(o.get(), offset);
   read_file(m_file_handle, buffer, o.get());
-  return AsyncReq{std::move(o), m_file_handle,
-                  gsl::narrow_cast<size_t>(buffer.bytes())};
+  return AsyncReq{ std::move(o), m_file_handle,
+                   gsl::narrow_cast<size_t>(buffer.size_bytes()) };
 }
 
 AsyncReq FileIO::write_async(uint64_t offset, gsl::span<const Byte> buffer) {
   auto o = std::make_unique<OVERLAPPED>();
   fill_overlapped(o.get(), offset);
   write_file(m_file_handle, buffer, o.get());
-  return AsyncReq{std::move(o), m_file_handle,
-                  gsl::narrow_cast<size_t>(buffer.bytes())};
+  return AsyncReq{ std::move(o), m_file_handle,
+                   gsl::narrow_cast<size_t>(buffer.size_bytes()) };
 }
 
 uint64_t FileIO::size() const { return get_size(m_file_handle); }
