@@ -14,13 +14,13 @@ SCENARIO("Reading and writing to cache.") {
       const std::string test{ "ABCDEFGHIJKLMNOP" };
       {
         auto p = cache.write(page);
-        copy({ test }, p->subspan(offset));
+        copy(gsl::as_bytes(gsl::span<const char>(test)), p->subspan(offset));
       }
 
       THEN("same data can be read") {
         auto p = cache.read(page);
-        REQUIRE(std::equal(test.begin(), test.end(),
-                           p.get().subspan(offset).cbegin()));
+        REQUIRE(gsl::as_bytes(gsl::span<const char>(test)) ==
+                p->subspan(offset, test.size()));
       }
 
       AND_WHEN("many other pages are read") {
@@ -28,8 +28,8 @@ SCENARIO("Reading and writing to cache.") {
 
         THEN("same data can sill be read") {
           auto p = cache.read(page);
-          REQUIRE(std::equal(test.begin(), test.end(),
-                             p.get().subspan(offset).cbegin()));
+          REQUIRE(gsl::as_bytes(gsl::span<const char>(test)) ==
+                  p->subspan(offset, test.size()));
         }
       }
     }

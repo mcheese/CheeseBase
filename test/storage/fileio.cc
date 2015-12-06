@@ -10,9 +10,9 @@ void put_random_bytes(gsl::span<Byte> memory) {
   std::random_device rd;
   std::mt19937 mt{ rd() };
 
-  std::uniform_int_distribution<short> dist(std::numeric_limits<Byte>::min(),
-                                            std::numeric_limits<Byte>::max());
-  for (auto& b : memory) b = static_cast<Byte>(dist(mt));
+  std::uniform_int_distribution<int> dist(std::numeric_limits<int>::min(),
+                                          std::numeric_limits<int>::max());
+  for (auto& i : memory) i = (Byte)((char)dist(mt));
 }
 
 const size_t page_size = 1024 * 4;
