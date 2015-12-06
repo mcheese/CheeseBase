@@ -90,9 +90,9 @@ std::pair<Block, AllocWrites> PageAllocator::alloc() {
 AllocWrites PageAllocator::free(Addr page) {
   auto next = m_free;
   m_free = page;
-  auto hdr = DskBlockHdr(this->type(), next).data;
-  m_next_cache[page] = hdr;
-  return { { free_offset(), m_free }, { page, hdr } };
+  auto hdr = DskBlockHdr(this->type(), next);
+  m_next_cache[page] = hdr.next();
+  return { { free_offset(), m_free }, { page, hdr.data } };
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -156,9 +156,9 @@ template<class ParentAlloc>
 AllocWrites TierAllocator<ParentAlloc>::free(Addr block) {
   auto next = m_free;
   m_free = block;
-  auto hdr = DskBlockHdr(this->type(), next).data;
-  m_next_cache[block] = hdr;
-  return { { this->free_offset(), m_free }, { block, hdr } };
+  auto hdr = DskBlockHdr(this->type(), next);
+  m_next_cache[block] = hdr.next();
+  return { { this->free_offset(), m_free }, { block, hdr.data } };
 }
 
 } // namespace cheesebase
