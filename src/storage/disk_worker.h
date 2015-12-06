@@ -2,15 +2,17 @@
 
 #pragma once
 
+#include "common/sync.h"
 #include "fileio.h"
 #include "inc_prio_queue.h"
-#include "common/sync.h"
 
 #include <boost/variant.hpp>
 #include <condition_variable>
 #include <future>
 
 namespace cheesebase {
+
+struct CachePage;
 
 class DiskWorker {
 public:
@@ -19,19 +21,17 @@ public:
   DiskWorker(const std::string& filename, OpenMode mode);
   ~DiskWorker();
 
-  void write(gsl::span<const Byte> buffer, Addr disk_addr);
-  void read(gsl::span<Byte> buffer, Addr disk_addr);
+  void write(gsl::not_null<CachePage*> page);
+  void write(const std::vector<gsl::not_null<CachePage*>>& pages);
+  void read(gsl::not_null<CachePage*> page);
 
 private:
-  template <typename View>
-  struct DiskReq {
-    Addr offset;
-    View buffer;
-    Cond* cb;
+  enum class ReqType { none, write, read };
+  struct Req {
+    CachePage* page;
+    ReqType type;
+    int* done;
   };
-  using DiskWriteReq = DiskReq<gsl::span<const Byte>>;
-  using DiskReadReq = DiskReq<gsl::span<Byte>>;
-  using DiskReqVar = boost::variant<DiskWriteReq, DiskReadReq>;
 
   // core loop processing disk requests
   void loop();
@@ -41,7 +41,8 @@ private:
   std::future<void> m_async;
   Mutex m_queue_mtx;
   Cond m_queue_notify;
-  IncPrioQueue<Addr, std::unique_ptr<DiskReqVar>> m_queue;
+  Cond m_task_notify;
+  IncPrioQueue<Addr, Req> m_queue;
 };
 
 } // namespace cheesebase

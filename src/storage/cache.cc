@@ -10,7 +10,7 @@ namespace cheesebase {
 Cache::Cache(const std::string& fn, OpenMode m, size_t nr_pages)
     : m_disk_worker(fn, m)
     , m_memory(k_page_size * (nr_pages + 1) - 1)
-    , m_pages(std::make_unique<Page[]>(nr_pages)) {
+    , m_pages(std::make_unique<CachePage[]>(nr_pages)) {
   auto overlap = reinterpret_cast<uintptr_t>(m_memory.data()) % k_page_size;
   auto padding = (overlap == 0 ? 0 : k_page_size - overlap);
 
@@ -25,7 +25,7 @@ Cache::Cache(const std::string& fn, OpenMode m, size_t nr_pages)
   m_most_recent = &m_pages[nr_pages - 1];
 }
 
-Cache::~Cache() {}
+Cache::~Cache() { flush(); }
 
 ReadRef Cache::read(PageNr page_nr) {
   auto p = get_page<ShLock<RwMutex>>(page_nr);
@@ -38,18 +38,18 @@ WriteRef Cache::write(PageNr page_nr) {
   return {p.first.data, std::move(p.second)};
 }
 
-std::pair<Cache::Page&, ExLock<RwMutex>>
+std::pair<CachePage&, ExLock<RwMutex>>
 Cache::get_free_page(const ExLock<RwMutex>& map_lck) {
   ExLock<Mutex> lck{m_pages_mtx};
   auto& p = *m_least_recent;
-  std::pair<Page&, ExLock<RwMutex>> ret{p, ExLock<RwMutex>(p.mutex)};
+  std::pair<CachePage&, ExLock<RwMutex>> ret{p, ExLock<RwMutex>(p.mutex)};
   free_page(p, ret.second, map_lck);
   bump_page(p, lck);
 
   return ret;
 }
 
-void Cache::bump_page(Page& p, const ExLock<Mutex>& lck) {
+void Cache::bump_page(CachePage& p, const ExLock<Mutex>& lck) {
   Expects(lck.mutex() == &m_pages_mtx);
   Expects(lck.owns_lock());
 
@@ -75,20 +75,21 @@ void Cache::bump_page(Page& p, const ExLock<Mutex>& lck) {
   m_most_recent = &p;
 }
 
-void Cache::free_page(Page& p, const ExLock<RwMutex>& page_lck,
+void Cache::free_page(CachePage& p, const ExLock<RwMutex>& page_lck,
                       const ExLock<RwMutex>& map_lck) {
   Expects(page_lck.mutex() == &p.mutex);
   Expects(page_lck.owns_lock());
   Expects(map_lck.mutex() == &m_map_mtx);
   Expects(map_lck.owns_lock());
 
-  if (p.changed != 0) m_disk_worker.write(p.data, page_addr(p.page_nr));
+  if (p.changed == true) m_disk_worker.write(&p);
+  Ensures(p.changed == false);
   m_map.erase(p.page_nr);
   p.page_nr = static_cast<PageNr>(-1);
 }
 
 template <class Lock>
-std::pair<Cache::Page&, Lock> Cache::get_page(PageNr page_nr) {
+std::pair<CachePage&, Lock> Cache::get_page(PageNr page_nr) {
   // acquire read access for map
   ShLock<RwMutex> cache_s_lck{m_map_mtx};
 
@@ -122,11 +123,25 @@ std::pair<Cache::Page&, Lock> Cache::get_page(PageNr page_nr) {
     cache_x_lck.unlock();
 
     page.page_nr = page_nr;
-    m_disk_worker.read(page.data, page_addr(page_nr));
+    m_disk_worker.read(&page);
 
     // downgrade the exclusive page lock to shared ATOMICALLY
     return {page, Lock{std::move(page_x_lck)}};
   }
+}
+
+void Cache::flush() {
+  ExLock<Mutex> lck{ m_pages_mtx };
+  std::vector<gsl::not_null<CachePage*>> writes;
+  std::vector<ShLock<RwMutex>> locks;
+  for (auto p = m_least_recent; p != nullptr; p = p->more_recent) {
+    ShLock<RwMutex> page_lck{ p->mutex };
+    if (p->changed) {
+      writes.push_back(p);
+      locks.emplace_back(std::move(page_lck));
+    }
+  }
+  m_disk_worker.write(writes);
 }
 
 } // namespace cheesebase

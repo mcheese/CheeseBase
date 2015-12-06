@@ -11,6 +11,15 @@
 
 namespace cheesebase {
 
+struct CachePage {
+  RwMutex mutex;
+  gsl::span<Byte> data;
+  PageNr page_nr{ static_cast<PageNr>(-1) };
+  CachePage* less_recent;
+  CachePage* more_recent;
+  bool changed{ false };
+};
+
 // Locked reference of a page.
 template <class View, class Lock>
 class PageRef {
@@ -39,42 +48,34 @@ public:
 
   ReadRef read(PageNr page_nr);
   WriteRef write(PageNr page_nr);
+  void flush();
 
 private:
-  struct Page {
-    RwMutex mutex;
-    gsl::span<Byte> data;
-    PageNr page_nr{static_cast<PageNr>(-1)};
-    Page* less_recent;
-    Page* more_recent;
-    bool changed{false};
-  };
-
   // return specific page, creates it if not found
   template <class Lock>
-  std::pair<Page&, Lock> get_page(PageNr page_nr);
+  std::pair<CachePage&, Lock> get_page(PageNr page_nr);
 
   // return an unused page, may free the least recently used page
-  std::pair<Page&, ExLock<RwMutex>>
+  std::pair<CachePage&, ExLock<RwMutex>>
   get_free_page(const ExLock<RwMutex>& map_lck);
 
   // mark p as most recently used (move to front of list)
-  void bump_page(Page& p, const ExLock<Mutex>& lck);
+  void bump_page(CachePage& p, const ExLock<Mutex>& lck);
 
   // ensure write to disk and remove from map
-  void free_page(Page& p, const ExLock<RwMutex>& page_lck,
+  void free_page(CachePage& p, const ExLock<RwMutex>& page_lck,
                  const ExLock<RwMutex>& map_lck);
 
   DiskWorker m_disk_worker;
   std::vector<Byte> m_memory;
 
   Mutex m_pages_mtx;
-  std::unique_ptr<Page[]> m_pages;
-  Page* m_least_recent;
-  Page* m_most_recent;
+  std::unique_ptr<CachePage[]> m_pages;
+  CachePage* m_least_recent;
+  CachePage* m_most_recent;
 
   RwMutex m_map_mtx;
-  std::unordered_map<PageNr, Page&> m_map;
+  std::unordered_map<PageNr, CachePage&> m_map;
 };
 
 } // namespace cheesebase
