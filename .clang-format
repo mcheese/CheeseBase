@@ -9,4 +9,5 @@ AllowShortLoopsOnASingleLine: true
 BreakConstructorInitializersBeforeComma: true
 ConstructorInitializerAllOnOneLineOrOnePerLine: true
 BreakBeforeBraces: Attach
+Cpp11BracedListStyle: false
 
