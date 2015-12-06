@@ -4,6 +4,7 @@ set(COMMON
   common/common.h
   common/sync.h
   common/log.h common/log.cc
+  common/compiler.h
 )
 
 set(STORAGE
@@ -14,9 +15,16 @@ set(STORAGE
   storage/disk_worker.h storage/disk_worker.cc
 )
 
+set(ALLOC
+  alloc/allocator.h alloc/allocator.cc
+  alloc/block_alloc.h alloc/block_alloc.cc
+  alloc/structs.h
+)
+
 source_group( src\\common  FILES ${COMMON}  )
 source_group( src\\storage FILES ${STORAGE} )
+source_group( src\\alloc   FILES ${ALLOC}   )
 
-add_library(cheesebase ${COMMON} ${STORAGE})
+add_library(cheesebase ${COMMON} ${STORAGE} ${ALLOC})
 target_link_libraries(cheesebase ${Boost_LIBRARIES})
 

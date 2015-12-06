@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
 #include <gsl.h>
 
 #define MOVE_ONLY(T)                                                           \
@@ -18,12 +19,12 @@
     const char* what() const noexcept { return #NAME; }                        \
   };
 
-using Byte = char;
+using Byte = gsl::byte;
 
 namespace cheesebase {
 
 // size of a memory page
-const size_t k_page_size_power{14};
+const size_t k_page_size_power{12};
 const size_t k_page_size{1u << k_page_size_power};
 
 const size_t k_default_cache_size{k_page_size * 1024 * 10}; // 40 MB - test
@@ -44,6 +45,14 @@ constexpr Offset page_offset(Addr addr) noexcept {
 }
 
 constexpr Addr page_addr(PageNr nr) noexcept { return nr * k_page_size; }
+
+// Represents a write to disk.
+struct Write {
+  Addr addr;
+  gsl::span<const Byte> data;
+};
+
+using Writes = std::vector<Write>;
 
 template <typename T>
 void copy(gsl::span<const T> from, gsl::span<T> to) {

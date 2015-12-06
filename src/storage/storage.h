@@ -12,12 +12,6 @@
 
 namespace cheesebase {
 
-// Represents a write to disk.
-struct Write {
-  Addr addr;
-  gsl::span<const Byte> data;
-};
-
 // Disk representation of a database instance. Opens DB file and journal on
 // construction. Provides load/store access backed by a cache.
 class Storage {
