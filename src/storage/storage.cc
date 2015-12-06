@@ -9,14 +9,14 @@ namespace cheesebase {
 Storage::Storage(const std::string& filename, OpenMode mode)
     : m_cache(filename, mode, k_default_cache_size / k_page_size) {}
 
-ReadRef Storage::load(PageNr page_nr) { return m_cache.read(page_nr); }
+ReadRef Storage::loadPage(PageNr page_nr) { return m_cache.readPage(page_nr); }
 
-void Storage::store(Write write) {
-  auto p = m_cache.write(page_nr(write.addr));
-  copy(write.data, p->subspan(page_offset(write.addr)));
+void Storage::storeWrite(Write write) {
+  auto p = m_cache.writePage(toPageNr(write.addr));
+  copySpan(write.data, p->subspan(toPageOffset(write.addr)));
 }
 
-void Storage::store(std::vector<Write>& transaction) {
+void Storage::storeWrite(std::vector<Write>& transaction) {
   // TODO: write to journal here
 
   // sort the writes to minimize cache requests
@@ -25,12 +25,12 @@ void Storage::store(std::vector<Write>& transaction) {
 
   auto it = transaction.begin();
   while (it != transaction.end()) {
-    auto nr = page_nr(it->addr);
-    auto ref = m_cache.write(nr);
+    auto nr = toPageNr(it->addr);
+    auto ref = m_cache.writePage(nr);
     do {
-      copy(it->data, ref->subspan(page_offset(it->addr)));
+      copySpan(it->data, ref->subspan(toPageOffset(it->addr)));
       ++it;
-    } while (it != transaction.end() && nr == page_nr(it->addr));
+    } while (it != transaction.end() && nr == toPageNr(it->addr));
   }
 }
 

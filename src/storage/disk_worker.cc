@@ -28,10 +28,10 @@ void DiskWorker::loop() {
 
       if (req.type == ReqType::write) {
         last =
-            m_fileio.write_async(page_addr(req.page->page_nr), req.page->data);
+            m_fileio.writeAsync(toAddr(req.page->page_nr), req.page->data);
       } else if (req.type == ReqType::read) {
         last =
-            m_fileio.read_async(page_addr(req.page->page_nr), req.page->data);
+            m_fileio.readAsync(toAddr(req.page->page_nr), req.page->data);
       }
 
       lck.lock();
@@ -59,7 +59,7 @@ void DiskWorker::loop() {
 void DiskWorker::write(gsl::not_null<CachePage*> page) {
   ExLock<Mutex> lck{ m_queue_mtx };
   int done = 0;
-  m_queue.enqueue(page_addr(page->page_nr), { page, ReqType::write, &done });
+  m_queue.enqueue(toAddr(page->page_nr), { page, ReqType::write, &done });
   m_queue_notify.notify_all();
   while (!done) m_task_notify.wait(lck);
 }
@@ -70,7 +70,7 @@ void DiskWorker::write(const std::vector<gsl::not_null<CachePage*>>& pages) {
   size_t i = 0;
   for (auto p : pages) {
     Expects(i < done.size());
-    m_queue.enqueue(page_addr(p->page_nr),
+    m_queue.enqueue(toAddr(p->page_nr),
                     { p, ReqType::write, &(done.data()[i++]) });
   }
   m_queue_notify.notify_all();
@@ -80,11 +80,11 @@ void DiskWorker::write(const std::vector<gsl::not_null<CachePage*>>& pages) {
 }
 
 void DiskWorker::read(gsl::not_null<CachePage*> page) {
-  if (page_addr(page->page_nr) >= m_fileio.size()) return;
+  if (toAddr(page->page_nr) >= m_fileio.size()) return;
 
   ExLock<Mutex> lck{ m_queue_mtx };
   int done = 0;
-  m_queue.enqueue(page_addr(page->page_nr), { page, ReqType::read, &done });
+  m_queue.enqueue(toAddr(page->page_nr), { page, ReqType::read, &done });
   m_queue_notify.notify_all();
   while (!done) m_task_notify.wait(lck);
 }

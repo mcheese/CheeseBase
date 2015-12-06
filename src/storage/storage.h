@@ -24,15 +24,15 @@ public:
   // returns a PageReadRef object holding a read-locked reference of the page.
   // The referenced page is guaranteed to be valid and unchanged for the
   // lifetime of the object.
-  ReadRef load(PageNr page_nr);
+  ReadRef loadPage(PageNr page_nr);
 
   // Write data to the DB. Old data is overwritten and the file extended if
   // needed. The caller has to handle consistency of the database.
   // The write is guaranteed to be all-or-nothing. On return of the function
   // the journal has been written and persistence of the write is guaranteed.
-  void store(Write write);
+  void storeWrite(Write write);
 
-  void store(std::vector<Write>& transaction);
+  void storeWrite(std::vector<Write>& transaction);
 
 private:
   Cache m_cache;

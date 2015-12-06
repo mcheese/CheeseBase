@@ -21,7 +21,7 @@ public:
   // Insert element into queue with regards to priority.
   void enqueue(Index index, Value element) {
     m_data.emplace_back(index, std::move(element));
-    bubble_up(m_data.size() - 1);
+    bubbleUp(m_data.size() - 1);
   }
 
   // Get the first element and remove it from the queue.
@@ -35,7 +35,7 @@ public:
     if (m_data.size() > 1) {
       m_data[0] = std::move(m_data.back());
       m_data.pop_back();
-      bubble_down(0);
+      bubbleDown(0);
     } else {
       m_data.clear();
     }
@@ -54,7 +54,7 @@ public:
       auto ret = std::move(m_data.front());
       m_current = ret.first;
       m_data[0] = {index, std::move(element)};
-      bubble_down(0);
+      bubbleDown(0);
       return std::move(ret.second);
     }
   }
@@ -84,7 +84,7 @@ private:
   }
 
   // Moves the element at pos up the heap to a fitting position.
-  void bubble_up(size_t pos) {
+  void bubbleUp(size_t pos) {
     Expects(pos < m_data.size());
     while (pos > 0 && !compare(m_data[parent(pos)].first, m_data[pos].first)) {
       std::swap(m_data[parent(pos)], m_data[pos]);
@@ -93,7 +93,7 @@ private:
   }
 
   // Moves the element at pos down the heap to a fitting position.
-  void bubble_down(size_t pos) {
+  void bubbleDown(size_t pos) {
     Expects(pos < m_data.size());
 
     const auto size = m_data.size();

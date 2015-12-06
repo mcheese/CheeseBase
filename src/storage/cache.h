@@ -24,8 +24,7 @@ struct CachePage {
 template <class View, class Lock>
 class PageRef {
 public:
-  PageRef(View page, Lock lock)
-      : m_page(page), m_lock(std::move(lock)){};
+  PageRef(View page, Lock lock) : m_page(page), m_lock(std::move(lock)){};
 
   MOVE_ONLY(PageRef);
 
@@ -46,25 +45,25 @@ public:
   Cache(const std::string& filename, OpenMode mode, size_t nr_pages);
   ~Cache();
 
-  ReadRef read(PageNr page_nr);
-  WriteRef write(PageNr page_nr);
+  ReadRef readPage(PageNr page_nr);
+  WriteRef writePage(PageNr page_nr);
   void flush();
 
 private:
   // return specific page, creates it if not found
   template <class Lock>
-  std::pair<CachePage&, Lock> get_page(PageNr page_nr);
+  std::pair<CachePage&, Lock> getPage(PageNr page_nr);
 
   // return an unused page, may free the least recently used page
   std::pair<CachePage&, ExLock<RwMutex>>
-  get_free_page(const ExLock<RwMutex>& map_lck);
+  GetFreePage(const ExLock<RwMutex>& map_lck);
 
   // mark p as most recently used (move to front of list)
-  void bump_page(CachePage& p, const ExLock<Mutex>& lck);
+  void bumpPage(CachePage& p, const ExLock<Mutex>& lck);
 
   // ensure write to disk and remove from map
-  void free_page(CachePage& p, const ExLock<RwMutex>& page_lck,
-                 const ExLock<RwMutex>& map_lck);
+  void freePage(CachePage& p, const ExLock<RwMutex>& page_lck,
+                const ExLock<RwMutex>& map_lck);
 
   DiskWorker m_disk_worker;
   std::vector<Byte> m_memory;

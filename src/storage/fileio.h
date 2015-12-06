@@ -71,10 +71,10 @@ public:
   uint64_t size() const;
 
   // Queue read request. Use returned object to wait() for completion.
-  AsyncReq read_async(uint64_t offset, gsl::span<Byte> buffer) const;
+  AsyncReq readAsync(uint64_t offset, gsl::span<Byte> buffer) const;
 
   // Queue write request. Use returned object to wait() for completion.
-  AsyncReq write_async(uint64_t offset, gsl::span<const Byte> buffer);
+  AsyncReq writeAsync(uint64_t offset, gsl::span<const Byte> buffer);
 
 private:
   uint64_t m_size;

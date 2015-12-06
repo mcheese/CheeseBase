@@ -66,7 +66,7 @@ SCENARIO("Writing and reading from files") {
       AsyncReq reqs[n];
       for (size_t i = 0; i < n; ++i) {
         reqs[i] =
-            fileio.write_async(offset + size * i, data.subspan(size * i, size));
+            fileio.writeAsync(offset + size * i, data.subspan(size * i, size));
       }
       for (auto& e : reqs) { e.wait(); }
       REQUIRE(fileio.size() == offset + size * n);
@@ -76,7 +76,7 @@ SCENARIO("Writing and reading from files") {
         auto read = page_align(read_buffer);
         REQUIRE(data != read);
         for (size_t i = 0; i < n; ++i) {
-          reqs[i] = fileio.read_async(offset + size * i,
+          reqs[i] = fileio.readAsync(offset + size * i,
                                       read.subspan(size * i, size));
         }
         for (auto& e : reqs) { e.wait(); }

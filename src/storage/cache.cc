@@ -27,29 +27,29 @@ Cache::Cache(const std::string& fn, OpenMode m, size_t nr_pages)
 
 Cache::~Cache() { flush(); }
 
-ReadRef Cache::read(PageNr page_nr) {
-  auto p = get_page<ShLock<RwMutex>>(page_nr);
+ReadRef Cache::readPage(PageNr page_nr) {
+  auto p = getPage<ShLock<RwMutex>>(page_nr);
   return {p.first.data, std::move(p.second)};
 }
 
-WriteRef Cache::write(PageNr page_nr) {
-  auto p = get_page<ExLock<RwMutex>>(page_nr);
+WriteRef Cache::writePage(PageNr page_nr) {
+  auto p = getPage<ExLock<RwMutex>>(page_nr);
   p.first.changed = true;
   return {p.first.data, std::move(p.second)};
 }
 
 std::pair<CachePage&, ExLock<RwMutex>>
-Cache::get_free_page(const ExLock<RwMutex>& map_lck) {
+Cache::GetFreePage(const ExLock<RwMutex>& map_lck) {
   ExLock<Mutex> lck{m_pages_mtx};
   auto& p = *m_least_recent;
   std::pair<CachePage&, ExLock<RwMutex>> ret{p, ExLock<RwMutex>(p.mutex)};
-  free_page(p, ret.second, map_lck);
-  bump_page(p, lck);
+  freePage(p, ret.second, map_lck);
+  bumpPage(p, lck);
 
   return ret;
 }
 
-void Cache::bump_page(CachePage& p, const ExLock<Mutex>& lck) {
+void Cache::bumpPage(CachePage& p, const ExLock<Mutex>& lck) {
   Expects(lck.mutex() == &m_pages_mtx);
   Expects(lck.owns_lock());
 
@@ -75,7 +75,7 @@ void Cache::bump_page(CachePage& p, const ExLock<Mutex>& lck) {
   m_most_recent = &p;
 }
 
-void Cache::free_page(CachePage& p, const ExLock<RwMutex>& page_lck,
+void Cache::freePage(CachePage& p, const ExLock<RwMutex>& page_lck,
                       const ExLock<RwMutex>& map_lck) {
   Expects(page_lck.mutex() == &p.mutex);
   Expects(page_lck.owns_lock());
@@ -89,14 +89,14 @@ void Cache::free_page(CachePage& p, const ExLock<RwMutex>& page_lck,
 }
 
 template <class Lock>
-std::pair<CachePage&, Lock> Cache::get_page(PageNr page_nr) {
+std::pair<CachePage&, Lock> Cache::getPage(PageNr page_nr) {
   // acquire read access for map
   ShLock<RwMutex> cache_s_lck{m_map_mtx};
 
   auto p = m_map.find(page_nr);
   if (p != m_map.end()) {
     // page found, lock and return it
-    bump_page(p->second, ExLock<Mutex>(m_pages_mtx));
+    bumpPage(p->second, ExLock<Mutex>(m_pages_mtx));
     return {p->second, Lock{p->second.mutex}};
   } else {
     // page not found, create it
@@ -108,12 +108,12 @@ std::pair<CachePage&, Lock> Cache::get_page(PageNr page_nr) {
     // there might be a saved page now
     p = m_map.find(page_nr);
     if (p != m_map.end()) {
-      bump_page(p->second, ExLock<Mutex>(m_pages_mtx));
+      bumpPage(p->second, ExLock<Mutex>(m_pages_mtx));
       return {p->second, Lock{p->second.mutex}};
     }
 
     // get a free page
-    auto new_page = get_free_page(cache_x_lck);
+    auto new_page = GetFreePage(cache_x_lck);
     auto& page_x_lck = new_page.second;
     auto& page = new_page.first;
     auto inserted = m_map.insert({page_nr, page});

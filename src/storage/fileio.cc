@@ -19,14 +19,14 @@ AsyncReq::~AsyncReq() {
 
 namespace {
 
-void fill_overlapped(OVERLAPPED* o, const uint64_t offset) {
+void fillOverlapped(OVERLAPPED* o, const uint64_t offset) {
   memset(o, 0, sizeof(*o));
   o->Offset = static_cast<uint32_t>(offset);
   o->OffsetHigh = static_cast<uint32_t>(offset >> 32);
   o->hEvent = ::CreateEvent(NULL, TRUE, FALSE, NULL);
 }
 
-void write_file(HANDLE handle, gsl::span<const Byte> buffer, OVERLAPPED* o) {
+void writeFile(HANDLE handle, gsl::span<const Byte> buffer, OVERLAPPED* o) {
   if (!::WriteFile(handle, buffer.data(),
                    gsl::narrow<DWORD>(buffer.size_bytes()), NULL, o)) {
     auto err = ::GetLastError();
@@ -40,7 +40,7 @@ void write_file(HANDLE handle, gsl::span<const Byte> buffer, OVERLAPPED* o) {
   }
 }
 
-void read_file(HANDLE handle, gsl::span<Byte> buffer, OVERLAPPED* o) {
+void readFile(HANDLE handle, gsl::span<Byte> buffer, OVERLAPPED* o) {
   if (!::ReadFile(handle, buffer.data(),
                   gsl::narrow<DWORD>(buffer.size_bytes()), NULL, o)) {
     auto err = ::GetLastError();
@@ -54,7 +54,7 @@ void read_file(HANDLE handle, gsl::span<Byte> buffer, OVERLAPPED* o) {
   }
 }
 
-void wait_overlapped(HANDLE handle, OVERLAPPED* o, const uint64_t expected) {
+void waitOverlapped(HANDLE handle, OVERLAPPED* o, const uint64_t expected) {
   DWORD bytes;
   if (!::GetOverlappedResult(handle, o, &bytes, TRUE)) {
     auto err = ::GetLastError();
@@ -70,7 +70,7 @@ void wait_overlapped(HANDLE handle, OVERLAPPED* o, const uint64_t expected) {
     throw FileIO::file_error{};
   }
 }
-uint64_t get_size(HANDLE handle) {
+uint64_t getSize(HANDLE handle) {
   LARGE_INTEGER size;
   if (!::GetFileSizeEx(handle, &size)) {
     auto err = ::GetLastError();
@@ -123,7 +123,7 @@ FileIO::~FileIO() { ::CloseHandle(m_file_handle); }
 
 void AsyncReq::wait() {
   if (m_async_struct) {
-    wait_overlapped(m_handle, m_async_struct.get(), m_expected);
+    waitOverlapped(m_handle, m_async_struct.get(), m_expected);
     ::CloseHandle(m_async_struct->hEvent);
     m_async_struct.reset();
   }
@@ -131,16 +131,16 @@ void AsyncReq::wait() {
 
 void FileIO::read(uint64_t offset, gsl::span<Byte> buffer) const {
   OVERLAPPED o;
-  fill_overlapped(&o, offset);
-  read_file(m_file_handle, buffer, &o);
-  wait_overlapped(m_file_handle, &o, buffer.size_bytes());
+  fillOverlapped(&o, offset);
+  readFile(m_file_handle, buffer, &o);
+  waitOverlapped(m_file_handle, &o, buffer.size_bytes());
 }
 
 void FileIO::write(uint64_t offset, gsl::span<const Byte> buffer) {
   OVERLAPPED o;
-  fill_overlapped(&o, offset);
-  write_file(m_file_handle, buffer, &o);
-  wait_overlapped(m_file_handle, &o, buffer.size_bytes());
+  fillOverlapped(&o, offset);
+  writeFile(m_file_handle, buffer, &o);
+  waitOverlapped(m_file_handle, &o, buffer.size_bytes());
 }
 
 void FileIO::resize(uint64_t size) {
@@ -160,23 +160,23 @@ void FileIO::resize(uint64_t size) {
   }
 }
 
-AsyncReq FileIO::read_async(uint64_t offset, gsl::span<Byte> buffer) const {
+AsyncReq FileIO::readAsync(uint64_t offset, gsl::span<Byte> buffer) const {
   auto o = std::make_unique<OVERLAPPED>();
-  fill_overlapped(o.get(), offset);
-  read_file(m_file_handle, buffer, o.get());
+  fillOverlapped(o.get(), offset);
+  readFile(m_file_handle, buffer, o.get());
   return AsyncReq{ std::move(o), m_file_handle,
                    gsl::narrow_cast<size_t>(buffer.size_bytes()) };
 }
 
-AsyncReq FileIO::write_async(uint64_t offset, gsl::span<const Byte> buffer) {
+AsyncReq FileIO::writeAsync(uint64_t offset, gsl::span<const Byte> buffer) {
   auto o = std::make_unique<OVERLAPPED>();
-  fill_overlapped(o.get(), offset);
-  write_file(m_file_handle, buffer, o.get());
+  fillOverlapped(o.get(), offset);
+  writeFile(m_file_handle, buffer, o.get());
   return AsyncReq{ std::move(o), m_file_handle,
                    gsl::narrow_cast<size_t>(buffer.size_bytes()) };
 }
 
-uint64_t FileIO::size() const { return get_size(m_file_handle); }
+uint64_t FileIO::size() const { return getSize(m_file_handle); }
 
 #else
 ///////////////////////////////////////////////////////////////////////////////

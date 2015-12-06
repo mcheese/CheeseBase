@@ -22,8 +22,8 @@ public:
 
 private:
   AllocTransaction(Allocator& alloc, ExLock<Mutex> lock);
-  std::pair<Block, AllocWrites> block_alloc(size_t size);
-  AllocWrites block_free(Addr block);
+  std::pair<Block, AllocWrites> allocBlock(size_t size);
+  AllocWrites freeBlock(Addr block);
 
   Allocator& m_alloc;
   ExLock<Mutex> m_lock;
@@ -36,10 +36,10 @@ class Allocator {
 public:
   Allocator(const DskDatabaseHdr& header, Storage& store);
 
-  AllocTransaction transaction();
+  AllocTransaction startTransaction();
 
 private:
-  void clear_cache();
+  void clearCache();
 
   Storage& m_store;
   Mutex m_mutex;
