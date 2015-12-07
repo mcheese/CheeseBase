@@ -19,6 +19,9 @@ using Handle = HANDLE;
 
 namespace cheesebase {
 
+DEF_EXCEPTION(FileError);
+DEF_EXCEPTION(BadArgument);
+
 enum class OpenMode {
   create_new,    // Creates new DB if it does not exist.
   create_always, // Creates new DB, always. Overwrite existing DB.
@@ -48,9 +51,6 @@ private:
 
 class FileIO {
 public:
-  DEF_EXCEPTION(file_error);
-  DEF_EXCEPTION(bad_argument);
-
   // Opens file with mode specified. If direct is true the file is opened
   // with direct disk access (no buffering and write through) and all further
   // offsets and sizes need to be multiple of the sector size.

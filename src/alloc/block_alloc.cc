@@ -26,7 +26,7 @@ std::pair<Block, AllocWrites> PageAllocator::allocBlock() {
           m_store.loadPage(toPageNr(m_free))->subspan(toPageOffset(m_free)))[0];
       next = hdr.next();
       if (hdr.type() != type() || toPageOffset(next) != 0)
-        throw ConsistencyError();
+        throw ConsistencyError("Invalid header in block of free list");
     }
 
     m_free = next;
@@ -66,7 +66,8 @@ std::pair<Block, AllocWrites> TierAllocator<ParentAlloc>::allocBlock() {
       auto hdr = gsl::as_span<const DskBlockHdr>(
           m_store.loadPage(toPageNr(m_free))->subspan(toPageOffset(m_free)))[0];
       next = hdr.next();
-      if (hdr.type() != type() || next % size() != 0) throw ConsistencyError();
+      if (hdr.type() != type() || next % size() != 0)
+        throw ConsistencyError("Invalid header in block of free list");
     }
 
     m_free = next;

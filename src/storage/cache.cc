@@ -2,7 +2,6 @@
 
 #include "cache.h"
 
-#include "common/log.h"
 #include <boost/thread/locks.hpp>
 
 namespace cheesebase {

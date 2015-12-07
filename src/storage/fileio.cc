@@ -1,7 +1,7 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
 
-#include "common/log.h"
 #include "fileio.h"
+#include <sstream>
 
 namespace cheesebase {
 
@@ -33,9 +33,10 @@ void writeFile(HANDLE handle, gsl::span<const Byte> buffer, OVERLAPPED* o) {
     if (err != ERROR_IO_PENDING) {
       auto offs = static_cast<uint64_t>(o->Offset) +
                   (static_cast<uint64_t>(o->OffsetHigh) << 32);
-      LOG_ERROR << "WriteFile() failed for size " << buffer.size_bytes()
-                << " at offset " << offs << " with 0x" << std::hex << err;
-      throw FileIO::file_error{};
+      std::stringstream ss;
+      ss << "WriteFile() failed for size " << buffer.size_bytes()
+         << " at offset " << offs << " with 0x" << std::hex << err;
+      throw FileError(ss.str());
     }
   }
 }
@@ -47,9 +48,10 @@ void readFile(HANDLE handle, gsl::span<Byte> buffer, OVERLAPPED* o) {
     if (err != ERROR_IO_PENDING) {
       auto offs = static_cast<uint64_t>(o->Offset) +
                   (static_cast<uint64_t>(o->OffsetHigh) << 32);
-      LOG_ERROR << "ReadFile() failed for size " << buffer.size_bytes()
-                << " at offset " << offs << " with 0x" << std::hex << err;
-      throw FileIO::file_error{};
+      std::stringstream ss;
+      ss << "ReadFile() failed for size " << buffer.size_bytes()
+         << " at offset " << offs << " with 0x" << std::hex << err;
+      throw FileError(ss.str());
     }
   }
 }
@@ -60,22 +62,25 @@ void waitOverlapped(HANDLE handle, OVERLAPPED* o, const uint64_t expected) {
     auto err = ::GetLastError();
     auto offs = static_cast<uint64_t>(o->Offset) +
                 (static_cast<uint64_t>(o->OffsetHigh) << 32);
-    LOG_ERROR << "GetOverlappedResult() failed for size " << expected
-              << " at offset " << offs << " with 0x" << std::hex << err;
-    throw FileIO::file_error{};
+    std::stringstream ss;
+    ss << "GetOverlappedResult() failed for size " << expected << " at offset "
+       << offs << " with 0x" << std::hex << err;
+    throw FileError(ss.str());
   }
   if (bytes != expected) {
-    LOG_ERROR << "FileIO request transferred " << bytes
-              << " bytes while trying to transfer " << expected << " bytes";
-    throw FileIO::file_error{};
+    std::stringstream ss;
+    ss << "FileIO request transferred " << bytes
+       << " bytes while trying to transfer " << expected << " bytes";
+    throw FileError(ss.str());
   }
 }
 uint64_t getSize(HANDLE handle) {
   LARGE_INTEGER size;
   if (!::GetFileSizeEx(handle, &size)) {
     auto err = ::GetLastError();
-    LOG_ERROR << "GetFileSizeEx() failed for with 0x" << std::hex << err;
-    throw FileIO::file_error{};
+    std::stringstream ss;
+    ss << "GetFileSizeEx() failed for with 0x" << std::hex << err;
+    throw FileError(ss.str());
   }
   return size.QuadPart;
 }
@@ -98,7 +103,7 @@ FileIO::FileIO(const std::string& filename, OpenMode mode, bool direct) {
     open_arg = OPEN_ALWAYS;
     break;
   default:
-    throw bad_argument{};
+    throw BadArgument();
   }
 
   m_file_handle = ::CreateFileA(
@@ -113,9 +118,10 @@ FileIO::FileIO(const std::string& filename, OpenMode mode, bool direct) {
 
   if (m_file_handle == INVALID_HANDLE_VALUE) {
     auto err = ::GetLastError();
-    LOG_ERROR << "CreateFile() failed for " << filename << " with 0x"
-              << std::hex << err;
-    throw file_error{};
+    std::stringstream ss;
+    ss << "CreateFile() failed for " << filename << " with 0x" << std::hex
+       << err;
+    throw FileError(ss.str());
   }
 }
 
@@ -148,15 +154,17 @@ void FileIO::resize(uint64_t size) {
   li.QuadPart = size;
   if (!::SetFilePointerEx(m_file_handle, li, NULL, FILE_BEGIN)) {
     auto err = ::GetLastError();
-    LOG_ERROR << "SetFilePointer() failed for size " << size << " with 0x"
-              << std::hex << err;
-    throw file_error{};
+    std::stringstream ss;
+    ss << "SetFilePointer() failed for size " << size << " with 0x" << std::hex
+       << err;
+    throw FileError(ss.str());
   }
   if (!::SetEndOfFile(m_file_handle)) {
     auto err = ::GetLastError();
-    LOG_ERROR << "SetEndOfFile() failed for position " << size << " with 0x"
-              << std::hex << err;
-    throw file_error{};
+    std::stringstream ss;
+    ss << "SetEndOfFile() failed for position " << size << " with 0x"
+       << std::hex << err;
+    throw FileError(ss.str());
   }
 }
 
