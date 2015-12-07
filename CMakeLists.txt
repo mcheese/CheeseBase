@@ -16,6 +16,7 @@ include_directories(
 )
 
 add_subdirectory(src)
+add_subdirectory(tools)
 
 option(TESTS "compile unit tests" OFF)
 if(TESTS)
