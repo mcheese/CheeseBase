@@ -1,5 +1,7 @@
+#ifdef _MSC_VER
+#define _SCL_SECURE_NO_WARNINGS
+#endif
 #include "catch.hpp"
-
 #include <storage/cache.h>
 
 using namespace cheesebase;
@@ -14,7 +16,8 @@ SCENARIO("Reading and writing to cache.") {
       const std::string test{ "ABCDEFGHIJKLMNOP" };
       {
         auto p = cache.writePage(page);
-        copySpan(gsl::as_bytes(gsl::span<const char>(test)), p->subspan(offset));
+        copySpan(gsl::as_bytes(gsl::span<const char>(test)),
+                 p->subspan(offset));
       }
 
       THEN("same data can be read") {

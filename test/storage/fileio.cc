@@ -1,5 +1,7 @@
+#ifdef _MSC_VER
+#define _SCL_SECURE_NO_WARNINGS
+#endif
 #include "catch.hpp"
-
 #include "storage/fileio.h"
 #include <gsl.h>
 #include <random>
@@ -76,8 +78,8 @@ SCENARIO("Writing and reading from files") {
         auto read = page_align(read_buffer);
         REQUIRE(data != read);
         for (size_t i = 0; i < n; ++i) {
-          reqs[i] = fileio.readAsync(offset + size * i,
-                                      read.subspan(size * i, size));
+          reqs[i] =
+              fileio.readAsync(offset + size * i, read.subspan(size * i, size));
         }
         for (auto& e : reqs) { e.wait(); }
         THEN("read data is equal to written data")
