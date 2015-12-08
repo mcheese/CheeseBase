@@ -1,7 +1,7 @@
 #ifdef _MSC_VER
 #define _SCL_SECURE_NO_WARNINGS
 #endif
-#include "alloc/allocator.h"
+#include "blockman/allocator.h"
 #include "catch.hpp"
 #include "common/common.h"
 #include "storage/storage.h"
