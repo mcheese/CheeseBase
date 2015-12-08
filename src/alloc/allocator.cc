@@ -31,7 +31,7 @@ std::pair<Block, AllocWrites> AllocTransaction::allocBlock(size_t size) {
   else if (size <= m_alloc->m_pg_alloc.size() - hdr)
     return m_alloc->m_pg_alloc.allocBlock();
   else
-    throw alloc_too_big();
+    throw AllocError("requested size to big");
 }
 
 AllocWrites AllocTransaction::freeBlock(Addr block) {
@@ -42,22 +42,34 @@ AllocWrites AllocTransaction::freeBlock(Addr block) {
     hdr = gsl::as_span<DskBlockHdr>(m_alloc->m_store.loadPage(toPageNr(block))
                                         ->subspan(toPageOffset(block)))[0];
   }
+  AllocWrites ret;
+
   switch (hdr.type()) {
   case BlockType::page:
-    return m_alloc->m_pg_alloc.freeBlock(block);
+    ret = m_alloc->m_pg_alloc.freeBlock(block);
+    break;
   case BlockType::t1:
-    return m_alloc->m_t1_alloc.freeBlock(block);
+    ret = m_alloc->m_t1_alloc.freeBlock(block);
+    break;
   case BlockType::t2:
-    return m_alloc->m_t2_alloc.freeBlock(block);
+    ret = m_alloc->m_t2_alloc.freeBlock(block);
+    break;
   case BlockType::t3:
-    return m_alloc->m_t3_alloc.freeBlock(block);
+    ret = m_alloc->m_t3_alloc.freeBlock(block);
+    break;
   case BlockType::t4:
-    return m_alloc->m_t4_alloc.freeBlock(block);
-  case BlockType::multi:
-    throw ConsistencyError();
+    ret = m_alloc->m_t4_alloc.freeBlock(block);
+    break;
   default:
     throw ConsistencyError();
   }
+
+  if (hdr.next() != 0) {
+    auto next = freeBlock(hdr.next());
+    std::move(next.begin(), next.end(), std::back_inserter(ret));
+  }
+
+  return ret;
 }
 
 void Allocator::clearCache() {
@@ -87,6 +99,31 @@ Block AllocTransaction::alloc(size_t size) {
 void AllocTransaction::free(Addr block) {
   Expects(m_lock.owns_lock());
   for (auto& w : freeBlock(block)) { m_writes[w.first] = w.second; }
+}
+
+Block AllocTransaction::allocExtension(Addr block, size_t size) {
+  Expects(m_lock.owns_lock());
+
+  DskBlockHdr hdr;
+  if (m_writes.count(block) > 0) {
+    hdr.data = m_writes.at(block);
+  } else {
+    hdr = gsl::as_span<DskBlockHdr>(m_alloc->m_store.loadPage(toPageNr(block))
+                                        ->subspan(toPageOffset(block)))[0];
+  }
+
+  if (hdr.next() != 0)
+    throw AllocError("block to extend is not the last block");
+
+  auto alloc = allocBlock(size);
+  auto& new_block = alloc.first;
+  auto& writes = alloc.second;
+
+  m_writes[block] = DskBlockHdr(hdr.type(), new_block.addr).data;
+
+  for (auto& w : writes) { m_writes[w.first] = w.second; }
+
+  return new_block;
 }
 
 std::vector<Write> AllocTransaction::commit() {
