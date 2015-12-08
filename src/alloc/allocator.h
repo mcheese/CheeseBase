@@ -12,20 +12,20 @@ class AllocTransaction {
   friend class Allocator;
 
 public:
-  ~AllocTransaction();
   MOVE_ONLY(AllocTransaction);
+  ~AllocTransaction();
 
   Block alloc(size_t size);
   void free(Addr block);
   std::vector<Write> commit();
-  void abort();
+  void end();
 
 private:
-  AllocTransaction(Allocator& alloc, ExLock<Mutex> lock);
+  AllocTransaction(gsl::not_null<Allocator*> alloc, ExLock<Mutex> lock);
   std::pair<Block, AllocWrites> allocBlock(size_t size);
   AllocWrites freeBlock(Addr block);
 
-  Allocator& m_alloc;
+  Allocator* m_alloc;
   ExLock<Mutex> m_lock;
   std::map<Addr, Addr> m_writes;
 };

@@ -14,22 +14,22 @@ Allocator::Allocator(const DskDatabaseHdr& h, Storage& store)
     , m_t4_alloc(store, h.free_alloc_t4, m_t3_alloc) {}
 
 AllocTransaction Allocator::startTransaction() {
-  return AllocTransaction(*this, ExLock<Mutex>{ m_mutex });
+  return AllocTransaction(this, ExLock<Mutex>{ m_mutex });
 }
 
 std::pair<Block, AllocWrites> AllocTransaction::allocBlock(size_t size) {
   constexpr auto hdr = sizeof(DskBlockHdr);
 
-  if (size <= m_alloc.m_t4_alloc.size() - hdr)
-    return m_alloc.m_t4_alloc.allocBlock();
-  else if (size <= m_alloc.m_t3_alloc.size() - hdr)
-    return m_alloc.m_t3_alloc.allocBlock();
-  else if (size <= m_alloc.m_t2_alloc.size() - hdr)
-    return m_alloc.m_t2_alloc.allocBlock();
-  else if (size <= m_alloc.m_t1_alloc.size() - hdr)
-    return m_alloc.m_t1_alloc.allocBlock();
-  else if (size <= m_alloc.m_pg_alloc.size() - hdr)
-    return m_alloc.m_pg_alloc.allocBlock();
+  if (size <= m_alloc->m_t4_alloc.size() - hdr)
+    return m_alloc->m_t4_alloc.allocBlock();
+  else if (size <= m_alloc->m_t3_alloc.size() - hdr)
+    return m_alloc->m_t3_alloc.allocBlock();
+  else if (size <= m_alloc->m_t2_alloc.size() - hdr)
+    return m_alloc->m_t2_alloc.allocBlock();
+  else if (size <= m_alloc->m_t1_alloc.size() - hdr)
+    return m_alloc->m_t1_alloc.allocBlock();
+  else if (size <= m_alloc->m_pg_alloc.size() - hdr)
+    return m_alloc->m_pg_alloc.allocBlock();
   else
     throw alloc_too_big();
 }
@@ -39,20 +39,20 @@ AllocWrites AllocTransaction::freeBlock(Addr block) {
   if (m_writes.count(block) > 0) {
     hdr.data = m_writes.at(block);
   } else {
-    hdr = gsl::as_span<DskBlockHdr>(
-        m_alloc.m_store.loadPage(toPageNr(block))->subspan(toPageOffset(block)))[0];
+    hdr = gsl::as_span<DskBlockHdr>(m_alloc->m_store.loadPage(toPageNr(block))
+                                        ->subspan(toPageOffset(block)))[0];
   }
   switch (hdr.type()) {
   case BlockType::page:
-    return m_alloc.m_pg_alloc.freeBlock(block);
+    return m_alloc->m_pg_alloc.freeBlock(block);
   case BlockType::t1:
-    return m_alloc.m_t1_alloc.freeBlock(block);
+    return m_alloc->m_t1_alloc.freeBlock(block);
   case BlockType::t2:
-    return m_alloc.m_t2_alloc.freeBlock(block);
+    return m_alloc->m_t2_alloc.freeBlock(block);
   case BlockType::t3:
-    return m_alloc.m_t3_alloc.freeBlock(block);
+    return m_alloc->m_t3_alloc.freeBlock(block);
   case BlockType::t4:
-    return m_alloc.m_t4_alloc.freeBlock(block);
+    return m_alloc->m_t4_alloc.freeBlock(block);
   case BlockType::multi:
     throw ConsistencyError();
   default:
@@ -68,12 +68,14 @@ void Allocator::clearCache() {
   m_t4_alloc.clearCache();
 }
 
-AllocTransaction::AllocTransaction(Allocator& alloc, ExLock<Mutex> lock)
+AllocTransaction::AllocTransaction(gsl::not_null<Allocator*> alloc,
+                                   ExLock<Mutex> lock)
     : m_alloc(alloc), m_lock(std::move(lock)){};
 
-AllocTransaction::~AllocTransaction() { m_alloc.clearCache(); }
+AllocTransaction::~AllocTransaction() { m_alloc->clearCache(); }
 
 Block AllocTransaction::alloc(size_t size) {
+  Expects(m_lock.owns_lock());
   auto alloc = allocBlock(size);
   auto& block = alloc.first;
   auto& writes = alloc.second;
@@ -83,12 +85,12 @@ Block AllocTransaction::alloc(size_t size) {
 }
 
 void AllocTransaction::free(Addr block) {
-  for (auto& w : freeBlock(block)) {
-    m_writes[w.first] = w.second;
-  }
+  Expects(m_lock.owns_lock());
+  for (auto& w : freeBlock(block)) { m_writes[w.first] = w.second; }
 }
 
 std::vector<Write> AllocTransaction::commit() {
+  Expects(m_lock.owns_lock());
   std::vector<Write> writes;
   writes.reserve(m_writes.size());
 
@@ -99,9 +101,10 @@ std::vector<Write> AllocTransaction::commit() {
   return writes;
 }
 
-void AllocTransaction::abort() {
+void AllocTransaction::end() {
   m_writes.clear();
-  m_alloc.clearCache();
+  m_alloc->clearCache();
+  if (m_lock.owns_lock()) m_lock.unlock();
 }
 
 } // namespace cheesebase
