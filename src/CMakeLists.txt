@@ -17,6 +17,7 @@ set(STORAGE
 set(BLOCKMAN
   blockman/allocator.h blockman/allocator.cc
   blockman/block_alloc.h blockman/block_alloc.cc
+  blockman/block_locks.h blockman/block_locks.cc
   blockman/structs.h
 )
 
