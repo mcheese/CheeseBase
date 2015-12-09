@@ -66,7 +66,7 @@ private:
                 const ExLock<RwMutex>& map_lck);
 
   DiskWorker m_disk_worker;
-  std::vector<Byte> m_memory;
+  Byte* m_memory;
 
   Mutex m_pages_mtx;
   std::unique_ptr<CachePage[]> m_pages;

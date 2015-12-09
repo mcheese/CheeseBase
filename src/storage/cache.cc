@@ -3,19 +3,17 @@
 #include "cache.h"
 
 #include <boost/thread/locks.hpp>
+#include <boost/align/aligned_alloc.hpp>
 
 namespace cheesebase {
 
 Cache::Cache(const std::string& fn, OpenMode m, size_t nr_pages)
     : m_disk_worker(fn, m)
-    , m_memory(k_page_size * (nr_pages + 1) - 1)
+    , m_memory((Byte*)boost::alignment::aligned_alloc(k_page_size,
+                                                      k_page_size * nr_pages))
     , m_pages(std::make_unique<CachePage[]>(nr_pages)) {
-  auto overlap = reinterpret_cast<uintptr_t>(m_memory.data()) % k_page_size;
-  auto padding = (overlap == 0 ? 0 : k_page_size - overlap);
-
   for (size_t i = 0; i < nr_pages; ++i) {
-    m_pages[i].data = gsl::span<Byte>(
-        m_memory.data() + padding + (k_page_size * i), k_page_size);
+    m_pages[i].data = gsl::span<Byte>(&m_memory[i * k_page_size], k_page_size);
 
     m_pages[i].less_recent = (i > 0 ? &m_pages[i - 1] : nullptr);
     m_pages[i].more_recent = (i < nr_pages - 1 ? &m_pages[i + 1] : nullptr);
@@ -24,7 +22,10 @@ Cache::Cache(const std::string& fn, OpenMode m, size_t nr_pages)
   m_most_recent = &m_pages[nr_pages - 1];
 }
 
-Cache::~Cache() { flush(); }
+Cache::~Cache() {
+  flush();
+  boost::alignment::aligned_free(m_memory);
+}
 
 ReadRef Cache::readPage(PageNr page_nr) {
   auto p = getPage<ShLock<RwMutex>>(page_nr);
