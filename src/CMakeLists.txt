@@ -21,10 +21,16 @@ set(BLOCKMAN
   blockman/structs.h
 )
 
+set(MODEL
+  model/model.h model/model.cc
+  model/parser.h
+)
+
 source_group( src\\common   FILES ${COMMON})
 source_group( src\\storage  FILES ${STORAGE})
 source_group( src\\blockman FILES ${BLOCKMAN})
+source_group( src\\model    FILES ${MODEL})
 
-add_library(cheesebase ${COMMON} ${STORAGE} ${BLOCKMAN})
+add_library(cheesebase ${COMMON} ${STORAGE} ${BLOCKMAN} ${MODEL})
 target_link_libraries(cheesebase ${Boost_LIBRARIES})
 
