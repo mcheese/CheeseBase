@@ -9,7 +9,7 @@
 using namespace cheesebase;
 
 const Addr eof_addr = offsetof(DskDatabaseHdr, end_of_file);
-const Addr pg_addr = offsetof(DskDatabaseHdr, free_alloc_page);
+const Addr pg_addr = offsetof(DskDatabaseHdr, free_alloc_pg);
 const Addr t1_addr = offsetof(DskDatabaseHdr, free_alloc_t1);
 const Addr t2_addr = offsetof(DskDatabaseHdr, free_alloc_t2);
 const Addr t3_addr = offsetof(DskDatabaseHdr, free_alloc_t3);

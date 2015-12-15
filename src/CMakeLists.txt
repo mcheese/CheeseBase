@@ -31,12 +31,17 @@ set(KEYCACHE
   keycache/murmurhash3.h keycache/murmurhash3.cc
 )
 
+set(CORE
+  core.h core.cc
+)
+
 source_group( src\\common   FILES ${COMMON})
 source_group( src\\storage  FILES ${STORAGE})
 source_group( src\\blockman FILES ${BLOCKMAN})
 source_group( src\\model    FILES ${MODEL})
 source_group( src\\keycache FILES ${KEYCACHE})
+source_group( src           FILES ${CORE})
 
-add_library(cheesebase ${KEYCACHE} ${COMMON} ${STORAGE} ${BLOCKMAN} ${MODEL})
+add_library(cheesebase ${CORE} ${KEYCACHE} ${COMMON} ${STORAGE} ${BLOCKMAN} ${MODEL})
 target_link_libraries(cheesebase ${Boost_LIBRARIES})
 

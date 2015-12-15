@@ -81,20 +81,33 @@ Writes KeyTransaction::commit() {
       Expects(idx == main_vec.size());
       main_vec.push_back(str);
 
-      if (block.size - off < sizeof(DskKeyCacheSize) + len) {
+      if (block.size < off + sizeof(DskKeyCacheSize) + len) {
+        if (block.size >= off + sizeof(DskKeyCacheSize)) {
+          writes.push_back({ block.addr + off,
+                             gsl::as_bytes(gsl::span<const DskKeyCacheSize>(
+                                 s_terminator)) });
+        }
+
         block = m_alloc->allocExtension(block.addr,
                                         k_page_size - sizeof(DskBlockHdr));
         off = sizeof(DskBlockHdr);
       }
-      Ensures(block.size - off >= sizeof(DskKeyCacheSize) + len);
+      Ensures(block.size >= off + sizeof(DskKeyCacheSize) + len);
 
       writes.push_back(
-          { block.addr + off, gsl::as_bytes(gsl::span<const DskKeyCacheSize>(len)) });
+          { block.addr + off,
+            gsl::as_bytes(gsl::span<const DskKeyCacheSize>(len)) });
       off += sizeof(DskKeyCacheSize);
       writes.push_back({ block.addr + off, gsl::as_bytes(gsl::span<const char>(
                                                str.data(), len)) });
       off += len;
     }
+  }
+
+  if (block.size >= off + sizeof(DskKeyCacheSize)) {
+    writes.push_back(
+        { block.addr + off,
+          gsl::as_bytes(gsl::span<const DskKeyCacheSize>(s_terminator)) });
   }
 
   return writes;
@@ -108,6 +121,36 @@ void KeyTransaction::end() {
   if (m_ex_lck.owns_lock()) m_ex_lck.unlock();
 }
 
+KeyCache::KeyCache(Block first_block, Storage& store)
+    : m_cur_block(first_block), m_store(store) {
+  // empty string is always known
+  m_cache[hashString("")].emplace_back("");
+
+  // go through all linked blocks adding every string
+  auto next = first_block.addr;
+  while (next != 0) {
+    m_cur_block.addr = next;
+    auto page = m_store.loadPage(toPageNr(m_cur_block.addr));
+    auto block = page->subspan(toPageOffset(m_cur_block.addr));
+    auto hdr = gsl::as_span<DskBlockHdr>(block)[0];
+    m_cur_block.size = toBlockSize(hdr.type());
+    block = block.subspan(0, m_cur_block.size);
+    next = hdr.next();
+    m_offset = sizeof(DskBlockHdr);
+
+    while (m_offset + sizeof(DskKeyCacheSize) <= m_cur_block.size) {
+      auto size = gsl::as_span<DskKeyCacheSize>(
+          block.subspan(m_offset, sizeof(DskKeyCacheSize)))[0];
+      if (size == 0) break;
+      m_offset += sizeof(DskKeyCacheSize);
+      auto str_span = gsl::as_span<const char>(block.subspan(m_offset, size));
+      std::string str{ str_span.begin(), str_span.end() };
+      m_offset += size;
+      m_cache[hashString(str)].emplace_back(std::move(str));
+    }
+  }
+}
+
 std::string KeyCache::getString(const DskKey& key) {
   ShLock<UgMutex> lck{ m_mtx };
   auto lookup = m_cache.find(key.hash);
@@ -116,7 +159,7 @@ std::string KeyCache::getString(const DskKey& key) {
   return lookup->second[key.index];
 }
 
-boost::optional<DskKey> KeyCache::getKey(const std::string & str) {
+boost::optional<DskKey> KeyCache::getKey(const std::string& str) {
   ShLock<UgMutex> lck{ m_mtx };
 
   auto h = hashString(str);

@@ -50,7 +50,7 @@ int main(int argc, char* argv[]) {
   }
 
   std::set<Addr> free;
-  if (!check_free(free, db_hdr.free_alloc_page, BlockType::page, 1, fs))
+  if (!check_free(free, db_hdr.free_alloc_pg, BlockType::pg, 1, fs))
     return 1;
   if (!check_free(free, db_hdr.free_alloc_t1, BlockType::t1, 2, fs))
     return 1;
@@ -70,8 +70,7 @@ int main(int argc, char* argv[]) {
       auto hdr = get_hdr(addr, fs);
       int len;
       switch (hdr.type()) {
-      case BlockType::multi:
-      case BlockType::page:
+      case BlockType::pg:
         offset += k_page_size;
         len = 64;
         break;

@@ -40,9 +40,9 @@ public:
       : BlockAllocator(store, free), m_eof(eof) {}
   static constexpr size_t size() { return k_page_size; };
   static constexpr Addr hdrOffset() {
-    return offsetof(DskDatabaseHdr, free_alloc_page);
+    return offsetof(DskDatabaseHdr, free_alloc_pg);
   }
-  static constexpr BlockType type() { return BlockType::page; };
+  static constexpr BlockType type() { return BlockType::pg; };
   std::pair<Block, AllocWrites> allocBlock();
   AllocWrites freeBlock(Addr);
 

@@ -40,6 +40,7 @@ private:
 
   KeyCache* m_cache;
   AllocTransaction* m_alloc;
+  static const DskKeyCacheSize s_terminator{0};
   UgLock<UgMutex> m_ug_lck;
   ExLock<UgMutex> m_ex_lck;
   boost::container::flat_map < KeyHash,
@@ -50,7 +51,7 @@ private:
 class KeyCache {
   friend KeyTransaction;
 public:
-  KeyCache(Storage& store) : m_store(store) {};
+  KeyCache(Block first_block, Storage& store);
 
   // Get string version of internal key representation. Throws on failure since
   // every key in the database should be successfully found here.
@@ -70,8 +71,8 @@ private:
   Storage& m_store;
   std::unordered_map<KeyHash, std::vector<std::string>> m_cache;
   UgMutex m_mtx;
-  Block m_cur_block{ 0, 0 };
-  Offset m_offset{ 0 };
+  Block m_cur_block;
+  Offset m_offset{ sizeof(DskBlockHdr) };
 };
 
 } // namespace cheesebase

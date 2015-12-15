@@ -9,13 +9,23 @@
 namespace cheesebase {
 
 enum class BlockType {
-  multi, // first block of a multi page linked allocation
-  page,  // 1 page (4k)
-  t1,    // 1/2 page (2k)
-  t2,    // 1/4 page (1k)
-  t3,    // 1/8 page (512)
-  t4     // 1/16 page (256)
+  pg = 'P', // 1 page (4k)
+  t1 = '1', // 1/2 page (2k)
+  t2 = '2', // 1/4 page (1k)
+  t3 = '3', // 1/8 page (512)
+  t4 = '4'  // 1/16 page (256)
 };
+
+static size_t toBlockSize(BlockType t) {
+  switch (t) {
+  case BlockType::pg: return k_page_size;
+  case BlockType::t1: return k_page_size / 2;
+  case BlockType::t2: return k_page_size / 4;
+  case BlockType::t3: return k_page_size / 8;
+  case BlockType::t4: return k_page_size / 16;
+  default: throw ConsistencyError("Invalid block type");
+  }
+}
 
 CB_PACKED(struct DskBlockHdr {
   DskBlockHdr() = default;
@@ -35,15 +45,19 @@ CB_PACKED(struct DskBlockHdr {
   uint64_t data;
 });
 
+const uint64_t magic = *((uint64_t const*)"CHSBSE01");
+
 CB_PACKED(struct DskDatabaseHdr {
-  char magic[8];
+  uint64_t magic;
   uint64_t end_of_file;
-  uint64_t free_alloc_page;
+  uint64_t free_alloc_pg;
   uint64_t free_alloc_t1;
   uint64_t free_alloc_t2;
   uint64_t free_alloc_t3;
   uint64_t free_alloc_t4;
 });
+static_assert(sizeof(DskDatabaseHdr) <= k_page_size / 2,
+              "Database header should be smaller than half of the page size");
 
 CB_PACKED(struct DskKey {
   DskKey(uint32_t h, uint16_t i) : hash(h), index(i) {};

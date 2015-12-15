@@ -7,7 +7,7 @@ namespace cheesebase {
 
 Allocator::Allocator(const DskDatabaseHdr& h, Storage& store)
     : m_store(store)
-    , m_pg_alloc(store, h.free_alloc_page, h.end_of_file)
+    , m_pg_alloc(store, h.free_alloc_pg, h.end_of_file)
     , m_t1_alloc(store, h.free_alloc_t1, m_pg_alloc)
     , m_t2_alloc(store, h.free_alloc_t2, m_t1_alloc)
     , m_t3_alloc(store, h.free_alloc_t3, m_t2_alloc)
@@ -45,7 +45,7 @@ AllocWrites AllocTransaction::freeBlock(Addr block) {
   AllocWrites ret;
 
   switch (hdr.type()) {
-  case BlockType::page:
+  case BlockType::pg:
     ret = m_alloc->m_pg_alloc.freeBlock(block);
     break;
   case BlockType::t1:
@@ -84,7 +84,7 @@ AllocTransaction::AllocTransaction(gsl::not_null<Allocator*> alloc,
                                    ExLock<Mutex> lock)
     : m_alloc(alloc), m_lock(std::move(lock)){};
 
-AllocTransaction::~AllocTransaction() { m_alloc->clearCache(); }
+AllocTransaction::~AllocTransaction() { end(); }
 
 Block AllocTransaction::alloc(size_t size) {
   Expects(m_lock.owns_lock());
@@ -140,8 +140,10 @@ std::vector<Write> AllocTransaction::commit() {
 
 void AllocTransaction::end() {
   m_writes.clear();
-  m_alloc->clearCache();
-  if (m_lock.owns_lock()) m_lock.unlock();
+  if (m_lock.owns_lock()) {
+    m_alloc->clearCache();
+    m_lock.unlock();
+  }
 }
 
 } // namespace cheesebase

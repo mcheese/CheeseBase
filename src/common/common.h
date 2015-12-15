@@ -26,6 +26,8 @@ using Byte = gsl::byte;
 
 namespace cheesebase {
 
+const uint64_t k_magic = *(uint64_t const*)"CHSBSE01";
+
 // size of a memory page
 const size_t k_page_size_power{ 12 };
 const size_t k_page_size{ 1u << k_page_size_power };
