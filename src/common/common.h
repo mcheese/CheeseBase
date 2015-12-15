@@ -70,4 +70,6 @@ void copySpan(gsl::span<const T> from, gsl::span<T> to) {
   Ensures(input == from.cend());
 }
 
+DEF_EXCEPTION(ConsistencyError);
+
 } // namespace cheesebase

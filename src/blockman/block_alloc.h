@@ -3,14 +3,12 @@
 #pragma once
 
 #include "common/sync.h"
-#include "structs.h"
+#include "common/structs.h"
 #include <gsl.h>
 
 #include <map>
 
 namespace cheesebase {
-
-DEF_EXCEPTION(ConsistencyError);
 
 struct Block {
   Addr addr;

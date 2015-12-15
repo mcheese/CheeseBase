@@ -1,4 +1,4 @@
-#include "blockman/structs.h"
+#include "common/structs.h"
 #include "common/common.h"
 #include <fstream>
 #include <iostream>

@@ -4,6 +4,7 @@ set(COMMON
   common/common.h
   common/sync.h
   common/compiler.h
+  common/structs.h
 )
 
 set(STORAGE
@@ -18,7 +19,6 @@ set(BLOCKMAN
   blockman/allocator.h blockman/allocator.cc
   blockman/block_alloc.h blockman/block_alloc.cc
   blockman/block_locks.h blockman/block_locks.cc
-  blockman/structs.h
 )
 
 set(MODEL
@@ -26,11 +26,17 @@ set(MODEL
   model/parser.h
 )
 
+set(KEYCACHE
+  keycache/keycache.h keycache/keycache.cc
+  keycache/murmurhash3.h keycache/murmurhash3.cc
+)
+
 source_group( src\\common   FILES ${COMMON})
 source_group( src\\storage  FILES ${STORAGE})
 source_group( src\\blockman FILES ${BLOCKMAN})
 source_group( src\\model    FILES ${MODEL})
+source_group( src\\keycache FILES ${KEYCACHE})
 
-add_library(cheesebase ${COMMON} ${STORAGE} ${BLOCKMAN} ${MODEL})
+add_library(cheesebase ${KEYCACHE} ${COMMON} ${STORAGE} ${BLOCKMAN} ${MODEL})
 target_link_libraries(cheesebase ${Boost_LIBRARIES})
 

@@ -4,4 +4,5 @@ include_directories(.)
 add_subdirectory(storage)
 add_subdirectory(blockman)
 add_subdirectory(model)
+add_subdirectory(keycache)
 
