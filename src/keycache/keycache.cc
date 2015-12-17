@@ -156,7 +156,7 @@ std::string KeyCache::getString(Key k) {
   DskKey key{ k };
   Expects(key.index > 0);
   auto lookup = m_cache.find(key.hash);
-  if (lookup == m_cache.end() || lookup->second.size() <= key.index)
+  if (lookup == m_cache.end() || lookup->second.size() < key.index)
     throw KeyCacheError("key not known");
   return lookup->second[key.index - 1];
 }
