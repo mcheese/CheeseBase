@@ -5,7 +5,7 @@
 
 namespace cheesebase {
 
-DskKey KeyTransaction::getKey(const std::string& str) {
+Key KeyTransaction::getKey(const std::string& str) {
   if (str.size() > 256) throw KeyCacheError("key too long");
   Expects(m_cache != nullptr);
   auto h = hashString(str);
@@ -13,7 +13,7 @@ DskKey KeyTransaction::getKey(const std::string& str) {
   // check local cache
   if (m_local.count(h) > 0) {
     for (auto& p : m_local[h]) {
-      if (p.second.first == str) return DskKey(h, p.first);
+      if (p.second.first == str) return DskKey(h, p.first + 1).key();
     }
   }
 
@@ -25,7 +25,7 @@ DskKey KeyTransaction::getKey(const std::string& str) {
   if (lookup != m_cache->m_cache.end()) {
     for (; i < lookup->second.size(); ++i) {
       if (lookup->second[i] == str) {
-        return DskKey(h, gsl::narrow<KeyIndex>(i));
+        return DskKey(h, gsl::narrow<KeyIndex>(i + 1)).key();
       }
     }
   }
@@ -40,7 +40,7 @@ DskKey KeyTransaction::getKey(const std::string& str) {
   lookup = m_cache->m_cache.find(h);
   if (lookup != m_cache->m_cache.end()) {
     for (; i < lookup->second.size(); ++i) {
-      if (lookup->second[i] == str) return DskKey(h, gsl::narrow<KeyIndex>(i));
+      if (lookup->second[i] == str) return DskKey(h, gsl::narrow<KeyIndex>(i) + 1).key();
     }
   }
 
@@ -51,7 +51,7 @@ DskKey KeyTransaction::getKey(const std::string& str) {
   m_local[h].emplace(idx, std::pair<std::string, DskKeyCacheSize>{
                               str, gsl::narrow<DskKeyCacheSize>(str.size()) });
 
-  return DskKey(h, idx);
+  return DskKey(h, idx + 1).key();
 }
 
 void KeyTransaction::upgrade() {
@@ -151,15 +151,17 @@ KeyCache::KeyCache(Block first_block, Storage& store)
   }
 }
 
-std::string KeyCache::getString(const DskKey& key) {
+std::string KeyCache::getString(Key k) {
   ShLock<UgMutex> lck{ m_mtx };
+  DskKey key{ k };
+  Expects(key.index > 0);
   auto lookup = m_cache.find(key.hash);
   if (lookup == m_cache.end() || lookup->second.size() <= key.index)
     throw KeyCacheError("key not known");
-  return lookup->second[key.index];
+  return lookup->second[key.index - 1];
 }
 
-boost::optional<DskKey> KeyCache::getKey(const std::string& str) {
+boost::optional<Key> KeyCache::getKey(const std::string& str) {
   ShLock<UgMutex> lck{ m_mtx };
 
   auto h = hashString(str);
@@ -169,7 +171,7 @@ boost::optional<DskKey> KeyCache::getKey(const std::string& str) {
     for (; i < lookup->second.size(); ++i) {
       if (lookup->second[i] == str) {
         Expects(i <= std::numeric_limits<KeyIndex>::max());
-        return DskKey(h, gsl::narrow_cast<KeyIndex>(i));
+        return DskKey(h, gsl::narrow_cast<KeyIndex>(i + 1)).key();
       }
     }
   }

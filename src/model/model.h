@@ -20,8 +20,26 @@
 #include "common/common.h"
 
 namespace cheesebase {
+
+DEF_EXCEPTION(ModelError);
+
 namespace model {
 
+////////////////////////////////////////////////////////////////////////////////
+// on disk type info
+constexpr size_t k_short_string_limit = 24;
+
+enum ValueType : uint8_t {
+  object = 'O',
+  list = 'A',
+  number = 'N',
+  string = 'S',
+  boolean_true = 'T',
+  boolean_false = 'F',
+  null = '0'
+};
+
+size_t valueExtraWords(uint8_t t);
 
 ////////////////////////////////////////////////////////////////////////////////
 // scalar
@@ -48,6 +66,8 @@ public:
   virtual ~Value() = default;
   virtual std::ostream& print(std::ostream& os) const = 0;
   virtual std::ostream& prettyPrint(std::ostream& os, size_t depth) const = 0;
+  virtual ValueType type() const = 0;
+  virtual std::vector<uint64_t> extraWords() const = 0;
 };
 
 using PValue = std::unique_ptr<Value>;
@@ -67,6 +87,11 @@ public:
 
   std::ostream& print(std::ostream& os) const override;
   std::ostream& prettyPrint(std::ostream& os, size_t depth = 0) const override;
+  ValueType type() const override;
+  std::vector<uint64_t> extraWords() const override;
+
+  Map<Key, PValue>::const_iterator begin() const;
+  Map<Key, PValue>::const_iterator end() const;
 
 private:
   Map<Key, PValue> m_childs;
@@ -83,6 +108,8 @@ public:
 
   std::ostream& print(std::ostream& os) const override;
   std::ostream& prettyPrint(std::ostream& os, size_t depth = 0) const override;
+  ValueType type() const override;
+  std::vector<uint64_t> extraWords() const override;
 
 private:
   List<PValue> m_childs;
@@ -97,6 +124,8 @@ public:
 
   std::ostream& print(std::ostream& os) const override;
   std::ostream& prettyPrint(std::ostream& os, size_t depth) const override;
+  ValueType type() const override;
+  std::vector<uint64_t> extraWords() const override;
 
 private:
   boost::variant<String, Number, Bool, Null> m_data;

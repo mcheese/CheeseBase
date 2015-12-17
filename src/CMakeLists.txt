@@ -23,6 +23,7 @@ set(BLOCKMAN
 
 set(MODEL
   model/model.h model/model.cc
+  model/btree.h model/btree.cc
   model/parser.h
 )
 

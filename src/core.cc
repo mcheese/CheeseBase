@@ -52,4 +52,28 @@ Database::Database(const std::string& file) {
       Block{ k_page_size / 2, k_page_size / 2 }, *m_store);
 }
 
+Transaction Database::startTransaction() { return Transaction(*this); };
+
+ReadRef Transaction::load(PageNr p) { return m_storage.loadPage(p); };
+
+Block Transaction::alloc(size_t s) { return m_alloc.alloc(s); };
+
+void Transaction::free(Addr a) { return m_alloc.free(a); }
+
+Key Transaction::key(const std::string& s) { return m_kcache.getKey(s); }
+
+Transaction::Transaction(Database& db)
+    : m_storage(*db.m_store)
+    , m_alloc(db.m_alloc->startTransaction())
+    , m_kcache(db.m_keycache->startTransaction(m_alloc)) {}
+
+void Transaction::commit(Writes w) {
+  auto w1 = m_alloc.commit();
+  auto w2 = m_kcache.commit();
+  w.reserve(w.size() + w1.size() + w2.size());
+  std::move(w1.begin(), w1.end(), std::back_inserter(w));
+  std::move(w2.begin(), w2.end(), std::back_inserter(w));
+  m_storage.storeWrite(std::move(w));
+}
+
 } // namespace cheesebase

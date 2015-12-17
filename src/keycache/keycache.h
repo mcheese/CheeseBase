@@ -27,7 +27,7 @@ public:
   KeyTransaction() : m_cache(nullptr), m_alloc(nullptr) {}
   MOVE_ONLY(KeyTransaction);
 
-  DskKey getKey(const std::string& str);
+  Key getKey(const std::string& str);
   void upgrade();
 
   Writes commit();
@@ -55,11 +55,11 @@ public:
 
   // Get string version of internal key representation. Throws on failure since
   // every key in the database should be successfully found here.
-  std::string getString(const DskKey& key);
+  std::string getString(Key key);
 
   // Try to get key representation of string. Returns boost::none if the string
   // is not known. Use your transaction if you may just have inserted it.
-  boost::optional<DskKey> getKey(const std::string& str);
+  boost::optional<Key> getKey(const std::string& str);
 
   // Start KeyTransaction, allowing you to insert new strings. It is required
   // to call commit() and add the returned Writes to the disk transaction.

@@ -4,20 +4,43 @@
 
 #include "common/common.h"
 
-#include <string>
+#include "blockman/allocator.h"
+#include "keycache/keycache.h"
+#include "storage/storage.h"
+
 #include <memory>
+#include <string>
 
 namespace cheesebase {
 
 DEF_EXCEPTION(DatabaseError);
 
-class Storage;
-class Allocator;
-class KeyCache;
+class Database;
+
+class Transaction {
+  friend class Database;
+
+public:
+  ReadRef load(PageNr p);
+  Block alloc(size_t s);
+  void free(Addr a);
+  Key key(const std::string& s);
+
+  void commit(Writes w);
+private:
+  Transaction(Database& db);
+
+  Storage& m_storage;
+  AllocTransaction m_alloc;
+  KeyTransaction m_kcache;
+};
 
 class Database {
+  friend class Transaction;
+
 public:
   Database(const std::string& name);
+  Transaction startTransaction();
 
 private:
   // for test cases

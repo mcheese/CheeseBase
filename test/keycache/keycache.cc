@@ -39,8 +39,6 @@ TEST_CASE("KeyCache single") {
     auto k1 = tk.getKey("test string 1");
     auto k2 = tk.getKey("test string 2");
     REQUIRE(k1 != k2);
-    REQUIRE(k1.index == 0); // both are inserted on empty cache
-    REQUIRE(k2.index == 0); // so index should be 0
   }
 
   std::string teststr{ "test string" };
@@ -87,8 +85,6 @@ TEST_CASE("KeyCache database") {
     auto k1 = tk.getKey("test string 1");
     auto k2 = tk.getKey("test string 2");
     REQUIRE(k1 != k2);
-    REQUIRE(k1.index == 0); // both are inserted on empty cache
-    REQUIRE(k2.index == 0); // so index should be 0
   }
 
   std::string teststr{ "test string" };
@@ -158,7 +154,7 @@ TEST_CASE("KeyCache database") {
     // need to fill the initial allocation to force an extension
     const size_t amount = 1000;
     std::vector<std::string> vec;
-    std::vector<DskKey> keys;
+    std::vector<Key> keys;
     keys.reserve(amount);
     vec.reserve(amount);
     for (size_t i = 0; i < amount; ++i) {

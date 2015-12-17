@@ -16,15 +16,18 @@ enum class BlockType {
   t4 = '4'  // 1/16 page (256)
 };
 
-static size_t toBlockSize(BlockType t) {
-  switch (t) {
-  case BlockType::pg: return k_page_size;
-  case BlockType::t1: return k_page_size / 2;
-  case BlockType::t2: return k_page_size / 4;
-  case BlockType::t3: return k_page_size / 8;
-  case BlockType::t4: return k_page_size / 16;
-  default: throw ConsistencyError("Invalid block type");
-  }
+constexpr size_t toBlockSize(BlockType t) {
+  return t == BlockType::pg
+             ? k_page_size
+             : t == BlockType::t1
+                   ? k_page_size / 2
+                   : t == BlockType::t2
+                         ? k_page_size / 4
+                         : t == BlockType::t3
+                               ? k_page_size / 8
+                               : t == BlockType::t4 ? k_page_size / 16
+                                                    : throw ConsistencyError(
+                                                          "Invalid block type");
 }
 
 CB_PACKED(struct DskBlockHdr {
@@ -59,17 +62,26 @@ CB_PACKED(struct DskDatabaseHdr {
 static_assert(sizeof(DskDatabaseHdr) <= k_page_size / 2,
               "Database header should be smaller than half of the page size");
 
+using Key = uint64_t;
+
 CB_PACKED(struct DskKey {
-  DskKey(uint32_t h, uint16_t i) : hash(h), index(i) {};
+  DskKey() = default;
+  DskKey(uint32_t h, uint16_t i) : hash(h), index(i) {}
+  DskKey(Key k) {
+    k >>= 16;
+    index = gsl::narrow_cast<uint16_t>(k);
+    hash = gsl::narrow_cast<uint32_t>(k >> 16);
+  }
+  Key key() const {
+    return ((static_cast<uint64_t>(hash) << 16) + index) << 16;
+  }
   uint32_t hash;
   uint16_t index;
 
   bool operator!=(const DskKey& o) {
     return this->hash != o.hash || this->index != o.index;
   }
-  bool operator==(const DskKey& o) {
-    return !(*this != o);
-  }
+  bool operator==(const DskKey& o) { return !(*this != o); }
 });
 static_assert(sizeof(DskKey) == 6, "Invalid disk key size");
 
