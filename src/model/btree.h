@@ -4,6 +4,8 @@
 
 #include "common/common.h"
 #include "common/structs.h"
+#include "storage/storage.h"
+#include "model.h"
 #include <boost/container/flat_map.hpp>
 #include <memory>
 
@@ -12,9 +14,6 @@ namespace cheesebase {
 class Transaction;
 class Database;
 
-namespace model {
-class Value;
-}
 
 namespace btree {
 
@@ -117,19 +116,46 @@ private:
 // ReadOnly
 
 class BtreeReadOnly {
+public:
   BtreeReadOnly(Database& db, Addr root);
+
+  model::Object getObject();
+  std::unique_ptr<model::Value> getValue(Key key);
+
+private:
+  Database& m_db;
+  Addr m_root;
 };
 
-class NodeR {
+class NodeR : public Node {
+public:
+  virtual void getAll(model::Object& obj) = 0;
 
+protected:
+  NodeR(Database& db, Addr addr, ReadRef page);
+
+  gsl::span<const uint64_t> getData();
+
+  Database& m_db;
+  ReadRef m_page;
 };
 
-class LeafR {
+class LeafR : public NodeR {
+public:
+  LeafR(Database& db, Addr addr, ReadRef page);
 
+  void getAll(model::Object& obj) override;
+
+private:
+  std::pair<model::Key, model::PValue>
+  readValue(gsl::span<const uint64_t>::const_iterator& it);
 };
 
-class InternalR {
+class InternalR : public NodeR {
+public:
+  InternalR(Database& db, Addr addr, ReadRef page);
 
+  void getAll(model::Object& obj) override;
 };
 
 } // namespace btree

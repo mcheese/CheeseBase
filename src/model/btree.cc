@@ -55,8 +55,7 @@ static_assert(sizeof(DskNextPtr) == 8, "Invalid NextPtr size");
 
 namespace {
 
-std::unique_ptr<NodeW> openNodeW(Transaction& ta, Addr addr) {
-  auto page = ta.load(toPageNr(addr));
+bool isNodeLeaf(const ReadRef& page, Addr addr) {
   auto hdr = gsl::as_span<DskBlockHdr>(
       page->subspan(toPageOffset(addr), sizeof(DskBlockHdr)))[0];
 
@@ -65,14 +64,27 @@ std::unique_ptr<NodeW> openNodeW(Transaction& ta, Addr addr) {
 
   // first byte of Addr is always 0
   // next-ptr of leafs put a flag in the first byte, marking the node as leaf
-  auto leaf = gsl::as_span<const DskNextPtr>(page->subspan(
+  return gsl::as_span<const DskNextPtr>(page->subspan(
       toPageOffset(addr) + sizeof(DskBlockHdr), sizeof(DskNextPtr)))[0]
-                  .hasMagic();
+      .hasMagic();
+}
 
-  if (leaf)
+std::unique_ptr<NodeW> openNodeW(Transaction& ta, Addr addr) {
+  auto page = ta.load(toPageNr(addr));
+
+  if (isNodeLeaf(page, addr))
     return std::make_unique<LeafW>(ta, addr);
   else
     return std::make_unique<InternalW>(ta, addr);
+}
+
+std::unique_ptr<NodeR> openNodeR(Database& db, Addr addr) {
+  auto page = db.loadPage(toPageNr(addr));
+
+  if (isNodeLeaf(page, addr))
+    return std::make_unique<LeafR>(db, addr, std::move(page));
+  else
+    return std::make_unique<InternalR>(db, addr, std::move(page));
 }
 
 size_t searchLeafPosition(Key key, gsl::span<const uint64_t> span) {
@@ -93,7 +105,14 @@ size_t searchInternalPosition(Key key, gsl::span<const uint64_t> span) {
 } // anonymous namespace
 
 ////////////////////////////////////////////////////////////////////////////////
-// Btree
+// Node
+
+Node::Node(Addr addr) : m_addr(addr) {}
+
+Addr Node::addr() const { return m_addr; }
+
+////////////////////////////////////////////////////////////////////////////////
+// BtreeWriteable
 
 BtreeWritable::BtreeWritable(Transaction& ta, Addr root) {
   m_root = openNodeW(ta, root);
@@ -117,13 +136,6 @@ Writes BtreeWritable::getWrites() const {
   Expects(m_root);
   return m_root->getWrites();
 }
-
-////////////////////////////////////////////////////////////////////////////////
-// Node
-
-Node::Node(Addr addr) : m_addr(addr) {}
-
-Addr Node::addr() const { return m_addr; }
 
 ////////////////////////////////////////////////////////////////////////////////
 // NodeW
@@ -286,6 +298,107 @@ size_t InternalW::findSize() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+// BtreeReadOnly
 
+BtreeReadOnly::BtreeReadOnly(Database& db, Addr root)
+    : m_db(db), m_root(root) {}
+
+model::Object BtreeReadOnly::getObject() {
+  model::Object obj;
+  openNodeR(m_db, m_root)->getAll(obj);
+  return obj;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// NodeR
+
+NodeR::NodeR(Database& db, Addr addr, ReadRef page)
+    : Node(addr), m_db(db), m_page(std::move(page)) {}
+
+gsl::span<const uint64_t> NodeR::getData() {
+  return gsl::as_span<const uint64_t>(m_page->subspan(
+      toPageOffset(m_addr) + sizeof(DskBlockHdr), k_node_max_bytes));
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// LeafR
+
+LeafR::LeafR(Database& db, Addr addr, ReadRef page)
+    : NodeR(db, addr, std::move(page)) {}
+
+void LeafR::getAll(model::Object& obj) {
+  auto data = getData();
+  auto it = data.begin();
+  auto end = data.end();
+  auto next = DskNextPtr();
+  next.data = *it++;
+
+  while (it != end && *it != 0) {
+    obj.append(readValue(it));
+  }
+}
+
+std::pair<model::Key, model::PValue>
+LeafR::readValue(gsl::span<const uint64_t>::const_iterator& it) {
+  auto entry = DskEntry(*it++);
+  std::pair<model::Key, model::PValue> ret;
+  ret.first = m_db.resolveKey(entry.key.key());
+
+  if (entry.value.type & 0b10000000) {
+    // short string
+    auto size = (entry.value.type & 0b00111111);
+    std::string str;
+    str.reserve(size);
+    uint64_t word;
+    for (size_t i = 0; i < size; ++i) {
+      if (i % 8 == 0) word = *it++;
+      str.push_back(static_cast<char>(word));
+      word >>= 8;
+    }
+    ret.second = std::make_unique<model::Scalar>(std::move(str));
+  } else {
+    switch (entry.value.type) {
+    case model::ValueType::object:
+      ret.second = std::make_unique<model::Object>(
+          BtreeReadOnly(m_db, *it++).getObject());
+      break;
+    case model::ValueType::list:
+      throw std::runtime_error("arrays NYI");
+      break;
+    case model::ValueType::number:
+      ret.second = std::make_unique<model::Scalar>(
+          *reinterpret_cast<const model::Number*>(&(*it++)));
+      break;
+    case model::ValueType::string:
+      throw std::runtime_error("long string NYI");
+      break;
+    case model::ValueType::boolean_true:
+      ret.second = std::make_unique<model::Scalar>(true);
+      break;
+    case model::ValueType::boolean_false:
+      ret.second = std::make_unique<model::Scalar>(false);
+      break;
+    case model::ValueType::null:
+      ret.second = std::make_unique<model::Scalar>(model::Null());
+      break;
+    default:
+      throw ConsistencyError("Unknown value type");
+    }
+  }
+
+  return ret;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// InternalR
+
+InternalR::InternalR(Database& db, Addr addr, ReadRef page)
+    : NodeR(db, addr, std::move(page)) {}
+
+void InternalR::getAll(model::Object& obj) {
+  // just follow the left most path and let leafs go through
+  throw std::runtime_error("NIY"); }
+
+////////////////////////////////////////////////////////////////////////////////
 } // namespace btree
 } // namespace cheesebase

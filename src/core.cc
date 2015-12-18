@@ -54,6 +54,12 @@ Database::Database(const std::string& file) {
 
 Transaction Database::startTransaction() { return Transaction(*this); };
 
+ReadRef Database::loadPage(PageNr p) { return m_store->loadPage(p); }
+
+std::string Database::resolveKey(Key k) const {
+  return m_keycache->getString(k);
+}
+
 ReadRef Transaction::load(PageNr p) { return m_storage.loadPage(p); };
 
 Block Transaction::alloc(size_t s) { return m_alloc.alloc(s); };

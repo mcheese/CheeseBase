@@ -13,12 +13,7 @@
 
 using namespace cheesebase;
 
-TEST_CASE("B+Tree") {
-  boost::filesystem::remove("test.db");
-  Database db("test.db");
-  auto ta = db.startTransaction();
-
-  std::string input = R"(
+const std::string input = R"(
     {
       "b": "foo",
       "c": true,
@@ -28,14 +23,26 @@ TEST_CASE("B+Tree") {
       "g": { "a": "a long short string", "xd":null, "sub object":
 { "heh": 1337, "lolasdasd": "1337", "f": "abcdefksdlabcjfldsoe"} }
     }
-        )";
+)";
 
+TEST_CASE("B+Tree") {
+  boost::filesystem::remove("test.db");
+  Database db("test.db");
+  Addr root;
   auto doc = parseJson(input.begin(), input.end());
 
-  auto node = btree::BtreeWritable(ta);
-  for (auto& c : doc) {
-    node.insert(ta.key(c.first), *c.second);
+  {
+    auto ta = db.startTransaction();
+    auto node = btree::BtreeWritable(ta);
+    root = node.addr();
+    for (auto& c : doc) {
+      node.insert(ta.key(c.first), *c.second);
+    }
+    ta.commit(node.getWrites());
   }
 
-  ta.commit(node.getWrites());
+  {
+    auto read = btree::BtreeReadOnly(db, root).getObject();
+    read.prettyPrint(std::cout) << std::endl;
+  }
 }

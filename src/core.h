@@ -41,6 +41,8 @@ class Database {
 public:
   Database(const std::string& name);
   Transaction startTransaction();
+  std::string resolveKey(Key k) const;
+  ReadRef loadPage(PageNr p);
 
 private:
   // for test cases
