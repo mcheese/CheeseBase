@@ -32,7 +32,7 @@ public:
   // the journal has been written and persistence of the write is guaranteed.
   void storeWrite(Write write);
 
-  void storeWrite(std::vector<Write>& transaction);
+  void storeWrite(std::vector<Write> transaction);
 
 private:
   Cache m_cache;

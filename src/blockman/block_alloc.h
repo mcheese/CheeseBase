@@ -56,8 +56,8 @@ public:
   TierAllocator(Storage& store, Addr free, ParentAlloc& parent)
       : BlockAllocator(store, free), m_parent_alloc(parent) {}
   static constexpr size_t size() noexcept { return ParentAlloc::size() / 2; }
-  static constexpr Addr hdrOffset();
-  static constexpr BlockType type();
+  static Addr hdrOffset();
+  static BlockType type();
   std::pair<Block, AllocWrites> allocBlock();
   AllocWrites freeBlock(Addr);
 
@@ -69,29 +69,5 @@ using T1Allocator = TierAllocator<PageAllocator>;
 using T2Allocator = TierAllocator<T1Allocator>;
 using T3Allocator = TierAllocator<T2Allocator>;
 using T4Allocator = TierAllocator<T3Allocator>;
-
-constexpr Addr T1Allocator::hdrOffset() {
-  return offsetof(DskDatabaseHdr, free_alloc_t1);
-}
-
-constexpr Addr T2Allocator::hdrOffset() {
-  return offsetof(DskDatabaseHdr, free_alloc_t2);
-}
-
-constexpr Addr T3Allocator::hdrOffset() {
-  return offsetof(DskDatabaseHdr, free_alloc_t3);
-}
-
-constexpr Addr T4Allocator::hdrOffset() {
-  return offsetof(DskDatabaseHdr, free_alloc_t4);
-}
-
-constexpr BlockType T1Allocator::type() { return BlockType::t1; }
-
-constexpr BlockType T2Allocator::type() { return BlockType::t2; }
-
-constexpr BlockType T3Allocator::type() { return BlockType::t3; }
-
-constexpr BlockType T4Allocator::type() { return BlockType::t4; }
 
 } // namespace cheesebase

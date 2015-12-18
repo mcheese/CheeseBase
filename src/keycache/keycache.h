@@ -21,6 +21,8 @@ class KeyCache;
 using KeyHash = decltype(DskKey::hash);
 using KeyIndex = decltype(DskKey::index);
 
+static const DskKeyCacheSize s_terminator{0};
+
 class KeyTransaction {
   friend KeyCache;
 public:
@@ -40,7 +42,6 @@ private:
 
   KeyCache* m_cache;
   AllocTransaction* m_alloc;
-  static const DskKeyCacheSize s_terminator{0};
   UgLock<UgMutex> m_ug_lck;
   ExLock<UgMutex> m_ex_lck;
   boost::container::flat_map < KeyHash,

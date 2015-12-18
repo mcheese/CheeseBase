@@ -14,7 +14,10 @@
 using AsyncStruct = OVERLAPPED;
 using Handle = HANDLE;
 #else
-// TODO: POSIX impl
+#include <fcntl.h>
+#include <aio.h>
+using AsyncStruct = struct aiocb;
+using Handle = int;
 #endif
 
 namespace cheesebase {

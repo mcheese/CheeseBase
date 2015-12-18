@@ -9,11 +9,6 @@ namespace cheesebase {
 DEF_EXCEPTION(ParserError);
 
 template <class InputIt>
-model::Object parseJson(InputIt begin, InputIt end) {
-  return JsonParser<InputIt>::parse(begin, end);
-}
-
-template <class InputIt>
 class JsonParser {
 public:
   static model::Object parse(InputIt begin, InputIt end) {
@@ -188,5 +183,10 @@ private:
     throw ParserError("expected value");
   }
 };
+
+template <class InputIt>
+model::Object parseJson(InputIt begin, InputIt end) {
+  return JsonParser<InputIt>::parse(begin, end);
+}
 
 } // namespace cheesebase

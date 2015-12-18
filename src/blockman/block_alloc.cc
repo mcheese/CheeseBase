@@ -5,10 +5,37 @@
 
 namespace cheesebase {
 
-template T1Allocator;
-template T2Allocator;
-template T3Allocator;
-template T4Allocator;
+template<>
+Addr T1Allocator::hdrOffset() {
+  return offsetof(DskDatabaseHdr, free_alloc_t1);
+}
+
+template<>
+Addr T2Allocator::hdrOffset() {
+  return offsetof(DskDatabaseHdr, free_alloc_t2);
+}
+
+template<>
+Addr T3Allocator::hdrOffset() {
+  return offsetof(DskDatabaseHdr, free_alloc_t3);
+}
+
+template<>
+Addr T4Allocator::hdrOffset() {
+  return offsetof(DskDatabaseHdr, free_alloc_t4);
+}
+
+template<>
+BlockType T1Allocator::type() { return BlockType::t1; }
+
+template<>
+BlockType T2Allocator::type() { return BlockType::t2; }
+
+template<>
+BlockType T3Allocator::type() { return BlockType::t3; }
+
+template<>
+BlockType T4Allocator::type() { return BlockType::t4; }
 
 ////////////////////////////////////////////////////////////////////////////////
 // PageAllocator
@@ -105,5 +132,10 @@ AllocWrites TierAllocator<ParentAlloc>::freeBlock(Addr block) {
   m_next_cache[block] = hdr.next();
   return { { hdrOffset(), m_free }, { block, hdr.data } };
 }
+
+template class TierAllocator<PageAllocator>;
+template class TierAllocator<T1Allocator>;
+template class TierAllocator<T2Allocator>;
+template class TierAllocator<T3Allocator>;
 
 } // namespace cheesebase

@@ -16,7 +16,7 @@ void Storage::storeWrite(Write write) {
   copySpan(write.data, p->subspan(toPageOffset(write.addr)));
 }
 
-void Storage::storeWrite(std::vector<Write>& transaction) {
+void Storage::storeWrite(std::vector<Write> transaction) {
   // TODO: write to journal here
 
   // sort the writes to minimize cache requests

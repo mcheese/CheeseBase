@@ -18,26 +18,7 @@ struct BlockLock {
   Writer writer{ Writer::None };
 };
 
-class BlockLocker {
-  friend class BlockLockSession;
-
-public:
-  BlockLocker() = default;
-
-  BlockLockSession startSession();
-
-private:
-  void readLock(Addr);
-  void writeLock(Addr);
-  void readUnlock(Addr);
-  void writeUnlock(Addr);
-
-  std::shared_ptr<BlockLock> getLock(Addr);
-
-  Mutex m_mtx;
-  Cond m_cnd;
-  std::unordered_map<Addr, std::shared_ptr<BlockLock>> m_locks;
-};
+class BlockLocker;
 
 class BlockLockSession {
   friend class BlockLocker;
@@ -57,6 +38,27 @@ private:
   BlockLocker& m_locker;
   std::set<Addr> m_read_locks;
   std::set<Addr> m_write_locks;
+};
+
+class BlockLocker {
+  friend class BlockLockSession;
+
+public:
+  BlockLocker() = default;
+
+  BlockLockSession startSession();
+
+private:
+  void readLock(Addr);
+  void writeLock(Addr);
+  void readUnlock(Addr);
+  void writeUnlock(Addr);
+
+  std::shared_ptr<BlockLock> getLock(Addr);
+
+  Mutex m_mtx;
+  Cond m_cnd;
+  std::unordered_map<Addr, std::shared_ptr<BlockLock>> m_locks;
 };
 
 } // namespace cheesebase

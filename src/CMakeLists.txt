@@ -46,3 +46,7 @@ source_group( src           FILES ${CORE})
 add_library(cheesebase ${CORE} ${KEYCACHE} ${COMMON} ${STORAGE} ${BLOCKMAN} ${MODEL})
 target_link_libraries(cheesebase ${Boost_LIBRARIES})
 
+if (NOT WIN32)
+  target_link_libraries(cheesebase rt)
+endif()
+
