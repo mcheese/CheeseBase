@@ -5,19 +5,32 @@
 
 #pragma once
 
-#include "disk_worker.h"
+#include "common/common.h"
+#include "common/sync.h"
 
 #include <unordered_map>
+#include <boost/interprocess/file_mapping.hpp>
+#include <boost/interprocess/mapped_region.hpp>
 
 namespace cheesebase {
+
+DEF_EXCEPTION(FileError);
 
 struct CachePage {
   RwMutex mutex;
   gsl::span<Byte> data;
+  boost::interprocess::mapped_region region;
   PageNr page_nr{ static_cast<PageNr>(-1) };
+  bool changed{ false };
   CachePage* less_recent;
   CachePage* more_recent;
-  bool changed{ false };
+};
+
+enum class OpenMode {
+  create_new,    // Creates new DB if it does not exist.
+  create_always, // Creates new DB, always. Overwrite existing DB.
+  open_existing, // Opens DB if it exists.
+  open_always    // Opens DB, always. Creates new DB if it does not exist.
 };
 
 // Locked reference of a page.
@@ -65,9 +78,9 @@ private:
   void freePage(CachePage& p, const ExLock<RwMutex>& page_lck,
                 const ExLock<RwMutex>& map_lck);
 
-  DiskWorker m_disk_worker;
-  Byte* m_memory;
-
+  boost::interprocess::file_mapping m_file;
+  std::string m_filename;
+  uint64_t m_size;
   Mutex m_pages_mtx;
   std::unique_ptr<CachePage[]> m_pages;
   CachePage* m_least_recent;

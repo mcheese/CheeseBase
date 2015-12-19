@@ -1,20 +1,52 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
 
 #include "cache.h"
-
-#include <boost/thread/locks.hpp>
-#include <boost/align/aligned_alloc.hpp>
+#include <boost/filesystem.hpp>
+#include <fstream>
 
 namespace cheesebase {
 
-Cache::Cache(const std::string& fn, OpenMode m, size_t nr_pages)
-    : m_disk_worker(fn, m)
-    , m_memory((Byte*)boost::alignment::aligned_alloc(k_page_size,
-                                                      k_page_size * nr_pages))
-    , m_pages(std::make_unique<CachePage[]>(nr_pages)) {
-  for (size_t i = 0; i < nr_pages; ++i) {
-    m_pages[i].data = gsl::span<Byte>(&m_memory[i * k_page_size], k_page_size);
+namespace bi = boost::interprocess;
+namespace fs = boost::filesystem;
 
+size_t createNew(const std::string& fn) {
+  std::fstream fb{};
+  fb.open(fn, std::ios_base::in | std::ios_base::out | std::ios_base::trunc |
+                  std::ios_base::binary);
+  fb.seekp(k_page_size * 8 - 1, std::ios_base::beg);
+  fb.put('\0');
+  return k_page_size * 8;
+}
+
+Cache::Cache(const std::string& fn, OpenMode m, size_t nr_pages)
+    : m_filename(fn) {
+  auto exists = fs::exists(fn);
+  switch (m) {
+  case OpenMode::create_new:
+    if (exists) throw FileError("file already exists");
+    m_size = createNew(fn);
+    break;
+  case OpenMode::create_always:
+    if (exists) fs::remove(fn);
+    m_size = createNew(fn);
+    break;
+  case OpenMode::open_existing:
+    if (exists)
+      m_size = fs::file_size(fn);
+    else
+      m_size = createNew(fn);
+    break;
+  case OpenMode::open_always:
+    if (!exists) throw FileError("file not found");
+    m_size = fs::file_size(fn);
+    break;
+  default:
+    throw FileError("unknown open type");
+  }
+
+  m_file = bi::file_mapping(fn.c_str(), bi::read_write);
+  m_pages = std::make_unique<CachePage[]>(nr_pages);
+  for (size_t i = 0; i < nr_pages; ++i) {
     m_pages[i].less_recent = (i > 0 ? &m_pages[i - 1] : nullptr);
     m_pages[i].more_recent = (i < nr_pages - 1 ? &m_pages[i + 1] : nullptr);
   }
@@ -24,7 +56,6 @@ Cache::Cache(const std::string& fn, OpenMode m, size_t nr_pages)
 
 Cache::~Cache() {
   flush();
-  boost::alignment::aligned_free(m_memory);
 }
 
 ReadRef Cache::readPage(PageNr page_nr) {
@@ -34,8 +65,7 @@ ReadRef Cache::readPage(PageNr page_nr) {
 
 WriteRef Cache::writePage(PageNr page_nr) {
   auto p = getPage<ExLock<RwMutex>>(page_nr);
-  p.first.changed = true;
-  return {p.first.data, std::move(p.second)};
+  return { p.first.data, std::move(p.second) };
 }
 
 std::pair<CachePage&, ExLock<RwMutex>>
@@ -82,9 +112,12 @@ void Cache::freePage(CachePage& p, const ExLock<RwMutex>& page_lck,
   Expects(map_lck.mutex() == &m_map_mtx);
   Expects(map_lck.owns_lock());
 
-  if (p.changed == true) m_disk_worker.write(&p);
-  Ensures(p.changed == false);
+  if (p.changed == true) {
+    p.region.flush(0, k_page_size, false);
+    p.changed = false;
+  }
   m_map.erase(p.page_nr);
+  p.region = {};
   p.page_nr = static_cast<PageNr>(-1);
 }
 
@@ -123,25 +156,27 @@ std::pair<CachePage&, Lock> Cache::getPage(PageNr page_nr) {
     cache_x_lck.unlock();
 
     page.page_nr = page_nr;
-    m_disk_worker.read(&page);
-
+    if ((page_nr + 1) * k_page_size > m_size) { 
+      fs::resize_file(m_filename, (page_nr + 8) * k_page_size);
+      m_size = (page_nr + 8) * k_page_size;
+    }
+    page.region = bi::mapped_region(m_file, bi::read_write,
+                                    page_nr * k_page_size, k_page_size);
+    page.data = gsl::span<Byte>(static_cast<Byte*>(page.region.get_address()),
+                                k_page_size);
     // downgrade the exclusive page lock to shared ATOMICALLY
     return {page, Lock{std::move(page_x_lck)}};
   }
 }
 
 void Cache::flush() {
-  ExLock<Mutex> lck{ m_pages_mtx };
-  std::vector<gsl::not_null<CachePage*>> writes;
-  std::vector<ShLock<RwMutex>> locks;
+  boost::lock_guard<Mutex> lck{ m_pages_mtx };
   for (auto p = m_least_recent; p != nullptr; p = p->more_recent) {
-    ShLock<RwMutex> page_lck{ p->mutex };
     if (p->changed) {
-      writes.push_back(p);
-      locks.emplace_back(std::move(page_lck));
+      if (!p->region.flush(0, k_page_size, false))
+        throw FileError("failed to flush page");
     }
   }
-  m_disk_worker.write(writes);
 }
 
 } // namespace cheesebase

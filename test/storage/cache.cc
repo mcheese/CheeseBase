@@ -6,7 +6,7 @@
 
 using namespace cheesebase;
 
-SCENARIO("Reading and writing to cache.") {
+SCENARIO("CACHE") {
   GIVEN("A cache") {
     Cache cache{ "test.db", OpenMode::create_always, 8 };
 

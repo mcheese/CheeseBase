@@ -2,8 +2,6 @@
 
 #include "storage.h"
 
-#include "fileio.h"
-
 namespace cheesebase {
 
 Storage::Storage(const std::string& filename, OpenMode mode)

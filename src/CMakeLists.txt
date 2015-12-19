@@ -9,10 +9,8 @@ set(COMMON
 
 set(STORAGE
   storage/storage.h storage/storage.cc
-  storage/fileio.h storage/fileio.cc
   storage/cache.h storage/cache.cc
   storage/inc_prio_queue.h
-  storage/disk_worker.h storage/disk_worker.cc
 )
 
 set(BLOCKMAN
@@ -45,8 +43,4 @@ source_group( src           FILES ${CORE})
 
 add_library(cheesebase ${CORE} ${KEYCACHE} ${COMMON} ${STORAGE} ${BLOCKMAN} ${MODEL})
 target_link_libraries(cheesebase ${Boost_LIBRARIES})
-
-if (NOT WIN32)
-  target_link_libraries(cheesebase rt)
-endif()
 
