@@ -9,40 +9,34 @@ namespace cheesebase {
 namespace bi = boost::interprocess;
 namespace fs = boost::filesystem;
 
-size_t createNew(const std::string& fn) {
-  std::fstream fb{};
-  fb.open(fn, std::ios_base::in | std::ios_base::out | std::ios_base::trunc |
-                  std::ios_base::binary);
-  fb.seekp(k_page_size * 8 - 1, std::ios_base::beg);
-  fb.put('\0');
-  return k_page_size * 8;
+uint64_t Cache::extendFile(uint64_t size) {
+  Expects(size > m_size);
+  for (uint64_t i = 0; i < size - m_size; ++i) m_fstream.put(0xAA);
+  if (m_fstream.bad()) throw FileError("failed extending file");
+  m_fstream.flush();
+  if (m_fstream.bad()) throw FileError("failed extending file");
+  return size;
 }
 
-Cache::Cache(const std::string& fn, OpenMode m, size_t nr_pages)
-    : m_filename(fn) {
+Cache::Cache(const std::string& fn, OpenMode m, size_t nr_pages) {
   auto exists = fs::exists(fn);
-  switch (m) {
-  case OpenMode::create_new:
-    if (exists) throw FileError("file already exists");
-    m_size = createNew(fn);
-    break;
-  case OpenMode::create_always:
-    if (exists) fs::remove(fn);
-    m_size = createNew(fn);
-    break;
-  case OpenMode::open_existing:
-    if (exists)
-      m_size = fs::file_size(fn);
-    else
-      m_size = createNew(fn);
-    break;
-  case OpenMode::open_always:
-    if (!exists) throw FileError("file not found");
-    m_size = fs::file_size(fn);
-    break;
-  default:
-    throw FileError("unknown open type");
-  }
+  if (m == OpenMode::create_new && exists)
+    throw FileError("file already exists");
+  if (m == OpenMode::open_existing && !exists)
+    throw FileError("file not found");
+  if (m == OpenMode::create_always && exists)
+    fs::remove(fn);
+
+  m_fstream.open(fn, std::ios_base::out | std::ios_base::binary |
+                         std::ios_base::app);
+  if (!m_fstream.is_open())
+    throw FileError("could not open file");
+
+  if (m == OpenMode::create_new || m == OpenMode::create_always || !exists)
+    extendFile(k_page_size * 8);
+
+  //m_fstream.seekp(0, std::ios_base::end);
+  m_size = m_fstream.tellp();
 
   m_file = bi::file_mapping(fn.c_str(), bi::read_write);
   m_pages = std::make_unique<CachePage[]>(nr_pages);
@@ -156,9 +150,8 @@ std::pair<CachePage&, Lock> Cache::getPage(PageNr page_nr) {
     cache_x_lck.unlock();
 
     page.page_nr = page_nr;
-    if ((page_nr + 1) * k_page_size > m_size) { 
-      fs::resize_file(m_filename, (page_nr + 8) * k_page_size);
-      m_size = (page_nr + 8) * k_page_size;
+    if ((page_nr + 1) * k_page_size > m_size) {
+      m_size = extendFile((page_nr + 8) * k_page_size);
     }
     page.region = bi::mapped_region(m_file, bi::read_write,
                                     page_nr * k_page_size, k_page_size);

@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <boost/interprocess/file_mapping.hpp>
 #include <boost/interprocess/mapped_region.hpp>
+#include <fstream>
 
 namespace cheesebase {
 
@@ -78,9 +79,11 @@ private:
   void freePage(CachePage& p, const ExLock<RwMutex>& page_lck,
                 const ExLock<RwMutex>& map_lck);
 
+  uint64_t extendFile(uint64_t size);
+
   boost::interprocess::file_mapping m_file;
-  std::string m_filename;
-  uint64_t m_size;
+  std::ofstream m_fstream;
+  uint64_t m_size{ 0 };
   Mutex m_pages_mtx;
   std::unique_ptr<CachePage[]> m_pages;
   CachePage* m_least_recent;
