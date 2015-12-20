@@ -38,6 +38,7 @@ enum class OpenMode {
 template <class View, class Lock>
 class PageRef {
 public:
+  PageRef() = default;
   PageRef(View page, Lock lock) : m_page(page), m_lock(std::move(lock)){};
 
   MOVE_ONLY(PageRef);

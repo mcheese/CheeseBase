@@ -29,16 +29,46 @@ CB_PACKED(struct DskEntry {
 });
 static_assert(sizeof(DskEntry) == 8, "Invalid DskEntry size");
 
+CB_PACKED(struct DskInternalEntry {
+  DskInternalEntry() = default;
+  DskInternalEntry(uint64_t w) {
+    *reinterpret_cast<uint64_t*>(this) = w;
+    if (magic[0] != '-' || magic[1] != '>')
+      throw ConsistencyError("No magic byte in key");
+  }
+
+  uint64_t fromKey(Key k) {
+    key = k;
+    magic[0] = '-';
+    magic[1] = '>';
+    return *reinterpret_cast<uint64_t*>(this);
+  }
+
+  uint64_t word() { return *reinterpret_cast<uint64_t*>(this); }
+
+  char magic[2];
+  DskKey key;
+});
+static_assert(sizeof(DskInternalEntry) == 8, "Invalid DskInternalEntry size");
+
 Key keyFromWord(uint64_t w) { return DskEntry(w).key.key(); }
 
 size_t entrySize(uint64_t e) { return DskEntry(e).extraWords() + 1; }
 
-CB_PACKED(struct DskNextPtr {
-  DskNextPtr() = default;
-  DskNextPtr(uint64_t d) {
+CB_PACKED(struct DskLeafHdr {
+  DskLeafHdr() = default;
+
+  DskLeafHdr& fromAddr(Addr d) {
     Expects((d & (static_cast<uint64_t>(0xff) << 56)) == 0);
     constexpr uint64_t magic = static_cast<uint64_t>('L') << 56;
     data = d + magic;
+    return *this;
+  }
+
+  DskLeafHdr& fromDsk(uint64_t w) {
+    data = w;
+    if (!hasMagic()) throw ConsistencyError("No magic byte in leaf node");
+    return *this;
   }
 
   bool hasMagic() const { return (data >> 56) == 'L'; }
@@ -46,7 +76,30 @@ CB_PACKED(struct DskNextPtr {
 
   uint64_t data;
 });
-static_assert(sizeof(DskNextPtr) == 8, "Invalid NextPtr size");
+static_assert(sizeof(DskLeafHdr) == 8, "Invalid DskLeafHdr size");
+
+CB_PACKED(struct DskInternalHdr {
+  DskInternalHdr() = default;
+  DskInternalHdr& fromSize(uint64_t d) {
+    Expects((d & (static_cast<uint64_t>(0xff) << 56)) == 0);
+    constexpr uint64_t magic = static_cast<uint64_t>('I') << 56;
+    data = d + magic;
+    return *this;
+  }
+  DskInternalHdr& fromRaw(uint64_t w) {
+    data = w;
+    if (!hasMagic()) throw ConsistencyError("No magic byte in internal node");
+    return *this;
+  }
+
+  bool hasMagic() const { return (data >> 56) == 'I'; }
+  size_t size() const {
+    return gsl::narrow_cast<size_t>(data & (((uint64_t)1 << 56) - 1));
+  }
+
+  uint64_t data;
+});
+static_assert(sizeof(DskInternalHdr) == 8, "Invalid DskInternalHdr size");
 
 } // anonymous namespace
 
@@ -64,8 +117,8 @@ bool isNodeLeaf(const ReadRef& page, Addr addr) {
 
   // first byte of Addr is always 0
   // next-ptr of leafs put a flag in the first byte, marking the node as leaf
-  return gsl::as_span<const DskNextPtr>(page->subspan(
-      toPageOffset(addr) + sizeof(DskBlockHdr), sizeof(DskNextPtr)))[0]
+  return gsl::as_span<const DskLeafHdr>(page->subspan(
+      toPageOffset(addr) + sizeof(DskBlockHdr), sizeof(DskLeafHdr)))[0]
       .hasMagic();
 }
 
@@ -96,10 +149,25 @@ size_t searchLeafPosition(Key key, gsl::span<const uint64_t> span) {
 }
 
 size_t searchInternalPosition(Key key, gsl::span<const uint64_t> span) {
-  for (int i = 1; i < static_cast<size_t>(span.size()); i += 2) {
-    if (span[i] == 0 || keyFromWord(span[i]) >= key) return i;
+  // 4, 6, 8... words: <hdr><addr>(<key><addr>)+
+  Expects((span.size() >= 4 && span.size() % 2 == 0));
+
+  // <hdr> <adr> (<key> <adr>) (<key> <adr>) (<key> <adr>)
+  //             ^                           ^
+  //            first                        last
+  size_t first = 0;
+  size_t last = gsl::narrow_cast<size_t>((span.size() - 2) / 2 - 1);
+
+  while (first != last) {
+    Expects(last >= first);
+    auto mid = (last - first) / 2;
+    if (key < DskInternalEntry(span[2 + mid * 2]).key.key()) {
+      last = mid;
+    } else {
+      first = mid;
+    }
   }
-  return static_cast<size_t>(span.size());
+  return first + 2;
 }
 
 } // anonymous namespace
@@ -115,11 +183,15 @@ Addr Node::addr() const { return m_addr; }
 // BtreeWriteable
 
 BtreeWritable::BtreeWritable(Transaction& ta, Addr root) {
-  m_root = openNodeW(ta, root);
+  auto page = ta.load(toPageNr(root));
+  if (isNodeLeaf(page, root))
+    m_root = std::make_unique<RootLeafW>(ta, root, *this);
+  else
+    m_root = std::make_unique<InternalW>(ta, root);
 }
 
 BtreeWritable::BtreeWritable(Transaction& ta) {
-  m_root = std::make_unique<LeafW>(AllocateNew(), ta, 0);
+  m_root = std::make_unique<RootLeafW>(AllocateNew(), ta, 0, *this);
 }
 
 Addr BtreeWritable::addr() const {
@@ -141,6 +213,8 @@ Writes BtreeWritable::getWrites() const {
 // NodeW
 
 NodeW::NodeW(Transaction& ta, Addr addr) : m_ta(ta), Node(addr) {}
+
+size_t NodeW::size() const { return m_top; }
 
 void NodeW::shiftBuffer(size_t pos, int amount) {
   Expects(m_buf);
@@ -180,7 +254,7 @@ LeafW::LeafW(AllocateNew, Transaction& ta, Addr next)
     : NodeW(ta, ta.alloc(k_node_max_bytes).addr) {
   m_buf = std::make_unique<std::array<uint64_t, k_node_max_words>>();
   std::fill(m_buf->begin(), m_buf->end(), 0);
-  (*m_buf)[0] = DskNextPtr(next).data;
+  (*m_buf)[0] = DskLeafHdr().fromAddr(next).data;
   m_top = 1;
 }
 
@@ -218,7 +292,7 @@ bool LeafW::insert(Key key, const model::Value& val) {
   bool overwrite;
 
   // enough space to insert?
-  if (m_top < k_node_max_words + extra_words) {
+  if (m_top + extra_words < k_node_max_words) {
 
     // find position to insert
     auto pos = searchLeafPosition(key, *m_buf);
@@ -258,10 +332,86 @@ bool LeafW::insert(Key key, const model::Value& val) {
     }
 
   } else {
-
-    // TODO: implement splitting etc..
-    throw std::runtime_error("NIY");
+    overwrite = split(key, val);
   }
+
+  return overwrite;
+}
+
+bool LeafW::split(Key, const model::Value&) {
+  throw std::runtime_error("LeafW NYI");
+}
+
+void LeafW::insert(gsl::span<const uint64_t> raw) {
+  Expects(m_buf);
+  Expects(k_node_max_words >= m_top + raw.size());
+
+  for (auto word : raw) { m_buf->at(m_top++) = word; }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// RootLeafW
+
+RootLeafW::RootLeafW(AllocateNew, Transaction& ta, Addr next,
+                     BtreeWritable& parent)
+    : LeafW(AllocateNew(), ta, next), m_parent(parent) {}
+
+RootLeafW::RootLeafW(Transaction& ta, Addr addr, BtreeWritable& parent)
+    : LeafW(ta, addr), m_parent(parent) {}
+
+bool RootLeafW::split(Key key, const model::Value& val) {
+  bool overwrite{ false };
+  Expects(m_buf);
+  auto right_leaf = std::make_unique<LeafW>(AllocateNew(), m_ta, 0);
+  auto left_leaf =
+      std::make_unique<LeafW>(AllocateNew(), m_ta, right_leaf->addr());
+  auto ins = left_leaf.get();
+
+  left_leaf->m_linked = std::move(m_linked);
+
+  Key mid{ 0 };
+  size_t new_val_size = 1 + valueExtraWords(val.type());
+  for (size_t i = 1; i < m_top; ++i) {
+    auto entry = DskEntry(m_buf->at(i));
+    auto extra = entry.extraWords();
+
+    if (new_val_size > 0 && entry.key.key() > key) {
+      if (ins == left_leaf.get() &&
+          left_leaf->size() >= m_top - i + new_val_size) {
+        mid = key;
+        ins = right_leaf.get();
+      }
+      overwrite = ins->insert(key, val);
+      new_val_size = 0;
+    }
+
+    if (ins == left_leaf.get() &&
+        left_leaf->size() >= m_top - i + new_val_size) {
+      mid = entry.key.key();
+      ins = right_leaf.get();
+    }
+
+    ins->insert({ &m_buf->at(i), gsl::narrow_cast<int>(extra + 1) });
+    i += extra;
+  }
+
+  if (new_val_size > 0) {
+    if (mid == 0) { mid = key; }
+    overwrite = right_leaf->insert(key, val);
+  }
+
+  m_buf->at(0) = DskInternalHdr().fromSize(4).data;
+  m_buf->at(1) = left_leaf->addr();
+  m_buf->at(2) = DskInternalEntry().fromKey(mid);
+  m_buf->at(3) = right_leaf->addr();
+  std::fill(m_buf->begin() + 4, m_buf->end(), 0);
+
+  auto new_me =
+      std::make_unique<RootInternalW>(m_ta, m_addr, m_top, std::move(m_buf));
+  new_me->m_childs.emplace(right_leaf->addr(), std::move(right_leaf));
+  new_me->m_childs.emplace(left_leaf->addr(), std::move(left_leaf));
+
+  m_parent.m_root = std::move(new_me);
 
   return overwrite;
 }
@@ -269,10 +419,26 @@ bool LeafW::insert(Key key, const model::Value& val) {
 ////////////////////////////////////////////////////////////////////////////////
 // InternalW
 
-InternalW::InternalW(Transaction& ta, Addr addr) : NodeW(ta, addr) {}
+InternalW::InternalW(Transaction& ta, Addr addr)
+    : NodeW(ta, addr) {
+  auto hdr = gsl::as_span<DskInternalHdr>(
+      (ta.load(toPageNr(addr)))
+          ->subspan(sizeof(DskBlockHdr), sizeof(DskInternalHdr)))[0];
+  if (!hdr.hasMagic()) throw ConsistencyError("Expected internal node");
+  if (hdr.size() > k_node_max_words)
+    throw ConsistencyError("Invalid fill size in internal node");
+  m_top = hdr.size();
+}
 
-bool InternalW::insert(Key key, const model::Value&) {
-  throw std::runtime_error("NIY");
+InternalW::InternalW(Transaction& ta, Addr addr, size_t top,
+                     std::unique_ptr<std::array<Word, k_node_max_words>> buf)
+    : NodeW(ta, addr) {
+  m_buf = std::move(buf);
+  m_top = top;
+}
+
+bool InternalW::insert(Key key, const model::Value& val) {
+  return searchChild(key).insert(key, val);
 }
 
 Writes InternalW::getWrites() const {
@@ -291,11 +457,47 @@ Writes InternalW::getWrites() const {
   return w;
 }
 
+NodeW& InternalW::searchChild(Key k) {
+  Expects(m_top <= k_node_max_words);
+
+  Addr addr;
+  if (m_buf) {
+    auto pos = searchInternalPosition(
+        k, gsl::span<uint64_t>(*m_buf).subspan(0, m_top));
+    if (DskInternalEntry(m_buf->at(pos)).key.key() > k) {
+      addr = m_buf->at(pos - 1);
+    } else {
+      addr = m_buf->at(pos + 1);
+    }
+  } else {
+    auto buf = gsl::as_span<uint64_t>(
+                   m_ta.load(toPageNr(m_addr))
+                       ->subspan(sizeof(DskBlockHdr), k_node_max_bytes))
+                   .subspan(0, m_top);
+    auto pos = searchInternalPosition(k, buf);
+    if (DskInternalEntry(buf[pos]).key.key() > k)
+      addr = buf[pos - 1];
+    else
+      addr = buf[pos + 1];
+  }
+
+  auto lookup = m_childs.find(addr);
+  if (lookup != m_childs.end()) {
+    return *lookup->second;
+  } else {
+    auto emplace = m_childs.emplace_hint(lookup, addr, openNodeW(m_ta, addr));
+    return *emplace->second;
+  }
+}
+
 size_t InternalW::findSize() {
   size_t i = 1; // first element always is a Addr, skip to value
   while (i < m_buf->size() && m_buf->at(i) != 0) { i += 2; }
   return i;
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// RootInternalW
 
 ////////////////////////////////////////////////////////////////////////////////
 // BtreeReadOnly
@@ -315,7 +517,7 @@ model::Object BtreeReadOnly::getObject() {
 NodeR::NodeR(Database& db, Addr addr, ReadRef page)
     : Node(addr), m_db(db), m_page(std::move(page)) {}
 
-gsl::span<const uint64_t> NodeR::getData() {
+gsl::span<const uint64_t> NodeR::getData() const {
   return gsl::as_span<const uint64_t>(m_page->subspan(
       toPageOffset(m_addr) + sizeof(DskBlockHdr), k_node_max_bytes));
 }
@@ -330,11 +532,11 @@ void LeafR::getAll(model::Object& obj) {
   auto data = getData();
   auto it = data.begin();
   auto end = data.end();
-  auto next = DskNextPtr();
-  next.data = *it++;
+  auto next = DskLeafHdr().fromDsk(*it++).next();
 
-  while (it != end && *it != 0) {
-    obj.append(readValue(it));
+  while (it != end && *it != 0) { obj.append(readValue(it)); }
+  if (next != 0) {
+    openNodeR(m_db, next)->getAll(obj);
   }
 }
 
@@ -393,11 +595,22 @@ LeafR::readValue(gsl::span<const uint64_t>::const_iterator& it) {
 // InternalR
 
 InternalR::InternalR(Database& db, Addr addr, ReadRef page)
-    : NodeR(db, addr, std::move(page)) {}
+    : NodeR(db, addr, std::move(page)) {
+  auto view = getData();
+  m_data = view.subspan(0, DskInternalHdr().fromRaw(view[0]).size());
+}
 
 void InternalR::getAll(model::Object& obj) {
   // just follow the left most path and let leafs go through
-  throw std::runtime_error("NIY"); }
+  searchChild(0)->getAll(obj);
+}
+
+std::unique_ptr<NodeR> InternalR::searchChild(Key k) {
+  auto pos = searchInternalPosition(k, m_data);
+  auto addr = (DskInternalEntry(m_data[pos]).key.key() > k ? m_data[pos - 1]
+                                                           : m_data[pos + 1]);
+  return openNodeR(m_db, addr);
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 } // namespace btree

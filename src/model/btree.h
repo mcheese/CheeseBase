@@ -37,6 +37,7 @@ constexpr size_t k_node_min_words =
 
 // Dummy type used as argument
 enum class AllocateNew {};
+enum class DontRead {};
 
 class Node {
 public:
@@ -52,6 +53,7 @@ protected:
 class NodeW;
 
 class BtreeWritable {
+  friend class RootLeafW;
 public:
   // create new tree
   BtreeWritable(Transaction& ta);
@@ -75,6 +77,11 @@ public:
   // inserts value, returns true if it overwrote something
   virtual bool insert(Key key, const model::Value&) = 0;
 
+  // filled size in words
+  size_t size() const;
+  // available size in words
+  size_t free() const;
+
 protected:
   void shiftBuffer(size_t pos, int amount);
   void initFromDisk();
@@ -90,26 +97,52 @@ public:
   LeafW(AllocateNew, Transaction& ta, Addr next);
   LeafW(Transaction& ta, Addr addr);
 
+  // serialize and insert value, may trigger split
   bool insert(Key key, const model::Value&) override;
 
-private:
-  Writes getWrites() const override;
-  size_t findSize() override;
+  // append raw words without further checking
+  void insert(gsl::span<const uint64_t> raw);
 
   std::vector<std::unique_ptr<BtreeWritable>> m_linked;
+
+  Writes getWrites() const override;
+private:
+  size_t findSize() override;
+  virtual bool split(Key, const model::Value&);
+};
+
+// tree just a single leaf
+class RootLeafW : public LeafW {
+  friend class RootInternalW;
+public:
+  RootLeafW(AllocateNew, Transaction& ta, Addr next, BtreeWritable& parent);
+  RootLeafW(Transaction& ta, Addr addr, BtreeWritable& parent);
+
+private:
+  BtreeWritable& m_parent;
+  bool split(Key, const model::Value&) override;
 };
 
 class InternalW : public NodeW {
 public:
   InternalW(Transaction& ta, Addr addr);
+  InternalW(Transaction& ta, Addr addr, size_t top,
+            std::unique_ptr<std::array<Word, k_node_max_words>> buf);
 
   bool insert(Key key, const model::Value&) override;
-
-private:
   Writes getWrites() const override;
+  NodeW& searchChild(Key k);
+
+protected:
   size_t findSize() override;
 
   boost::container::flat_map<Addr, std::unique_ptr<NodeW>> m_childs;
+};
+
+class RootInternalW : public InternalW {
+  friend class RootLeafW;
+public:
+  using InternalW::InternalW;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -134,7 +167,7 @@ public:
 protected:
   NodeR(Database& db, Addr addr, ReadRef page);
 
-  gsl::span<const uint64_t> getData();
+  gsl::span<const uint64_t> getData() const;
 
   Database& m_db;
   ReadRef m_page;
@@ -156,6 +189,10 @@ public:
   InternalR(Database& db, Addr addr, ReadRef page);
 
   void getAll(model::Object& obj) override;
+private:
+  std::unique_ptr<NodeR> searchChild(Key k);
+
+  gsl::span<const uint64_t> m_data;
 };
 
 } // namespace btree
