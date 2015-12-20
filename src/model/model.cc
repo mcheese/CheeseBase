@@ -37,6 +37,12 @@ void Object::append(Key k, PValue v) {
 
 void Object::reserve(size_t s) { m_childs.reserve(s); }
 
+boost::optional<const Value&> Object::getChild(Key k) const {
+  auto lookup = m_childs.find(k);
+  if (lookup != m_childs.end()) return *lookup->second;
+  return boost::none;
+}
+
 std::ostream& Object::print(std::ostream& os) const {
   auto beg = std::begin(m_childs);
   auto end = std::end(m_childs);
@@ -71,8 +77,16 @@ Map<Key, PValue>::const_iterator Object::begin() const {
   return m_childs.cbegin();
 }
 
-Map<Key, PValue>::const_iterator Object::end() const {
-  return m_childs.cend();
+Map<Key, PValue>::const_iterator Object::end() const { return m_childs.cend(); }
+
+bool Object::operator==(const Value& o) const {
+  auto other = dynamic_cast<const Object*>(&o);
+  if (other == nullptr) return false;
+  for (const auto& c : m_childs) {
+    auto partner = other->getChild(c.first);
+    if (!partner.is_initialized() || *c.second != partner.value()) return false;
+  }
+  return true;
 }
 
 std::ostream& operator<<(std::ostream& os, Null) { return os << "null"; }
@@ -144,6 +158,12 @@ std::vector<uint64_t> Scalar::extraWords() const {
   return ret;
 }
 
+bool Scalar::operator==(const Value& o) const {
+  auto other = dynamic_cast<const Scalar*>(&o);
+  if (other == nullptr) return false;
+  return m_data == other->m_data;
+}
+
 void Array::append(PValue v) { m_childs.push_back(std::move(v)); }
 
 std::ostream& Array::print(std::ostream& os) const {
@@ -174,6 +194,12 @@ ValueType Array::type() const { return ValueType::list; }
 
 std::vector<uint64_t> Array::extraWords() const {
   return std::vector<uint64_t>({ 0 });
+}
+
+bool Array::operator==(const Value& o) const {
+  auto other = dynamic_cast<const Array*>(&o);
+  if (other == nullptr) return false;
+  return m_childs == other->m_childs;
 }
 
 } // namespace model

@@ -2,10 +2,10 @@
 #define _SCL_SECURE_NO_WARNINGS
 #endif
 #include "catch.hpp"
-#include "model/btree.h"
 #include "keycache/keycache.h"
-#include <boost/filesystem.hpp>
+#include "model/btree.h"
 #include "model/parser.h"
+#include <boost/filesystem.hpp>
 
 #define private public
 #include "core.h"
@@ -33,34 +33,66 @@ const std::string input = R"(
       "F": 1
     }
 )";
+const std::string input_short = R"(
+{"a": "hey", "b": 3, "c": null, "d": true, "e": 1}
+)";
 
 TEST_CASE("B+Tree") {
   boost::filesystem::remove("test.db");
   Database db("test.db");
-  Addr root;
-  auto doc = parseJson(input.begin(), input.end());
 
-  {
-    auto ta = db.startTransaction();
-    auto node = btree::BtreeWritable(ta);
-    root = node.addr();
-    for (auto& c : doc) {
-      node.insert(ta.key(c.first), *c.second);
+  SECTION("short") {
+    Addr root;
+    auto doc = parseJson(input_short.begin(), input_short.end());
+    {
+      auto ta = db.startTransaction();
+      auto tree = btree::BtreeWritable(ta);
+      root = tree.addr();
+      for (auto& c : doc) tree.insert(ta.key(c.first), *c.second);
+      ta.commit(tree.getWrites());
     }
-    ta.commit(node.getWrites());
+    {
+      auto read = btree::BtreeReadOnly(db, root).getObject();
+      REQUIRE(read == doc);
+    }
   }
 
-  {
-    auto ta = db.startTransaction();
-    auto node = btree::BtreeWritable(ta, root);
-    for (auto& c : doc) {
-      if (c.first < "A") node.insert(ta.key(c.first + "#2"), *c.second);
+  SECTION("2 leafs") {
+    Addr root;
+    auto doc = parseJson(input.begin(), input.end());
+    {
+      auto ta = db.startTransaction();
+      auto node = btree::BtreeWritable(ta);
+      root = node.addr();
+      for (auto& c : doc) { node.insert(ta.key(c.first), *c.second); }
+      ta.commit(node.getWrites());
     }
-    ta.commit(node.getWrites());
-  }
 
-  {
-    auto read = btree::BtreeReadOnly(db, root).getObject();
-    read.prettyPrint(std::cout) << std::endl;
+    {
+      auto read = btree::BtreeReadOnly(db, root).getObject();
+      REQUIRE(read == doc);
+    }
+
+    SECTION("extend without split") {
+      {
+        auto ta = db.startTransaction();
+        auto node = btree::BtreeWritable(ta, root);
+        for (auto& c : doc) {
+          if (c.first < "A") node.insert(ta.key(c.first + "#2"), *c.second);
+        }
+        ta.commit(node.getWrites());
+      }
+      {
+        auto read = btree::BtreeReadOnly(db, root).getObject();
+        REQUIRE(read != doc);
+        for (auto& c : doc) {
+          REQUIRE(*c.second == *read.getChild(c.first));
+        }
+        for (auto& c : doc) {
+          if (c.first < "A")
+            REQUIRE(*c.second == *read.getChild(c.first + "#2"));
+        }
+      }
+    }
   }
 }

@@ -15,6 +15,7 @@
 #include <boost/container/flat_map.hpp>
 #include <boost/container/stable_vector.hpp>
 #include <boost/variant.hpp>
+#include <boost/optional.hpp>
 #include <memory>
 #include <string>
 #include "common/common.h"
@@ -47,7 +48,10 @@ using String = std::string;
 using Number = double;
 static_assert(sizeof(Number) == 8, "\'double\' should be 64 bit");
 using Bool = bool;
-class Null {};
+struct Null {
+  bool operator==(const Null&) const { return true; }
+  bool operator!=(const Null&) const { return false; }
+};
 
 using Key = String;
 
@@ -68,6 +72,8 @@ public:
   virtual std::ostream& prettyPrint(std::ostream& os, size_t depth) const = 0;
   virtual ValueType type() const = 0;
   virtual std::vector<uint64_t> extraWords() const = 0;
+  virtual bool operator==(const Value& o) const = 0;
+  bool operator!=(const Value& o) const { return !(*this == o); }
 };
 
 using PValue = std::unique_ptr<Value>;
@@ -85,6 +91,8 @@ public:
 
   void reserve(size_t s);
 
+  boost::optional<const Value&> getChild(Key) const;
+
   std::ostream& print(std::ostream& os) const override;
   std::ostream& prettyPrint(std::ostream& os, size_t depth = 0) const override;
   ValueType type() const override;
@@ -93,6 +101,7 @@ public:
   Map<Key, PValue>::const_iterator begin() const;
   Map<Key, PValue>::const_iterator end() const;
 
+  bool operator==(const Value& o) const override;
 private:
   Map<Key, PValue> m_childs;
 };
@@ -110,6 +119,7 @@ public:
   std::ostream& prettyPrint(std::ostream& os, size_t depth = 0) const override;
   ValueType type() const override;
   std::vector<uint64_t> extraWords() const override;
+  bool operator==(const Value& o) const override;
 
 private:
   List<PValue> m_childs;
@@ -126,6 +136,7 @@ public:
   std::ostream& prettyPrint(std::ostream& os, size_t depth) const override;
   ValueType type() const override;
   std::vector<uint64_t> extraWords() const override;
+  bool operator==(const Value& o) const override;
 
 private:
   boost::variant<String, Number, Bool, Null> m_data;

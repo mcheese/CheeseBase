@@ -32,6 +32,7 @@ TEST_CASE("parse JSON") {
             }
         }
     },
+     "test": 123,
     "list" : [{
       "id": 1,
       "first_name": "Beverly",
@@ -56,6 +57,8 @@ TEST_CASE("parse JSON") {
     },12312,null, true, false, null ]
   }
 )";
-  auto doc = parseJson(input.begin(), input.end());
-  doc.prettyPrint(std::cout);
+
+  model::Object doc;
+  REQUIRE_NOTHROW(doc = parseJson(input.begin(), input.end()));
+  REQUIRE(*doc.getChild("test") == model::Scalar(123.));
 }
