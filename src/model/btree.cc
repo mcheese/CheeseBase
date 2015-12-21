@@ -126,9 +126,9 @@ std::unique_ptr<NodeW> openNodeW(Transaction& ta, Addr addr, AbsInternalW& p) {
   auto page = ta.load(toPageNr(addr));
 
   if (isNodeLeaf(page, addr))
-    return std::make_unique<LeafW>(ta, addr, p);
+    return std::make_unique<LeafW>(ta, addr);
   else
-    return std::make_unique<InternalW>(ta, addr, p);
+    return std::make_unique<InternalW>(ta, addr);
 }
 
 std::unique_ptr<NodeR> openNodeR(Database& db, Addr addr) {
@@ -191,7 +191,7 @@ BtreeWritable::BtreeWritable(Transaction& ta, Addr root) {
   if (isNodeLeaf(page, root))
     m_root = std::make_unique<RootLeafW>(ta, root, *this);
   else
-    m_root = std::make_unique<RootInternalW>(ta, root);
+    m_root = std::make_unique<RootInternalW>(ta, root, *this);
 }
 
 BtreeWritable::BtreeWritable(Transaction& ta) {
@@ -205,7 +205,7 @@ Addr BtreeWritable::addr() const {
 
 bool BtreeWritable::insert(Key key, const model::Value& val, Overwrite o) {
   Expects(m_root);
-  return m_root->insert(key, val, o);
+  return m_root->insert(key, val, o, nullptr);
 }
 
 Writes BtreeWritable::getWrites() const {
@@ -264,8 +264,7 @@ AbsLeafW::AbsLeafW(AllocateNew, Transaction& ta, Addr next)
   m_top = 1;
 }
 
-AbsLeafW::AbsLeafW(Transaction& ta, Addr addr)
-    : NodeW(ta, addr) {}
+AbsLeafW::AbsLeafW(Transaction& ta, Addr addr) : NodeW(ta, addr) {}
 
 Writes AbsLeafW::getWrites() const {
   Writes w;
@@ -291,7 +290,9 @@ size_t AbsLeafW::findSize() {
   return i;
 }
 
-bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow) {
+bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
+                      AbsInternalW* parent) {
+  m_parent = parent;
   if (!m_buf) initFromDisk();
 
   auto extras = val.extraWords();
@@ -352,18 +353,13 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow) {
 ////////////////////////////////////////////////////////////////////////////////
 // LeafW
 
-LeafW::LeafW(AllocateNew, Transaction& ta, Addr next, AbsInternalW& parent)
-    : AbsLeafW(AllocateNew(), ta, next), m_parent(parent) {}
-
-LeafW::LeafW(Transaction& ta, Addr addr, AbsInternalW& parent)
-    : AbsLeafW(ta, addr), m_parent(parent) {}
-
 void LeafW::split(Key key, const model::Value& val, size_t pos) {
   Expects(m_buf);
   Expects(m_top <= m_buf->size());
+  Expects(m_parent != nullptr);
 
   auto right_leaf = std::make_unique<LeafW>(
-      AllocateNew(), m_ta, DskLeafHdr().fromDsk(m_buf->at(0)).next(), m_parent);
+      AllocateNew(), m_ta, DskLeafHdr().fromDsk(m_buf->at(0)).next());
 
   auto new_val_len = model::valueExtraWords(val.type()) + 1;
   bool new_here = false;
@@ -392,11 +388,11 @@ void LeafW::split(Key key, const model::Value& val, size_t pos) {
 
   // the check for existence happened before calling split so just use "Upsert"
   if (new_here)
-    insert(key, val, Overwrite::Upsert);
+    insert(key, val, Overwrite::Upsert, m_parent);
   else
-    right_leaf->insert(key, val, Overwrite::Upsert);
+    right_leaf->insert(key, val, Overwrite::Upsert, m_parent);
 
-  m_parent.insert(split_key, std::move(right_leaf));
+  m_parent->insert(split_key, std::move(right_leaf));
 }
 
 void AbsLeafW::insert(gsl::span<const uint64_t> raw) {
@@ -411,21 +407,21 @@ void AbsLeafW::insert(gsl::span<const uint64_t> raw) {
 
 RootLeafW::RootLeafW(AllocateNew, Transaction& ta, Addr next,
                      BtreeWritable& parent)
-    : AbsLeafW(AllocateNew(), ta, next), m_parent(parent) {}
+    : AbsLeafW(AllocateNew(), ta, next), m_tree(parent) {}
 
 RootLeafW::RootLeafW(Transaction& ta, Addr addr, BtreeWritable& parent)
-    : AbsLeafW(ta, addr), m_parent(parent) {}
+    : AbsLeafW(ta, addr), m_tree(parent) {}
 
 void RootLeafW::split(Key key, const model::Value& val, size_t pos) {
   bool overwrite{ false };
   Expects(m_buf);
   auto& buf = *m_buf;
-  auto new_me =
-      std::make_unique<RootInternalW>(m_ta, m_addr, 4, std::move(m_buf));
+  auto new_me = std::unique_ptr<RootInternalW>(
+      new RootInternalW(m_ta, m_addr, 4, std::move(m_buf), m_tree));
 
-  auto right_leaf = std::make_unique<LeafW>(AllocateNew(), m_ta, 0, *new_me);
+  auto right_leaf = std::make_unique<LeafW>(AllocateNew(), m_ta, 0);
   auto left_leaf =
-      std::make_unique<LeafW>(AllocateNew(), m_ta, right_leaf->addr(), *new_me);
+      std::make_unique<LeafW>(AllocateNew(), m_ta, right_leaf->addr());
   auto ins = left_leaf.get();
 
   left_leaf->m_linked = std::move(m_linked);
@@ -445,7 +441,7 @@ void RootLeafW::split(Key key, const model::Value& val, size_t pos) {
         ins = right_leaf.get();
       }
       // existence check happened before calling split, so use Upsert
-      ins->insert(key, val, Overwrite::Upsert);
+      ins->insert(key, val, Overwrite::Upsert, new_me.get());
       new_val_size = 0;
     }
 
@@ -455,7 +451,7 @@ void RootLeafW::split(Key key, const model::Value& val, size_t pos) {
       ins = right_leaf.get();
     }
     Expects(buf.size() >= i + extra + 1)
-    ins->insert({ &buf[i], gsl::narrow_cast<int>(extra + 1) });
+        ins->insert({ &buf[i], gsl::narrow_cast<int>(extra + 1) });
     i += extra;
   }
 
@@ -464,7 +460,7 @@ void RootLeafW::split(Key key, const model::Value& val, size_t pos) {
 
     // this should not really happen unless we have leafs with 2 elements
     if (mid == 0) { mid = key; }
-    right_leaf->insert(key, val, Overwrite::Upsert);
+    right_leaf->insert(key, val, Overwrite::Upsert, new_me.get());
   }
 
   buf[0] = DskInternalHdr().fromSize(4).data;
@@ -475,7 +471,7 @@ void RootLeafW::split(Key key, const model::Value& val, size_t pos) {
 
   new_me->m_childs.emplace(right_leaf->addr(), std::move(right_leaf));
   new_me->m_childs.emplace(left_leaf->addr(), std::move(left_leaf));
-  m_parent.m_root = std::move(new_me);
+  m_tree.m_root = std::move(new_me);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -484,22 +480,33 @@ void RootLeafW::split(Key key, const model::Value& val, size_t pos) {
 AbsInternalW::AbsInternalW(Transaction& ta, Addr addr) : NodeW(ta, addr) {
   auto hdr = gsl::as_span<DskInternalHdr>(
       (ta.load(toPageNr(addr)))
-          ->subspan(sizeof(DskBlockHdr), sizeof(DskInternalHdr)))[0];
+          ->subspan(toPageOffset(addr) + sizeof(DskBlockHdr),
+                    sizeof(DskInternalHdr)))[0];
   if (!hdr.hasMagic()) throw ConsistencyError("Expected internal node");
   if (hdr.size() > k_node_max_words)
     throw ConsistencyError("Invalid fill size in internal node");
   m_top = hdr.size();
 }
 
-AbsInternalW::AbsInternalW(Transaction& ta, Addr addr, size_t top,
-                     std::unique_ptr<std::array<Word, k_node_max_words>> buf)
+AbsInternalW::AbsInternalW(AllocateNew, Transaction& ta)
+    : NodeW(ta, ta.alloc(k_node_max_bytes).addr) {
+  m_buf = std::make_unique<std::array<uint64_t, k_node_max_words>>();
+  std::fill(m_buf->begin(), m_buf->end(), 0);
+  m_top = 1;
+}
+
+AbsInternalW::AbsInternalW(
+    Transaction& ta, Addr addr, size_t top,
+    std::unique_ptr<std::array<Word, k_node_max_words>> buf)
     : NodeW(ta, addr) {
   m_buf = std::move(buf);
   m_top = top;
 }
 
-bool AbsInternalW::insert(Key key, const model::Value& val, Overwrite ow) {
-  return searchChild(key).insert(key, val, ow);
+bool AbsInternalW::insert(Key key, const model::Value& val, Overwrite ow,
+                          AbsInternalW* parent) {
+  m_parent = parent;
+  return searchChild(key).insert(key, val, ow, this);
 }
 
 void AbsInternalW::insert(Key key, std::unique_ptr<NodeW> c) {
@@ -516,7 +523,8 @@ void AbsInternalW::insert(Key key, std::unique_ptr<NodeW> c) {
     m_childs.emplace(addr, std::move(c));
   } else {
     // no space
-    throw std::runtime_error("split for internal node NIY");
+
+    split(key, std::move(c));
   }
 }
 
@@ -541,11 +549,13 @@ Writes AbsInternalW::getWrites() const {
 NodeW& AbsInternalW::searchChild(Key k) {
   Expects(m_top <= k_node_max_words);
 
-  auto buf = (m_buf ? gsl::span<const uint64_t>(*m_buf)
-                    : gsl::as_span<const uint64_t>(
-                          m_ta.load(toPageNr(m_addr))
-                              ->subspan(sizeof(DskBlockHdr), k_node_max_bytes)))
-                 .subspan(0, m_top);
+  auto buf =
+      (m_buf ? gsl::span<const uint64_t>(*m_buf)
+             : gsl::as_span<const uint64_t>(
+                   m_ta.load(toPageNr(m_addr))
+                       ->subspan(toPageOffset(m_addr) + sizeof(DskBlockHdr),
+                                 k_node_max_bytes)))
+          .subspan(0, m_top);
   auto pos = searchInternalPosition(k, buf);
 
   Addr addr = ((pos >= m_top || DskInternalEntry(buf[pos]).key.key() > k)
@@ -562,6 +572,10 @@ NodeW& AbsInternalW::searchChild(Key k) {
   }
 }
 
+void AbsInternalW::appendChild(std::pair<Addr, std::unique_ptr<NodeW>>&& c) {
+  m_childs.insert(std::move(c));
+}
+
 size_t AbsInternalW::findSize() {
   return DskInternalHdr().fromRaw(m_buf->at(0)).size();
 }
@@ -569,11 +583,118 @@ size_t AbsInternalW::findSize() {
 ////////////////////////////////////////////////////////////////////////////////
 // InternalW
 
-InternalW::InternalW(Transaction& ta, Addr addr, AbsInternalW& parent)
-    : AbsInternalW(ta, addr), m_parent(parent) {}
+void InternalW::append(gsl::span<const uint64_t> raw) {
+  Expects(raw.size() + m_top <= k_node_max_words);
+  for (auto& c : raw) { m_buf->at(m_top++) = c; }
+}
+
+void InternalW::split(Key key, std::unique_ptr<NodeW> c) {
+  Expects(m_parent != nullptr);
+  Expects(m_buf);
+  Expects(m_top <= k_node_max_words);
+  Expects(m_top + 2 > k_node_max_words);
+  Expects(m_top % 2 == 0);
+
+  auto right = std::make_unique<InternalW>(AllocateNew(), m_ta);
+
+  size_t mid_pos = ((m_top - 2) / 2);
+  bool new_here = true;
+  if (mid_pos % 2 != 0) {
+    if (DskInternalEntry(m_buf->at(mid_pos + 1)).key.key() < key) {
+      new_here = false;
+      ++mid_pos;
+    } else {
+      --mid_pos;
+    }
+  }
+  auto mid_key = DskInternalEntry(m_buf->at(mid_pos)).key.key();
+
+  for (size_t i = 1; i < mid_pos; i += 2) {
+    auto lookup = m_childs.find(m_buf->at(i));
+    if (lookup != m_childs.end()) {
+      right->appendChild(std::move(*lookup));
+      m_childs.erase(lookup);
+    }
+  }
+
+  right->append(
+      { &m_buf->at(mid_pos + 1), gsl::narrow_cast<int>(m_top - mid_pos - 1) });
+  std::fill(m_buf->begin() + mid_pos, m_buf->end(), 0);
+  m_top = mid_pos;
+
+  if (new_here)
+    this->insert(key, std::move(c));
+  else
+    right->insert(key, std::move(c));
+
+  m_parent->insert(mid_key, std::move(right));
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // RootInternalW
+
+RootInternalW::RootInternalW(Transaction& ta, Addr addr, BtreeWritable& parent)
+    : AbsInternalW(ta, addr), m_parent(parent) {}
+
+RootInternalW::RootInternalW(
+    Transaction& ta, Addr addr, size_t top,
+    std::unique_ptr<std::array<uint64_t, k_node_max_words>> buf,
+    BtreeWritable& parent)
+    : AbsInternalW(ta, addr, top, std::move(buf)), m_parent(parent) {}
+
+void RootInternalW::split(Key key, std::unique_ptr<NodeW> c) {
+  Expects(m_buf);
+  Expects(m_top <= k_node_max_words);
+  Expects(m_top + 2 > k_node_max_words);
+  Expects(m_top % 2 == 0);
+
+  auto left = std::make_unique<InternalW>(AllocateNew(), m_ta);
+  auto right = std::make_unique<InternalW>(AllocateNew(), m_ta);
+
+  size_t mid_pos = ((m_top - 2) / 2);
+  bool new_left = true;
+  if (mid_pos % 2 != 0) {
+    if (DskInternalEntry(m_buf->at(mid_pos + 1)).key.key() < key) {
+      new_left = false;
+      ++mid_pos;
+    } else {
+      --mid_pos;
+    }
+  }
+
+  auto mid_key = DskInternalEntry(m_buf->at(mid_pos)).key.key();
+
+  left->append({ &m_buf->at(1), gsl::narrow_cast<int>(mid_pos - 1) });
+  right->append(
+      { &m_buf->at(mid_pos + 1), gsl::narrow_cast<int>(m_top - mid_pos - 1) });
+
+  if (new_left)
+    left->insert(key, std::move(c));
+  else
+    right->insert(key, std::move(c));
+
+  for (auto& c : m_childs) {
+    bool found = false;
+    for (size_t i = 1; i < mid_pos; ++i) {
+      if (c.first == m_buf->at(i)) {
+        left->appendChild(std::move(c));
+        found = true;
+        break;
+      }
+    }
+    if (!found) right->appendChild(std::move(c));
+  }
+  m_childs.clear();
+
+  m_buf->at(1) = left->addr();
+  m_buf->at(2) = DskInternalEntry().fromKey(mid_key);
+  m_buf->at(3) = right->addr();
+  std::fill(m_buf->begin() + 4, m_buf->end(), 0);
+  m_top = 4;
+
+  m_childs.emplace(right->addr(), std::move(right));
+  m_childs.emplace(left->addr(), std::move(left));
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // BtreeReadOnly

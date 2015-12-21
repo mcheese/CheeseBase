@@ -4,8 +4,8 @@
 
 #include "common/common.h"
 #include "common/structs.h"
-#include "storage/storage.h"
 #include "model.h"
+#include "storage/storage.h"
 #include <boost/container/flat_map.hpp>
 #include <memory>
 
@@ -13,7 +13,6 @@ namespace cheesebase {
 
 class Transaction;
 class Database;
-
 
 namespace btree {
 
@@ -40,15 +39,12 @@ enum class AllocateNew {};
 enum class DontRead {};
 
 // argument for insert queries
-enum class Overwrite {
-  Insert,
-  Update,
-  Upsert
-};
+enum class Overwrite { Insert, Update, Upsert };
 
 class Node {
 public:
   Addr addr() const;
+
 protected:
   Node(Addr addr);
   Addr m_addr;
@@ -63,6 +59,7 @@ class AbsLeafW;
 
 class BtreeWritable {
   friend class RootLeafW;
+
 public:
   // create new tree
   BtreeWritable(Transaction& ta);
@@ -84,7 +81,8 @@ public:
   virtual Writes getWrites() const = 0;
 
   // inserts value, returns true if it overwrote something
-  virtual bool insert(Key key, const model::Value&, Overwrite) = 0;
+  virtual bool insert(Key key, const model::Value&, Overwrite,
+                      AbsInternalW* parent) = 0;
 
   // filled size in words
   size_t size() const;
@@ -107,7 +105,8 @@ public:
   AbsLeafW(Transaction& ta, Addr addr);
 
   // serialize and insert value, may trigger split
-  bool insert(Key key, const model::Value&, Overwrite) override;
+  bool insert(Key key, const model::Value&, Overwrite,
+              AbsInternalW* parent) override;
 
   // append raw words without further checking
   void insert(gsl::span<const uint64_t> raw);
@@ -115,62 +114,83 @@ public:
   std::vector<std::unique_ptr<BtreeWritable>> m_linked;
 
   Writes getWrites() const override;
-private:
+
+protected:
   size_t findSize() override;
   virtual void split(Key, const model::Value&, size_t insert_pos) = 0;
+  AbsInternalW* m_parent;
 };
 
 class LeafW : public AbsLeafW {
 public:
-  LeafW(AllocateNew, Transaction& ta, Addr next, AbsInternalW& parent);
-  LeafW(Transaction& ta, Addr addr, AbsInternalW& parent);
+  using AbsLeafW::AbsLeafW;
+
 private:
-  AbsInternalW& m_parent;
   void split(Key, const model::Value&, size_t insert_pos) override;
 };
 
 // tree just a single leaf
 class RootLeafW : public AbsLeafW {
   friend class RootInternalW;
+
 public:
-  RootLeafW(AllocateNew, Transaction& ta, Addr next, BtreeWritable& parent);
-  RootLeafW(Transaction& ta, Addr addr, BtreeWritable& parent);
+  RootLeafW(AllocateNew, Transaction& ta, Addr next, BtreeWritable& tree);
+  RootLeafW(Transaction& ta, Addr addr, BtreeWritable& tree);
 
 private:
-  BtreeWritable& m_parent;
+  BtreeWritable& m_tree;
   void split(Key, const model::Value&, size_t insert_pos) override;
 };
 
 class AbsInternalW : public NodeW {
 public:
   AbsInternalW(Transaction& ta, Addr addr);
+  AbsInternalW(AllocateNew, Transaction& ta);
 
   // used when extending single root leaf to internal root
   AbsInternalW(Transaction& ta, Addr addr, size_t top,
-            std::unique_ptr<std::array<Word, k_node_max_words>> buf);
+               std::unique_ptr<std::array<Word, k_node_max_words>> buf);
 
-  bool insert(Key key, const model::Value&, Overwrite) override;
+  bool insert(Key key, const model::Value&, Overwrite,
+              AbsInternalW* parent) override;
   void insert(Key key, std::unique_ptr<NodeW> c);
   Writes getWrites() const override;
   NodeW& searchChild(Key k);
+  void appendChild(std::pair<Addr, std::unique_ptr<NodeW>>&&);
 
 protected:
   size_t findSize() override;
-
+  AbsInternalW* m_parent;
   boost::container::flat_map<Addr, std::unique_ptr<NodeW>> m_childs;
+
+private:
+  virtual void split(Key, std::unique_ptr<NodeW>) = 0;
 };
 
 class InternalW : public AbsInternalW {
 public:
-  InternalW(Transaction& ta, Addr addr, AbsInternalW& parent);
+  using AbsInternalW::AbsInternalW;
+
+  // append words without further checking, increases top position
+  void append(gsl::span<const uint64_t> raw);
+
 private:
-  AbsInternalW& m_parent;
+  void split(Key, std::unique_ptr<NodeW>) override;
 };
 
 class RootInternalW : public AbsInternalW {
   friend class RootLeafW;
+
 public:
-  using AbsInternalW::AbsInternalW;
+  RootInternalW(Transaction& ta, Addr addr, BtreeWritable& parent);
+
+private:
+  // used to construct while splitting RootLeafW
+  RootInternalW(Transaction& ta, Addr addr, size_t top,
+                std::unique_ptr<std::array<uint64_t, k_node_max_words>> buf,
+                BtreeWritable& parent);
+  void split(Key, std::unique_ptr<NodeW>) override;
+  BtreeWritable& m_parent;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -217,6 +237,7 @@ public:
   InternalR(Database& db, Addr addr, ReadRef page);
 
   void getAll(model::Object& obj) override;
+
 private:
   std::unique_ptr<NodeR> searchChild(Key k);
 

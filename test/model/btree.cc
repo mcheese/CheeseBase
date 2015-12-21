@@ -22,7 +22,7 @@ const std::string input = R"(
       "4": 1,
       "5": 1,
       "6": 1,
-      "7": { "hello": 2, "how": 2, "are": 2, "you": 2, "doing": 2 },
+      "7": 1,
       "8": 1,
       "9": 1,
       "A": 1,
@@ -90,9 +90,7 @@ TEST_CASE("B+Tree") {
       {
         auto read = btree::BtreeReadOnly(db, root).getObject();
         REQUIRE(read != doc);
-        for (auto& c : doc) {
-          REQUIRE(*c.second == *read.getChild(c.first));
-        }
+        for (auto& c : doc) { REQUIRE(*c.second == *read.getChild(c.first)); }
         for (auto& c : doc) {
           if (c.first < "A")
             REQUIRE(*c.second == *read.getChild(c.first + "#2"));
@@ -115,9 +113,30 @@ TEST_CASE("B+Tree") {
         REQUIRE(read != doc);
         for (auto& c : doc) {
           REQUIRE(*c.second == *read.getChild(c.first));
-        }
-        for (auto& c : doc) {
           REQUIRE(*c.second == *read.getChild(c.first + "#2"));
+        }
+      }
+    }
+    SECTION("extend with split to many leafs") {
+      for (size_t i = 0; i < 50; ++i) {
+        auto ta = db.startTransaction();
+        auto node = btree::BtreeWritable(ta, root);
+        for (auto& c : doc) {
+          node.insert(ta.key(c.first + "#" + std::to_string(i)), *c.second,
+                      btree::Overwrite::Upsert);
+        }
+        ta.commit(node.getWrites());
+      }
+
+      return;
+      {
+        auto read = btree::BtreeReadOnly(db, root).getObject();
+        for (auto& c : doc) {
+          REQUIRE(*c.second == *read.getChild(c.first));
+          for (size_t i = 0; i < 50; ++i) {
+            REQUIRE(*c.second ==
+                    *read.getChild(c.first + "#" + std::to_string(i)));
+          }
         }
       }
     }

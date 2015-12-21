@@ -74,8 +74,9 @@ Transaction::Transaction(Database& db)
     , m_kcache(db.m_keycache->startTransaction(m_alloc)) {}
 
 void Transaction::commit(Writes w) {
-  auto w1 = m_alloc.commit();
-  auto w2 = m_kcache.commit();
+  // kcache commit does allocation, so be sure to commit it before allocator
+  auto w1 = m_kcache.commit();
+  auto w2 = m_alloc.commit();
   w.reserve(w.size() + w1.size() + w2.size());
   std::move(w1.begin(), w1.end(), std::back_inserter(w));
   std::move(w2.begin(), w2.end(), std::back_inserter(w));
