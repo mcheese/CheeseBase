@@ -39,6 +39,13 @@ constexpr size_t k_node_min_words =
 enum class AllocateNew {};
 enum class DontRead {};
 
+// argument for insert queries
+enum class Overwrite {
+  Insert,
+  Update,
+  Upsert
+};
+
 class Node {
 public:
   Addr addr() const;
@@ -63,7 +70,7 @@ public:
   BtreeWritable(Transaction& ta, Addr root);
 
   Addr addr() const;
-  bool insert(Key key, const model::Value& val);
+  bool insert(Key key, const model::Value& val, Overwrite);
   Writes getWrites() const;
 
 private:
@@ -77,7 +84,7 @@ public:
   virtual Writes getWrites() const = 0;
 
   // inserts value, returns true if it overwrote something
-  virtual bool insert(Key key, const model::Value&) = 0;
+  virtual bool insert(Key key, const model::Value&, Overwrite) = 0;
 
   // filled size in words
   size_t size() const;
@@ -100,7 +107,7 @@ public:
   AbsLeafW(Transaction& ta, Addr addr);
 
   // serialize and insert value, may trigger split
-  bool insert(Key key, const model::Value&) override;
+  bool insert(Key key, const model::Value&, Overwrite) override;
 
   // append raw words without further checking
   void insert(gsl::span<const uint64_t> raw);
@@ -110,7 +117,7 @@ public:
   Writes getWrites() const override;
 private:
   size_t findSize() override;
-  virtual bool split(Key, const model::Value&) = 0;
+  virtual void split(Key, const model::Value&, size_t insert_pos) = 0;
 };
 
 class LeafW : public AbsLeafW {
@@ -119,7 +126,7 @@ public:
   LeafW(Transaction& ta, Addr addr, AbsInternalW& parent);
 private:
   AbsInternalW& m_parent;
-  bool split(Key, const model::Value&) override;
+  void split(Key, const model::Value&, size_t insert_pos) override;
 };
 
 // tree just a single leaf
@@ -131,7 +138,7 @@ public:
 
 private:
   BtreeWritable& m_parent;
-  bool split(Key, const model::Value&) override;
+  void split(Key, const model::Value&, size_t insert_pos) override;
 };
 
 class AbsInternalW : public NodeW {
@@ -142,7 +149,7 @@ public:
   AbsInternalW(Transaction& ta, Addr addr, size_t top,
             std::unique_ptr<std::array<Word, k_node_max_words>> buf);
 
-  bool insert(Key key, const model::Value&) override;
+  bool insert(Key key, const model::Value&, Overwrite) override;
   void insert(Key key, std::unique_ptr<NodeW> c);
   Writes getWrites() const override;
   NodeW& searchChild(Key k);

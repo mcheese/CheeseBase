@@ -48,7 +48,8 @@ TEST_CASE("B+Tree") {
       auto ta = db.startTransaction();
       auto tree = btree::BtreeWritable(ta);
       root = tree.addr();
-      for (auto& c : doc) tree.insert(ta.key(c.first), *c.second);
+      for (auto& c : doc)
+        tree.insert(ta.key(c.first), *c.second, btree::Overwrite::Upsert);
       ta.commit(tree.getWrites());
     }
     {
@@ -64,7 +65,9 @@ TEST_CASE("B+Tree") {
       auto ta = db.startTransaction();
       auto node = btree::BtreeWritable(ta);
       root = node.addr();
-      for (auto& c : doc) { node.insert(ta.key(c.first), *c.second); }
+      for (auto& c : doc) {
+        node.insert(ta.key(c.first), *c.second, btree::Overwrite::Upsert);
+      }
       ta.commit(node.getWrites());
     }
 
@@ -78,7 +81,9 @@ TEST_CASE("B+Tree") {
         auto ta = db.startTransaction();
         auto node = btree::BtreeWritable(ta, root);
         for (auto& c : doc) {
-          if (c.first < "A") node.insert(ta.key(c.first + "#2"), *c.second);
+          if (c.first < "A")
+            node.insert(ta.key(c.first + "#2"), *c.second,
+                        btree::Overwrite::Upsert);
         }
         ta.commit(node.getWrites());
       }
@@ -99,12 +104,12 @@ TEST_CASE("B+Tree") {
         auto ta = db.startTransaction();
         auto node = btree::BtreeWritable(ta, root);
         for (auto& c : doc) {
-          node.insert(ta.key(c.first + "#2"), *c.second);
+          node.insert(ta.key(c.first + "#2"), *c.second,
+                      btree::Overwrite::Upsert);
         }
         ta.commit(node.getWrites());
       }
 
-    return;
       {
         auto read = btree::BtreeReadOnly(db, root).getObject();
         REQUIRE(read != doc);

@@ -203,9 +203,9 @@ Addr BtreeWritable::addr() const {
   return m_root->addr();
 }
 
-bool BtreeWritable::insert(Key key, const model::Value& val) {
+bool BtreeWritable::insert(Key key, const model::Value& val, Overwrite o) {
   Expects(m_root);
-  return m_root->insert(key, val);
+  return m_root->insert(key, val, o);
 }
 
 Writes BtreeWritable::getWrites() const {
@@ -291,28 +291,30 @@ size_t AbsLeafW::findSize() {
   return i;
 }
 
-bool AbsLeafW::insert(Key key, const model::Value& val) {
+bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow) {
   if (!m_buf) initFromDisk();
 
   auto extras = val.extraWords();
   int extra_words = gsl::narrow_cast<int>(extras.size());
-  bool overwrite;
+
+  // find position to insert
+  auto pos = searchLeafPosition(key, *m_buf);
+  Ensures(pos < k_node_max_words + extra_words);
+  bool update = pos < m_top && keyFromWord(m_buf->at(pos)) == key;
+  if ((ow == Overwrite::Update && !update) ||
+      (ow == Overwrite::Insert && update)) {
+    return false;
+  }
 
   // enough space to insert?
   if (m_top + extra_words < k_node_max_words) {
 
-    // find position to insert
-    auto pos = searchLeafPosition(key, *m_buf);
-    Ensures(pos < k_node_max_words + extra_words);
-
     // make space
-    if (pos < m_top && keyFromWord(m_buf->at(pos)) == key) {
+    if (update) {
       auto extra = gsl::narrow_cast<int>(DskEntry(m_buf->at(pos)).extraWords());
       shiftBuffer(pos, extra_words - extra);
-      overwrite = true;
     } else {
       shiftBuffer(pos, 1 + extra_words);
-      overwrite = false;
     }
 
     // put the first word
@@ -325,7 +327,9 @@ bool AbsLeafW::insert(Key key, const model::Value& val) {
       auto& obj = dynamic_cast<const model::Object&>(val);
       m_linked.push_back(std::make_unique<BtreeWritable>(m_ta));
       for (auto& c : obj) {
-        m_linked.back()->insert(m_ta.key(c.first), *c.second);
+        auto r = m_linked.back()->insert(m_ta.key(c.first), *c.second,
+                                         Overwrite::Insert);
+        Expects(r == true);
       }
       m_buf->at(pos + 1) = m_linked.back()->addr();
     } else if (t == model::ValueType::list) {
@@ -339,10 +343,10 @@ bool AbsLeafW::insert(Key key, const model::Value& val) {
     }
 
   } else {
-    overwrite = split(key, val);
+    split(key, val, pos);
   }
 
-  return overwrite;
+  return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -354,8 +358,7 @@ LeafW::LeafW(AllocateNew, Transaction& ta, Addr next, AbsInternalW& parent)
 LeafW::LeafW(Transaction& ta, Addr addr, AbsInternalW& parent)
     : AbsLeafW(ta, addr), m_parent(parent) {}
 
-bool LeafW::split(Key key, const model::Value& val) {
-  bool overwrite;
+void LeafW::split(Key key, const model::Value& val, size_t pos) {
   Expects(m_buf);
   Expects(m_top <= m_buf->size());
 
@@ -387,14 +390,13 @@ bool LeafW::split(Key key, const model::Value& val) {
   m_top = i;
   m_buf->at(0) = DskLeafHdr().fromAddr(right_leaf->addr()).data;
 
+  // the check for existence happened before calling split so just use "Upsert"
   if (new_here)
-    overwrite = insert(key, val);
+    insert(key, val, Overwrite::Upsert);
   else
-    overwrite = right_leaf->insert(key, val);
+    right_leaf->insert(key, val, Overwrite::Upsert);
 
   m_parent.insert(split_key, std::move(right_leaf));
-
-  return overwrite;
 }
 
 void AbsLeafW::insert(gsl::span<const uint64_t> raw) {
@@ -414,7 +416,7 @@ RootLeafW::RootLeafW(AllocateNew, Transaction& ta, Addr next,
 RootLeafW::RootLeafW(Transaction& ta, Addr addr, BtreeWritable& parent)
     : AbsLeafW(ta, addr), m_parent(parent) {}
 
-bool RootLeafW::split(Key key, const model::Value& val) {
+void RootLeafW::split(Key key, const model::Value& val, size_t pos) {
   bool overwrite{ false };
   Expects(m_buf);
   auto& buf = *m_buf;
@@ -434,13 +436,16 @@ bool RootLeafW::split(Key key, const model::Value& val) {
     auto entry = DskEntry(buf[i]);
     auto extra = entry.extraWords();
 
-    if (new_val_size > 0 && entry.key.key() > key) {
+    // check if new key needs to be put now
+    if (new_val_size > 0 && i >= pos /*&& entry.key.key() > key*/) {
+      // check if new key even is the middle key
       if (ins == left_leaf.get() &&
           left_leaf->size() >= m_top - i + new_val_size) {
         mid = key;
         ins = right_leaf.get();
       }
-      overwrite = ins->insert(key, val);
+      // existence check happened before calling split, so use Upsert
+      ins->insert(key, val, Overwrite::Upsert);
       new_val_size = 0;
     }
 
@@ -455,8 +460,11 @@ bool RootLeafW::split(Key key, const model::Value& val) {
   }
 
   if (new_val_size > 0) {
+    // new key is the very last
+
+    // this should not really happen unless we have leafs with 2 elements
     if (mid == 0) { mid = key; }
-    overwrite = right_leaf->insert(key, val);
+    right_leaf->insert(key, val, Overwrite::Upsert);
   }
 
   buf[0] = DskInternalHdr().fromSize(4).data;
@@ -468,8 +476,6 @@ bool RootLeafW::split(Key key, const model::Value& val) {
   new_me->m_childs.emplace(right_leaf->addr(), std::move(right_leaf));
   new_me->m_childs.emplace(left_leaf->addr(), std::move(left_leaf));
   m_parent.m_root = std::move(new_me);
-
-  return overwrite;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -492,8 +498,8 @@ AbsInternalW::AbsInternalW(Transaction& ta, Addr addr, size_t top,
   m_top = top;
 }
 
-bool AbsInternalW::insert(Key key, const model::Value& val) {
-  return searchChild(key).insert(key, val);
+bool AbsInternalW::insert(Key key, const model::Value& val, Overwrite ow) {
+  return searchChild(key).insert(key, val, ow);
 }
 
 void AbsInternalW::insert(Key key, std::unique_ptr<NodeW> c) {
