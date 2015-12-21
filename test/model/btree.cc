@@ -94,5 +94,27 @@ TEST_CASE("B+Tree") {
         }
       }
     }
+    SECTION("extend with split to 3 leafs") {
+      {
+        auto ta = db.startTransaction();
+        auto node = btree::BtreeWritable(ta, root);
+        for (auto& c : doc) {
+          node.insert(ta.key(c.first + "#2"), *c.second);
+        }
+        ta.commit(node.getWrites());
+      }
+
+    return;
+      {
+        auto read = btree::BtreeReadOnly(db, root).getObject();
+        REQUIRE(read != doc);
+        for (auto& c : doc) {
+          REQUIRE(*c.second == *read.getChild(c.first));
+        }
+        for (auto& c : doc) {
+          REQUIRE(*c.second == *read.getChild(c.first + "#2"));
+        }
+      }
+    }
   }
 }

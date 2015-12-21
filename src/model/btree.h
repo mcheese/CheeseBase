@@ -51,6 +51,8 @@ protected:
 // Writable
 
 class NodeW;
+class AbsInternalW;
+class AbsLeafW;
 
 class BtreeWritable {
   friend class RootLeafW;
@@ -92,10 +94,10 @@ protected:
   size_t m_top{ 0 }; // size in Words
 };
 
-class LeafW : public NodeW {
+class AbsLeafW : public NodeW {
 public:
-  LeafW(AllocateNew, Transaction& ta, Addr next);
-  LeafW(Transaction& ta, Addr addr);
+  AbsLeafW(AllocateNew, Transaction& ta, Addr next);
+  AbsLeafW(Transaction& ta, Addr addr);
 
   // serialize and insert value, may trigger split
   bool insert(Key key, const model::Value&) override;
@@ -108,11 +110,20 @@ public:
   Writes getWrites() const override;
 private:
   size_t findSize() override;
-  virtual bool split(Key, const model::Value&);
+  virtual bool split(Key, const model::Value&) = 0;
+};
+
+class LeafW : public AbsLeafW {
+public:
+  LeafW(AllocateNew, Transaction& ta, Addr next, AbsInternalW& parent);
+  LeafW(Transaction& ta, Addr addr, AbsInternalW& parent);
+private:
+  AbsInternalW& m_parent;
+  bool split(Key, const model::Value&) override;
 };
 
 // tree just a single leaf
-class RootLeafW : public LeafW {
+class RootLeafW : public AbsLeafW {
   friend class RootInternalW;
 public:
   RootLeafW(AllocateNew, Transaction& ta, Addr next, BtreeWritable& parent);
@@ -123,13 +134,16 @@ private:
   bool split(Key, const model::Value&) override;
 };
 
-class InternalW : public NodeW {
+class AbsInternalW : public NodeW {
 public:
-  InternalW(Transaction& ta, Addr addr);
-  InternalW(Transaction& ta, Addr addr, size_t top,
+  AbsInternalW(Transaction& ta, Addr addr);
+
+  // used when extending single root leaf to internal root
+  AbsInternalW(Transaction& ta, Addr addr, size_t top,
             std::unique_ptr<std::array<Word, k_node_max_words>> buf);
 
   bool insert(Key key, const model::Value&) override;
+  void insert(Key key, std::unique_ptr<NodeW> c);
   Writes getWrites() const override;
   NodeW& searchChild(Key k);
 
@@ -139,10 +153,17 @@ protected:
   boost::container::flat_map<Addr, std::unique_ptr<NodeW>> m_childs;
 };
 
-class RootInternalW : public InternalW {
+class InternalW : public AbsInternalW {
+public:
+  InternalW(Transaction& ta, Addr addr, AbsInternalW& parent);
+private:
+  AbsInternalW& m_parent;
+};
+
+class RootInternalW : public AbsInternalW {
   friend class RootLeafW;
 public:
-  using InternalW::InternalW;
+  using AbsInternalW::AbsInternalW;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
