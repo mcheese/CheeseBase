@@ -110,6 +110,8 @@ Writes KeyTransaction::commit() {
           gsl::as_bytes(gsl::span<const DskKeyCacheSize>(s_terminator)) });
   }
 
+  m_cache->m_cur_block = block;
+  m_cache->m_offset = off;
   return writes;
 }
 
