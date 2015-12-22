@@ -426,7 +426,7 @@ void LeafW::split(Key key, const model::Value& val, size_t pos) {
   new_here = key < split_key;
 
   Ensures(mid < m_top);
-  Ensures(mid + (new_here ? new_val_len : 0) > k_node_min_words);
+  Ensures(mid + (new_here ? new_val_len : 0) > k_leaf_min_words);
 
   right_leaf->insert(
       gsl::span<uint64_t>(&m_buf->at(mid), gsl::narrow_cast<int>(m_top - mid)));
@@ -440,8 +440,8 @@ void LeafW::split(Key key, const model::Value& val, size_t pos) {
   else
     right_leaf->insert(key, val, Overwrite::Upsert, m_parent);
 
-  Ensures(m_top >= k_node_min_words);
-  Ensures(right_leaf->size() >= k_node_min_words);
+  Ensures(m_top >= k_leaf_min_words);
+  Ensures(right_leaf->size() >= k_leaf_min_words);
 
   m_parent->insert(split_key, std::move(right_leaf));
 }
@@ -506,8 +506,8 @@ void RootLeafW::split(Key key, const model::Value& val, size_t pos) {
     if (mid == 0) { mid = key; }
     right_leaf->insert(key, val, Overwrite::Upsert, new_me.get());
   }
-  Ensures(left_leaf->size() >= k_node_min_words);
-  Ensures(right_leaf->size() >= k_node_min_words);
+  Ensures(left_leaf->size() >= k_leaf_min_words);
+  Ensures(right_leaf->size() >= k_leaf_min_words);
 
 
   buf[0] = DskInternalHdr().fromSize(4).data;
@@ -684,6 +684,9 @@ void InternalW::split(Key key, std::unique_ptr<NodeW> c) {
   else
     right->insert(key, std::move(c));
 
+  Ensures(m_top >= k_internal_min_words);
+  Ensures(right->size() >= k_internal_min_words);
+
   m_parent->insert(mid_key, std::move(right));
 }
 
@@ -733,6 +736,9 @@ void RootInternalW::split(Key key, std::unique_ptr<NodeW> c) {
     left->insert(key, std::move(c));
   else
     right->insert(key, std::move(c));
+
+  Ensures(left->size() >= k_internal_min_words);
+  Ensures(right->size() >= k_internal_min_words);
 
   for (auto& c : m_childs) {
     bool found = false;

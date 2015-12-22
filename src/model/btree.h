@@ -28,8 +28,9 @@ static_assert(toBlockSize(k_block_type) ==
                   k_node_max_bytes + sizeof(DskBlockHdr),
               "Node should occupy a whole block");
 constexpr size_t k_node_max_words = k_node_max_bytes / sizeof(uint64_t);
-constexpr size_t k_node_min_words =
+constexpr size_t k_leaf_min_words =
     k_node_max_words / 2 - (k_entry_max_words - k_entry_min_words);
+constexpr size_t k_internal_min_words = k_node_max_words / 2 - 1;
 
 ////////////////////////////////////////////////////////////////////////////////
 // classes
