@@ -122,7 +122,7 @@ bool isNodeLeaf(const ReadRef& page, Addr addr) {
       .hasMagic();
 }
 
-std::unique_ptr<NodeW> openNodeW(Transaction& ta, Addr addr, AbsInternalW& p) {
+std::unique_ptr<NodeW> openNodeW(Transaction& ta, Addr addr) {
   auto page = ta.load(toPageNr(addr));
 
   if (isNodeLeaf(page, addr))
@@ -208,6 +208,11 @@ bool BtreeWritable::insert(Key key, const model::Value& val, Overwrite o) {
   return m_root->insert(key, val, o, nullptr);
 }
 
+void BtreeWritable::destroy() {
+  Expects(m_root);
+  m_root->destroy();
+}
+
 Writes BtreeWritable::getWrites() const {
   Expects(m_root);
   return m_root->getWrites();
@@ -253,6 +258,16 @@ void NodeW::initFromDisk() {
   m_top = findSize();
 }
 
+std::pair<gsl::span<const uint64_t>, std::unique_ptr<ReadRef>>
+NodeW::getDataView() const {
+  if (m_buf) return { gsl::span<const uint64_t>(*m_buf), nullptr };
+
+  auto p = std::make_unique<ReadRef>(m_ta.load(toPageNr(m_addr)));
+  return { gsl::as_span<const uint64_t>((*p)->subspan(
+               toPageOffset(m_addr) + sizeof(DskBlockHdr), k_node_max_bytes)),
+           std::move(p) };
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // AbsLeafW
 
@@ -280,6 +295,20 @@ Writes AbsLeafW::getWrites() const {
   }
 
   return w;
+}
+
+void AbsLeafW::destroy() {
+  auto bufv = getDataView();
+  auto& buf = bufv.first;
+
+  for (auto it = buf.begin() + 1; it < buf.end() && *it != 0; ++it) {
+    auto entry = DskEntry(*it);
+    if (entry.value.type == model::ValueType::object) {
+      BtreeWritable(m_ta, m_buf->at(*(it + 1))).destroy();
+    }
+    it += entry.extraWords();
+  }
+  m_ta.free(m_addr);
 }
 
 size_t AbsLeafW::findSize() {
@@ -312,7 +341,19 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
 
     // make space
     if (update) {
-      auto extra = gsl::narrow_cast<int>(DskEntry(m_buf->at(pos)).extraWords());
+      auto old_entry = DskEntry(m_buf->at(pos));
+
+      switch (old_entry.value.type) {
+      case model::ValueType::object:
+        BtreeWritable(m_ta, m_buf->at(pos + 1)).destroy();
+        break;
+      case model::ValueType::list:
+      case model::ValueType::string:
+        throw std::runtime_error("overwriting list or string NIY");
+        break;
+      }
+
+      auto extra = gsl::narrow_cast<int>(old_entry.extraWords());
       shiftBuffer(pos, extra_words - extra);
     } else {
       shiftBuffer(pos, 1 + extra_words);
@@ -348,6 +389,13 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
   }
 
   return true;
+}
+
+void AbsLeafW::insert(gsl::span<const uint64_t> raw) {
+  Expects(m_buf);
+  Expects(k_node_max_words >= m_top + raw.size());
+
+  for (auto word : raw) { m_buf->at(m_top++) = word; }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -393,13 +441,6 @@ void LeafW::split(Key key, const model::Value& val, size_t pos) {
     right_leaf->insert(key, val, Overwrite::Upsert, m_parent);
 
   m_parent->insert(split_key, std::move(right_leaf));
-}
-
-void AbsLeafW::insert(gsl::span<const uint64_t> raw) {
-  Expects(m_buf);
-  Expects(k_node_max_words >= m_top + raw.size());
-
-  for (auto word : raw) { m_buf->at(m_top++) = word; }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -549,13 +590,8 @@ Writes AbsInternalW::getWrites() const {
 NodeW& AbsInternalW::searchChild(Key k) {
   Expects(m_top <= k_node_max_words);
 
-  auto buf =
-      (m_buf ? gsl::span<const uint64_t>(*m_buf)
-             : gsl::as_span<const uint64_t>(
-                   m_ta.load(toPageNr(m_addr))
-                       ->subspan(toPageOffset(m_addr) + sizeof(DskBlockHdr),
-                                 k_node_max_bytes)))
-          .subspan(0, m_top);
+  auto bufview = getDataView();
+  auto buf = bufview.first.subspan(0, m_top);
   auto pos = searchInternalPosition(k, buf);
 
   Addr addr = ((pos >= m_top || DskInternalEntry(buf[pos]).key.key() > k)
@@ -567,9 +603,20 @@ NodeW& AbsInternalW::searchChild(Key k) {
     return *lookup->second;
   } else {
     auto emplace =
-        m_childs.emplace_hint(lookup, addr, openNodeW(m_ta, addr, *this));
+        m_childs.emplace_hint(lookup, addr, openNodeW(m_ta, addr));
     return *emplace->second;
   }
+}
+
+void AbsInternalW::destroy() {
+  auto bufr = getDataView();
+  auto buf = bufr.first.subspan(0, m_top);
+
+  for (auto it = buf.begin() + 1; it < buf.end(); it += 2) {
+    openNodeW(m_ta, *it)->destroy();
+  }
+
+  m_ta.free(m_addr);
 }
 
 void AbsInternalW::appendChild(std::pair<Addr, std::unique_ptr<NodeW>>&& c) {
@@ -609,7 +656,7 @@ void InternalW::split(Key key, std::unique_ptr<NodeW> c) {
   }
   auto mid_key = DskInternalEntry(m_buf->at(mid_pos)).key.key();
 
-  for (size_t i = 1; i < mid_pos; i += 2) {
+  for (size_t i = mid_pos + 1; i < m_top; i += 2) {
     auto lookup = m_childs.find(m_buf->at(i));
     if (lookup != m_childs.end()) {
       right->appendChild(std::move(*lookup));
@@ -675,7 +722,7 @@ void RootInternalW::split(Key key, std::unique_ptr<NodeW> c) {
 
   for (auto& c : m_childs) {
     bool found = false;
-    for (size_t i = 1; i < mid_pos; ++i) {
+    for (size_t i = 1; i < mid_pos; i += 2) {
       if (c.first == m_buf->at(i)) {
         left->appendChild(std::move(c));
         found = true;

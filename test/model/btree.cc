@@ -118,7 +118,8 @@ TEST_CASE("B+Tree") {
       }
     }
     SECTION("extend with split to many leafs") {
-      for (size_t i = 0; i < 50; ++i) {
+      const int times = 50;
+      for (size_t i = 0; i < times; ++i) {
         auto ta = db.startTransaction();
         auto node = btree::BtreeWritable(ta, root);
         for (auto& c : doc) {
@@ -128,12 +129,11 @@ TEST_CASE("B+Tree") {
         ta.commit(node.getWrites());
       }
 
-      return;
       {
         auto read = btree::BtreeReadOnly(db, root).getObject();
         for (auto& c : doc) {
           REQUIRE(*c.second == *read.getChild(c.first));
-          for (size_t i = 0; i < 50; ++i) {
+          for (size_t i = 0; i < times; ++i) {
             REQUIRE(*c.second ==
                     *read.getChild(c.first + "#" + std::to_string(i)));
           }

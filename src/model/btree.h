@@ -68,6 +68,7 @@ public:
 
   Addr addr() const;
   bool insert(Key key, const model::Value& val, Overwrite);
+  void destroy();
   Writes getWrites() const;
 
 private:
@@ -80,19 +81,25 @@ public:
 
   virtual Writes getWrites() const = 0;
 
-  // inserts value, returns true if it overwrote something
+  // inserts value, returns true on success
   virtual bool insert(Key key, const model::Value&, Overwrite,
                       AbsInternalW* parent) = 0;
 
+  // deallocate node and all its children
+  virtual void destroy() = 0;
+
   // filled size in words
   size_t size() const;
-  // available size in words
-  size_t free() const;
 
 protected:
   void shiftBuffer(size_t pos, int amount);
   void initFromDisk();
   virtual size_t findSize() = 0;
+
+  // get a view over internal data, independent of m_buf being initialized
+  // second part of pair is needed to keep ReadRef locked if m_buf is not used
+  std::pair<gsl::span<const uint64_t>, std::unique_ptr<ReadRef>>
+  getDataView() const;
 
   Transaction& m_ta;
   std::unique_ptr<std::array<Word, k_node_max_words>> m_buf;
@@ -114,6 +121,8 @@ public:
   std::vector<std::unique_ptr<BtreeWritable>> m_linked;
 
   Writes getWrites() const override;
+
+  void destroy() override;
 
 protected:
   size_t findSize() override;
@@ -156,6 +165,7 @@ public:
   void insert(Key key, std::unique_ptr<NodeW> c);
   Writes getWrites() const override;
   NodeW& searchChild(Key k);
+  void destroy() override;
   void appendChild(std::pair<Addr, std::unique_ptr<NodeW>>&&);
 
 protected:
