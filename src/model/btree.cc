@@ -440,6 +440,9 @@ void LeafW::split(Key key, const model::Value& val, size_t pos) {
   else
     right_leaf->insert(key, val, Overwrite::Upsert, m_parent);
 
+  Ensures(m_top >= k_node_min_words);
+  Ensures(right_leaf->size() >= k_node_min_words);
+
   m_parent->insert(split_key, std::move(right_leaf));
 }
 
@@ -503,6 +506,9 @@ void RootLeafW::split(Key key, const model::Value& val, size_t pos) {
     if (mid == 0) { mid = key; }
     right_leaf->insert(key, val, Overwrite::Upsert, new_me.get());
   }
+  Ensures(left_leaf->size() >= k_node_min_words);
+  Ensures(right_leaf->size() >= k_node_min_words);
+
 
   buf[0] = DskInternalHdr().fromSize(4).data;
   buf[1] = left_leaf->addr();
