@@ -234,8 +234,13 @@ protected:
 class LeafR : public NodeR {
 public:
   LeafR(Database& db, Addr addr, ReadRef page);
+  LeafR(Database& db, Addr addr);
 
+  // fill obj with values in this and all following leafs
   void getAll(model::Object& obj) override;
+
+  // fill obj with values in this leaf, returns next leaf address
+  Addr getAllInLeaf(model::Object& obj);
 
 private:
   std::pair<model::Key, model::PValue>

@@ -772,14 +772,25 @@ gsl::span<const uint64_t> NodeR::getData() const {
 LeafR::LeafR(Database& db, Addr addr, ReadRef page)
     : NodeR(db, addr, std::move(page)) {}
 
+LeafR::LeafR(Database& db, Addr addr)
+    : NodeR(db, addr, db.loadPage(toPageNr(addr))) {}
+
 void LeafR::getAll(model::Object& obj) {
+  auto next = getAllInLeaf(obj);
+  while (next != 0) {
+    next = LeafR(m_db, next).getAllInLeaf(obj);
+  }
+}
+
+Addr LeafR::getAllInLeaf(model::Object& obj) {
   auto data = getData();
   auto it = data.begin();
   auto end = data.end();
   auto next = DskLeafHdr().fromDsk(*it++).next();
 
   while (it != end && *it != 0) { obj.append(readValue(it)); }
-  if (next != 0) { openNodeR(m_db, next)->getAll(obj); }
+
+  return next;
 }
 
 std::pair<model::Key, model::PValue>
