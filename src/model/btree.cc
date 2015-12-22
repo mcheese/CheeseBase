@@ -411,27 +411,27 @@ void LeafW::split(Key key, const model::Value& val, size_t pos) {
 
   auto new_val_len = model::valueExtraWords(val.type()) + 1;
   bool new_here = false;
-  size_t i = 1;
-  for (; i < m_top; ++i) {
-    if ((new_here && i >= m_top - i + new_val_len + 1) ||
-        (!new_here && i + new_val_len >= m_top - i + 1)) {
-
+  size_t mid = 1;
+  for (; mid < m_top; ++mid) {
+    if ((new_here && mid >= m_top - mid + new_val_len + 1) ||
+        (!new_here && mid + new_val_len >= m_top - mid + 1)) {
       break;
     }
-    auto entry = DskEntry(m_buf->at(i));
+    auto entry = DskEntry(m_buf->at(mid));
     if (entry.key.key() >= key) { new_here = true; }
-    i += entry.extraWords();
+    mid += entry.extraWords();
   }
 
-  auto split_key = DskEntry(m_buf->at(i)).key.key();
+  auto split_key = DskEntry(m_buf->at(mid)).key.key();
+  new_here = key < split_key;
 
-  Ensures(i < m_top);
-  Ensures(i + (new_here ? new_val_len : 0) > k_node_min_words);
+  Ensures(mid < m_top);
+  Ensures(mid + (new_here ? new_val_len : 0) > k_node_min_words);
 
   right_leaf->insert(
-      gsl::span<uint64_t>(&m_buf->at(i), gsl::narrow_cast<int>(m_top - i)));
-  std::fill(m_buf->begin() + i, m_buf->begin() + m_top, 0);
-  m_top = i;
+      gsl::span<uint64_t>(&m_buf->at(mid), gsl::narrow_cast<int>(m_top - mid)));
+  std::fill(m_buf->begin() + mid, m_buf->begin() + m_top, 0);
+  m_top = mid;
   m_buf->at(0) = DskLeafHdr().fromAddr(right_leaf->addr()).data;
 
   // the check for existence happened before calling split so just use "Upsert"
@@ -602,8 +602,7 @@ NodeW& AbsInternalW::searchChild(Key k) {
   if (lookup != m_childs.end()) {
     return *lookup->second;
   } else {
-    auto emplace =
-        m_childs.emplace_hint(lookup, addr, openNodeW(m_ta, addr));
+    auto emplace = m_childs.emplace_hint(lookup, addr, openNodeW(m_ta, addr));
     return *emplace->second;
   }
 }
@@ -653,7 +652,12 @@ void InternalW::split(Key key, std::unique_ptr<NodeW> c) {
     } else {
       --mid_pos;
     }
+  } else {
+    if (DskInternalEntry(m_buf->at(mid_pos)).key.key() < key) {
+      new_here = false;
+    }
   }
+
   auto mid_key = DskInternalEntry(m_buf->at(mid_pos)).key.key();
 
   for (size_t i = mid_pos + 1; i < m_top; i += 2) {
@@ -707,6 +711,10 @@ void RootInternalW::split(Key key, std::unique_ptr<NodeW> c) {
     } else {
       --mid_pos;
     }
+  } else {
+    if (DskInternalEntry(m_buf->at(mid_pos)).key.key() < key) {
+      new_left = false;
+    }
   }
 
   auto mid_key = DskInternalEntry(m_buf->at(mid_pos)).key.key();
@@ -755,6 +763,12 @@ model::Object BtreeReadOnly::getObject() {
   return obj;
 }
 
+std::unique_ptr<model::Value> BtreeReadOnly::getValue(const std::string& key) {
+  auto k = m_db.getKey(key);
+  if (!k) return nullptr;
+  return openNodeR(m_db, m_root)->getValue(*k);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // NodeR
 
@@ -777,9 +791,7 @@ LeafR::LeafR(Database& db, Addr addr)
 
 void LeafR::getAll(model::Object& obj) {
   auto next = getAllInLeaf(obj);
-  while (next != 0) {
-    next = LeafR(m_db, next).getAllInLeaf(obj);
-  }
+  while (next != 0) { next = LeafR(m_db, next).getAllInLeaf(obj); }
 }
 
 Addr LeafR::getAllInLeaf(model::Object& obj) {
@@ -791,6 +803,14 @@ Addr LeafR::getAllInLeaf(model::Object& obj) {
   while (it != end && *it != 0) { obj.append(readValue(it)); }
 
   return next;
+}
+
+std::unique_ptr<model::Value> LeafR::getValue(Key key) {
+  auto view = getData();
+  auto pos = searchLeafPosition(key, view);
+  if (pos >= static_cast<size_t>(view.size()) || view[pos] == 0) return nullptr;
+
+  return readValue(view.begin() + pos).second;
 }
 
 std::pair<model::Key, model::PValue>
@@ -858,10 +878,16 @@ void InternalR::getAll(model::Object& obj) {
   searchChild(0)->getAll(obj);
 }
 
+std::unique_ptr<model::Value> InternalR::getValue(Key key) {
+  return searchChild(key)->getValue(key);
+}
+
 std::unique_ptr<NodeR> InternalR::searchChild(Key k) {
   auto pos = searchInternalPosition(k, m_data);
-  auto addr = (DskInternalEntry(m_data[pos]).key.key() > k ? m_data[pos - 1]
-                                                           : m_data[pos + 1]);
+  auto addr = (pos >= static_cast<size_t>(m_data.size()) ||
+                       DskInternalEntry(m_data[pos]).key.key() > k
+                   ? m_data[pos - 1]
+                   : m_data[pos + 1]);
   return openNodeR(m_db, addr);
 }
 

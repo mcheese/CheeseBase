@@ -16,21 +16,21 @@ using namespace cheesebase;
 const std::string input = R"(
     {
       "0": 1,
-      "1": 1,
-      "2": 1,
-      "3": 1,
-      "4": 1,
-      "5": 1,
-      "6": 1,
-      "7": 1,
-      "8": 1,
-      "9": 1,
-      "A": 1,
-      "B": 1,
-      "C": 1,
-      "D": 1,
-      "E": 1,
-      "F": 1
+      "1": 2,
+      "2": 3,
+      "3": 4,
+      "4": "blublub",
+      "5": 6,
+      "6": 7,
+      "7": 8,
+      "8": { "hey": true, "bla": false, "what": null, "is": 1337.456, "up": "asdasdasdasdada"},
+      "9": 9,
+      "A": 10,
+      "B": "blaaaaaaaaaaa",
+      "C": 12,
+      "D": 13,
+      "E": 14,
+      "F": 15
     }
 )";
 const std::string input_short = R"(
@@ -129,13 +129,27 @@ TEST_CASE("B+Tree") {
         ta.commit(node.getWrites());
       }
 
-      {
+      SECTION("read all values") {
         auto read = btree::BtreeReadOnly(db, root).getObject();
         for (auto& c : doc) {
           REQUIRE(*c.second == *read.getChild(c.first));
           for (size_t i = 0; i < times; ++i) {
             REQUIRE(*c.second ==
                     *read.getChild(c.first + "#" + std::to_string(i)));
+          }
+        }
+      }
+
+      SECTION("read specific values") {
+        for (auto& c : doc) {
+          auto read = btree::BtreeReadOnly(db, root).getValue(c.first);
+          REQUIRE(read);
+          REQUIRE(*read == *c.second);
+          for (size_t i = 0; i < times; ++i) {
+            auto read = btree::BtreeReadOnly(db, root)
+                            .getValue(c.first + "#" + std::to_string(i));
+            REQUIRE(read);
+            REQUIRE(*read == *c.second);
           }
         }
       }

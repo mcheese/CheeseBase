@@ -211,7 +211,7 @@ public:
   BtreeReadOnly(Database& db, Addr root);
 
   model::Object getObject();
-  std::unique_ptr<model::Value> getValue(Key key);
+  std::unique_ptr<model::Value> getValue(const std::string& key);
 
 private:
   Database& m_db;
@@ -221,6 +221,7 @@ private:
 class NodeR : public Node {
 public:
   virtual void getAll(model::Object& obj) = 0;
+  virtual std::unique_ptr<model::Value> getValue(Key key) = 0;
 
 protected:
   NodeR(Database& db, Addr addr, ReadRef page);
@@ -242,6 +243,8 @@ public:
   // fill obj with values in this leaf, returns next leaf address
   Addr getAllInLeaf(model::Object& obj);
 
+  std::unique_ptr<model::Value> getValue(Key key);
+
 private:
   std::pair<model::Key, model::PValue>
   readValue(gsl::span<const uint64_t>::const_iterator& it);
@@ -252,6 +255,8 @@ public:
   InternalR(Database& db, Addr addr, ReadRef page);
 
   void getAll(model::Object& obj) override;
+
+  std::unique_ptr<model::Value> getValue(Key key);
 
 private:
   std::unique_ptr<NodeR> searchChild(Key k);

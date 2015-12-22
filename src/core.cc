@@ -60,6 +60,10 @@ std::string Database::resolveKey(Key k) const {
   return m_keycache->getString(k);
 }
 
+boost::optional<Key> Database::getKey(const std::string& k) const {
+  return m_keycache->getKey(k);
+}
+
 ReadRef Transaction::load(PageNr p) { return m_storage.loadPage(p); };
 
 Block Transaction::alloc(size_t s) { return m_alloc.alloc(s); };

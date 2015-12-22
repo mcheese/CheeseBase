@@ -42,6 +42,7 @@ public:
   Database(const std::string& name);
   Transaction startTransaction();
   std::string resolveKey(Key k) const;
+  boost::optional<Key> getKey(const std::string& k) const;
   ReadRef loadPage(PageNr p);
 
 private:
