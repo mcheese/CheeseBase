@@ -23,7 +23,8 @@ const std::string input = R"(
       "5": 6,
       "6": 7,
       "7": 8,
-      "8": 1337,
+      "8": {"hey": 1, "just": false, "met":true ,
+            "you": null, "and this is crazy": "but here is my #" },
       "9": 9,
       "A": 10,
       "B": "blaaaaaaaaaaa",
@@ -141,7 +142,6 @@ TEST_CASE("B+Tree insert") {
           }
         }
       }
-
       SECTION("read specific values") {
         for (auto& c : doc) {
           auto read = btree::BtreeReadOnly(db, root).getValue(c.first);
@@ -169,31 +169,84 @@ TEST_CASE("B+Tree insert") {
         ta.commit(tree.getWrites());
       }
 
-      // delete half
-      {
-        auto ta = db.startTransaction();
-        auto tree = btree::BtreeWritable(ta, root);
-        for (size_t i = 0; i < times / 4; ++i) {
+      SECTION("delete half") {
+        // delete half
+        {
+          auto ta = db.startTransaction();
+          auto tree = btree::BtreeWritable(ta, root);
+          for (size_t i = 0; i < times / 2; ++i) {
+            for (auto& c : doc) {
+              tree.remove(c.first + "#" + std::to_string(i));
+            }
+          }
+          ta.commit(tree.getWrites());
+        }
+        // read and compare to expected
+        {
           for (auto& c : doc) {
-            tree.remove(c.first + "#" + std::to_string(i));
+            auto read = btree::BtreeReadOnly(db, root).getValue(c.first);
+            REQUIRE(read);
+            REQUIRE(*read == *c.second);
+            for (size_t i = 0; i < times / 2; ++i) {
+              auto read = btree::BtreeReadOnly(db, root)
+                              .getValue(c.first + "#" + std::to_string(i));
+              if (i < times) {
+                REQUIRE_FALSE(read);
+              } else {
+                REQUIRE(read);
+                REQUIRE(*read == *c.second);
+              }
+            }
           }
         }
-        ta.commit(tree.getWrites());
+        {
+          auto read = btree::BtreeReadOnly(db, root).getObject();
+          for (auto& c : doc) {
+            REQUIRE(*read.getChild(c.first) == *c.second);
+            for (size_t i = 0; i < times / 2; ++i) {
+              if (i < times) {
+                REQUIRE_FALSE(read.getChild(c.first + "#" + std::to_string(i))
+                                  .is_initialized());
+              } else {
+                REQUIRE(*read.getChild(c.first + "#" + std::to_string(i)) ==
+                        *c.second);
+              }
+            }
+          }
+        }
       }
-      // read and compare to expected
-      {
-        for (auto& c : doc) {
-          auto read = btree::BtreeReadOnly(db, root).getValue(c.first);
-          REQUIRE(read);
-          REQUIRE(*read == *c.second);
+
+      SECTION("delete all") {
+        {
+          auto ta = db.startTransaction();
+          auto tree = btree::BtreeWritable(ta, root);
+          for (auto& c : doc) { tree.remove(c.first); }
           for (size_t i = 0; i < times; ++i) {
-            auto read = btree::BtreeReadOnly(db, root)
-                            .getValue(c.first + "#" + std::to_string(i));
-            if (i < times / 4) {
+            for (auto& c : doc) {
+              tree.remove(c.first + "#" + std::to_string(i));
+            }
+          }
+          ta.commit(tree.getWrites());
+        }
+        // read and compare to expected
+        {
+          for (auto& c : doc) {
+            auto read = btree::BtreeReadOnly(db, root).getValue(c.first);
+            REQUIRE_FALSE(read);
+            for (size_t i = 0; i < times / 2; ++i) {
+              auto read = btree::BtreeReadOnly(db, root)
+                              .getValue(c.first + "#" + std::to_string(i));
               REQUIRE_FALSE(read);
-            } else {
-              REQUIRE(read);
-              REQUIRE(*read == *c.second);
+            }
+          }
+        }
+        {
+          auto read = btree::BtreeReadOnly(db, root).getObject();
+          for (auto& c : doc) {
+            REQUIRE_FALSE(read.getChild(c.first).is_initialized());
+            for (size_t i = 0; i < times / 2; ++i) {
+              REQUIRE_FALSE(read.getChild(c.first + "#" + std::to_string(i))
+                                .is_initialized());
             }
           }
         }

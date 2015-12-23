@@ -60,6 +60,7 @@ class AbsLeafW;
 
 class BtreeWritable {
   friend class RootLeafW;
+  friend class RootInternalW;
 
 public:
   // create new tree
@@ -81,6 +82,8 @@ private:
 };
 
 class NodeW : public Node {
+  friend class RootInternalW;
+
 public:
   NodeW(Transaction& ta, Addr addr);
 
@@ -133,6 +136,7 @@ public:
   void destroy() override;
 
   boost::container::flat_map<Key, std::unique_ptr<BtreeWritable>> m_linked;
+
 protected:
   size_t findSize() override;
   virtual void split(Key, const model::Value&, size_t insert_pos) = 0;
@@ -144,13 +148,14 @@ protected:
 };
 
 class LeafW : public AbsLeafW {
+  friend class RootLeafW;
+
 public:
   using AbsLeafW::AbsLeafW;
 
 private:
   void split(Key, const model::Value&, size_t insert_pos) override;
   void merge() override;
-
 };
 
 // tree just a single leaf
@@ -162,12 +167,15 @@ public:
   RootLeafW(Transaction& ta, Addr addr, BtreeWritable& tree);
 
 private:
+  RootLeafW(LeafW&&, Addr addr, BtreeWritable& parent);
   BtreeWritable& m_tree;
   void split(Key, const model::Value&, size_t insert_pos) override;
   void merge() override;
 };
 
 class AbsInternalW : public NodeW {
+  friend class RootInternalW;
+
 public:
   AbsInternalW(Transaction& ta, Addr addr);
   AbsInternalW(AllocateNew, Transaction& ta);
@@ -185,8 +193,13 @@ public:
   void destroy() override;
   void appendChild(std::pair<Addr, std::unique_ptr<NodeW>>&&);
   NodeW& getSilbling(Key key, Addr addr);
-  void removeMerged(Key, Addr);
-  void updateMerged(Key, Addr);
+
+  // Remove Key+Addr after *a*. *k* search should find *a*. Returns removed Key.
+  Key removeMerged(Key k, Addr a);
+
+  // Replace Key after *a* with *k*. *k* search should find *a*. Returns
+  // replaced Key.
+  Key updateMerged(Key k, Addr a);
 
 protected:
   size_t findSize() override;
@@ -266,7 +279,7 @@ public:
   // fill obj with values in this leaf, returns next leaf address
   Addr getAllInLeaf(model::Object& obj);
 
-  std::unique_ptr<model::Value> getValue(Key key);
+  std::unique_ptr<model::Value> getValue(Key key) override;
 
 private:
   std::pair<model::Key, model::PValue>
@@ -279,7 +292,7 @@ public:
 
   void getAll(model::Object& obj) override;
 
-  std::unique_ptr<model::Value> getValue(Key key);
+  std::unique_ptr<model::Value> getValue(Key key) override;
 
 private:
   std::unique_ptr<NodeR> searchChild(Key k);
