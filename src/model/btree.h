@@ -69,10 +69,14 @@ public:
 
   Addr addr() const;
   bool insert(Key key, const model::Value& val, Overwrite);
+  bool insert(const std::string& key, const model::Value& val, Overwrite);
+  bool remove(Key key);
+  bool remove(const std::string& key);
   void destroy();
   Writes getWrites() const;
 
 private:
+  Transaction& m_ta;
   std::unique_ptr<NodeW> m_root;
 };
 
@@ -88,6 +92,9 @@ public:
 
   // deallocate node and all its children
   virtual void destroy() = 0;
+
+  // delete value, returns true if found and removed
+  virtual bool remove(Key key, AbsInternalW* parent) = 0;
 
   // filled size in words
   size_t size() const;
@@ -119,15 +126,20 @@ public:
   // append raw words without further checking
   void insert(gsl::span<const uint64_t> raw);
 
-  std::vector<std::unique_ptr<BtreeWritable>> m_linked;
+  bool remove(Key key, AbsInternalW* parent) override;
 
   Writes getWrites() const override;
 
   void destroy() override;
 
+  boost::container::flat_map<Key, std::unique_ptr<BtreeWritable>> m_linked;
 protected:
   size_t findSize() override;
   virtual void split(Key, const model::Value&, size_t insert_pos) = 0;
+  virtual void merge() = 0;
+  // Destroy value at pos (if remote). Return size of the entry.
+  template <typename ConstIt>
+  size_t destroyValue(ConstIt it);
   AbsInternalW* m_parent;
 };
 
@@ -137,6 +149,8 @@ public:
 
 private:
   void split(Key, const model::Value&, size_t insert_pos) override;
+  void merge() override;
+
 };
 
 // tree just a single leaf
@@ -150,6 +164,7 @@ public:
 private:
   BtreeWritable& m_tree;
   void split(Key, const model::Value&, size_t insert_pos) override;
+  void merge() override;
 };
 
 class AbsInternalW : public NodeW {
@@ -164,10 +179,14 @@ public:
   bool insert(Key key, const model::Value&, Overwrite,
               AbsInternalW* parent) override;
   void insert(Key key, std::unique_ptr<NodeW> c);
+  bool remove(Key key, AbsInternalW* parent) override;
   Writes getWrites() const override;
   NodeW& searchChild(Key k);
   void destroy() override;
   void appendChild(std::pair<Addr, std::unique_ptr<NodeW>>&&);
+  NodeW& getSilbling(Key key, Addr addr);
+  void removeMerged(Key, Addr);
+  void updateMerged(Key, Addr);
 
 protected:
   size_t findSize() override;
@@ -176,6 +195,7 @@ protected:
 
 private:
   virtual void split(Key, std::unique_ptr<NodeW>) = 0;
+  virtual void merge() = 0;
 };
 
 class InternalW : public AbsInternalW {
@@ -187,6 +207,7 @@ public:
 
 private:
   void split(Key, std::unique_ptr<NodeW>) override;
+  void merge() override;
 };
 
 class RootInternalW : public AbsInternalW {
@@ -201,6 +222,7 @@ private:
                 std::unique_ptr<std::array<uint64_t, k_node_max_words>> buf,
                 BtreeWritable& parent);
   void split(Key, std::unique_ptr<NodeW>) override;
+  void merge() override;
   BtreeWritable& m_parent;
 };
 
