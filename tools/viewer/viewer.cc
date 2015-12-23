@@ -44,8 +44,8 @@ int main(int argc, char* argv[]) {
 
   fs.seekg(0, std::ios_base::end);
   auto end = fs.tellg();
-  if (db_hdr.end_of_file != end) {
-    std::cout << "Corrupted: file size != end of file marker!\n";
+  if (db_hdr.end_of_file > end) {
+    std::cout << "Corrupted: file size < end of file marker!\n";
     return 1;
   }
 
