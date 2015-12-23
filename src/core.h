@@ -27,6 +27,8 @@ public:
   Key key(const std::string& s);
 
   void commit(Writes w);
+  const Database& db;
+
 private:
   Transaction(Database& db);
 

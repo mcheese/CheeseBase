@@ -73,7 +73,8 @@ void Transaction::free(Addr a) { return m_alloc.free(a); }
 Key Transaction::key(const std::string& s) { return m_kcache.getKey(s); }
 
 Transaction::Transaction(Database& db)
-    : m_storage(*db.m_store)
+    : db(db)
+    , m_storage(*db.m_store)
     , m_alloc(db.m_alloc->startTransaction())
     , m_kcache(db.m_keycache->startTransaction(m_alloc)) {}
 
