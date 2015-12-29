@@ -32,6 +32,8 @@ set(KEYCACHE
 
 set(CORE
   core.h core.cc
+  cheesebase.h cheesebase.cc
+  cbindings.cc
 )
 
 source_group( src\\common   FILES ${COMMON})
@@ -43,4 +45,3 @@ source_group( src           FILES ${CORE})
 
 add_library(cheesebase ${CORE} ${KEYCACHE} ${COMMON} ${STORAGE} ${BLOCKMAN} ${MODEL})
 target_link_libraries(cheesebase ${Boost_LIBRARIES})
-

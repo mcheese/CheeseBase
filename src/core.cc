@@ -5,6 +5,7 @@
 #include "blockman/allocator.h"
 #include "keycache/keycache.h"
 #include "storage/storage.h"
+#include "model/btree.h"
 
 #include <boost/filesystem.hpp>
 
@@ -21,13 +22,17 @@ Database::Database(const std::string& file) {
 
     auto kc_blk = gsl::as_span<DskBlockHdr>(page->subspan(k_page_size / 2))[0];
     if (hdr.magic != k_magic || hdr.free_alloc_pg % k_page_size != 0 ||
-        hdr.free_alloc_t1 % k_page_size / 2 != 0 ||
-        hdr.free_alloc_t2 % k_page_size / 4 != 0 ||
-        hdr.free_alloc_t3 % k_page_size / 8 != 0 ||
-        hdr.free_alloc_t4 % k_page_size / 16 != 0 ||
+        hdr.free_alloc_t1 % (k_page_size / 2) != 0 ||
+        hdr.free_alloc_t2 % (k_page_size / 4) != 0 ||
+        hdr.free_alloc_t3 % (k_page_size / 8) != 0 ||
+        hdr.free_alloc_t4 % (k_page_size / 16) != 0 ||
         hdr.end_of_file % k_page_size != 0 || hdr.end_of_file < k_page_size ||
         kc_blk.type() != BlockType::t1)
       throw DatabaseError("Invalid database header");
+
+    m_alloc = std::make_unique<Allocator>(hdr, *m_store);
+    m_keycache = std::make_unique<KeyCache>(
+        Block{ k_page_size / 2, k_page_size / 2 }, *m_store);
 
   } else {
     m_store = std::make_unique<Storage>(file, OpenMode::create_new);
@@ -44,12 +49,18 @@ Database::Database(const std::string& file) {
                gsl::as_bytes(gsl::span<DskBlockHdr>(cache_hdr)) },
         Write{ k_page_size / 2 + sizeof(DskBlockHdr),
                gsl::as_bytes(gsl::span<DskKeyCacheSize>(cache_term)) } });
+    m_alloc = std::make_unique<Allocator>(hdr, *m_store);
+    m_keycache = std::make_unique<KeyCache>(
+        Block{ k_page_size / 2, k_page_size / 2 }, *m_store);
+
+    auto ta = startTransaction();
+    btree::BtreeWritable tree(ta);
+    Expects(tree.addr() == k_root);
+    ta.commit(tree.getWrites());
   }
 
-
-  m_alloc = std::make_unique<Allocator>(hdr, *m_store);
-  m_keycache = std::make_unique<KeyCache>(
-      Block{ k_page_size / 2, k_page_size / 2 }, *m_store);
+  auto ta = startTransaction();
+  btree::BtreeWritable(ta, k_root);
 }
 
 Transaction Database::startTransaction() { return Transaction(*this); };

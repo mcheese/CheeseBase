@@ -46,7 +46,8 @@ TEST_CASE("B+Tree insert") {
 
   SECTION("short") {
     Addr root;
-    auto doc = parseJson(input_short.begin(), input_short.end());
+    auto parsed = parseJson(input_short.begin(), input_short.end());
+    auto& doc = dynamic_cast<model::Object&>(*parsed);
     {
       auto ta = db.startTransaction();
       auto tree = btree::BtreeWritable(ta);
@@ -63,7 +64,8 @@ TEST_CASE("B+Tree insert") {
 
   SECTION("splits") {
     Addr root;
-    auto doc = parseJson(input.begin(), input.end());
+    auto parsed = parseJson(input.begin(), input.end());
+    auto& doc = dynamic_cast<model::Object&>(*parsed);
     {
       auto ta = db.startTransaction();
       auto node = btree::BtreeWritable(ta);

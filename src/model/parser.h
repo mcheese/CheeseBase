@@ -11,7 +11,7 @@ DEF_EXCEPTION(ParserError);
 template <class InputIt>
 class JsonParser {
 public:
-  static model::Object parse(InputIt begin, InputIt end) {
+  static model::PValue parse(InputIt begin, InputIt end) {
     return JsonParser(begin, end).parseDoc();
   };
 
@@ -20,9 +20,9 @@ private:
   InputIt it;
   InputIt end;
 
-  model::Object parseDoc() {
+  model::PValue parseDoc() {
     skipWs();
-    auto doc = parseObject();
+    auto doc = parseValue();
     skipWs();
     if (it != end) throw ParserError("more data than expected");
     return doc;
@@ -185,7 +185,7 @@ private:
 };
 
 template <class InputIt>
-model::Object parseJson(InputIt begin, InputIt end) {
+model::PValue parseJson(InputIt begin, InputIt end) {
   return JsonParser<InputIt>::parse(begin, end);
 }
 

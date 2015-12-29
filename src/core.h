@@ -37,6 +37,8 @@ private:
   KeyTransaction m_kcache;
 };
 
+const Addr k_root{ k_page_size };
+
 class Database {
   friend class Transaction;
 

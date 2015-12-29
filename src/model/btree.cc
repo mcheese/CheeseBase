@@ -365,7 +365,7 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
       auto old_entry = DskEntry(m_buf->at(pos));
 
       auto extra = gsl::narrow_cast<int>(old_entry.extraWords());
-      shiftBuffer(pos, extra_words - extra);
+      shiftBuffer(pos + extra, extra_words - extra);
     } else {
       shiftBuffer(pos, 1 + extra_words);
     }

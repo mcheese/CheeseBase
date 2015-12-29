@@ -5,4 +5,5 @@ add_subdirectory(storage)
 add_subdirectory(blockman)
 add_subdirectory(model)
 add_subdirectory(keycache)
+add_subdirectory(cb)
 

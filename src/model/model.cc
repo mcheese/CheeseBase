@@ -5,7 +5,9 @@ namespace cheesebase {
 namespace model {
 
 size_t valueExtraWords(uint8_t t) {
-  if (t & 0b10000000) { return (t & 0b00111111) / 8 + 1; }
+  if (t & 0b10000000) {
+    return static_cast<size_t>((static_cast<int>(t & 0b00111111) - 1) / 8 + 1);
+  }
   switch (t) {
   case model::ValueType::object:
   case model::ValueType::list:
