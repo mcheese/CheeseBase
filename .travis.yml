@@ -11,6 +11,7 @@ matrix:
           packages:
             - cmake
             - cmake-data
+            - libboost-dev
             - g++-4.9
       env: COMPILER=g++-4.9
     - compiler: gcc
@@ -22,6 +23,7 @@ matrix:
           packages:
             - cmake
             - cmake-data
+            - libboost-dev
             - g++-5
       env: COMPILER=g++-5
     - compiler: clang
@@ -34,6 +36,7 @@ matrix:
           packages:
             - cmake
             - cmake-data
+            - libboost-dev
             - clang-3.6
       env: COMPILER=clang++-3.6
     - compiler: clang
@@ -46,6 +49,7 @@ matrix:
           packages:
             - cmake
             - cmake-data
+            - libboost-dev
             - clang-3.7
       env: COMPILER=clang++-3.7
 
