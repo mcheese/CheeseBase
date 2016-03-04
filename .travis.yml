@@ -40,6 +40,7 @@ matrix:
             - cmake
             - cmake-data
             - libboost1.55-all-dev
+            - g++-5
             - clang-3.6
       env: COMPILER=clang++-3.6
     - compiler: clang
@@ -54,6 +55,7 @@ matrix:
             - cmake
             - cmake-data
             - libboost1.55-all-dev
+            - g++-5
             - clang-3.7
       env: COMPILER=clang++-3.7
 
@@ -62,5 +64,5 @@ before_script:
     - cd build
     - cmake -DTESTS=ON ..
 
-script: make && make test
+script: echo ${STDLIB} && make && make test
 
