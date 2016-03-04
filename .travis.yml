@@ -1,9 +1,5 @@
 language: cpp
 
-# Ubuntu 14 Trusty support
-sudo: required
-dist: trusty
-
 matrix:
   include:
     - compiler: gcc
@@ -12,6 +8,7 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
           packages:
+            - cmake
             - g++-4.9
       env: COMPILER=g++-4.9
     - compiler: gcc
@@ -20,6 +17,7 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
           packages:
+            - cmake
             - g++-5
       env: COMPILER=g++-5
     - compiler: clang
@@ -29,6 +27,7 @@ matrix:
             - ubuntu-toolchain-r-test
             - llvm-toolchain-precise-3.6
           packages:
+            - cmake
             - clang-3.6
       env: COMPILER=clang++-3.6
     - compiler: clang
@@ -38,6 +37,7 @@ matrix:
             - ubuntu-toolchain-r-test
             - llvm-toolchain-precise-3.7
           packages:
+            - cmake
             - clang-3.7
       env: COMPILER=clang++-3.7
 
