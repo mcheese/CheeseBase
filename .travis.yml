@@ -12,6 +12,9 @@ matrix:
             - cmake
             - cmake-data
             - libboost-dev
+            - libboost-thread-dev
+            - libboost-system-dev
+            - libboost-filesystem-dev
             - g++-4.9
       env: COMPILER=g++-4.9
     - compiler: gcc
@@ -24,6 +27,9 @@ matrix:
             - cmake
             - cmake-data
             - libboost-dev
+            - libboost-thread-dev
+            - libboost-system-dev
+            - libboost-filesystem-dev
             - g++-5
       env: COMPILER=g++-5
     - compiler: clang
@@ -37,6 +43,9 @@ matrix:
             - cmake
             - cmake-data
             - libboost-dev
+            - libboost-thread-dev
+            - libboost-system-dev
+            - libboost-filesystem-dev
             - clang-3.6
       env: COMPILER=clang++-3.6
     - compiler: clang
@@ -50,6 +59,9 @@ matrix:
             - cmake
             - cmake-data
             - libboost-dev
+            - libboost-thread-dev
+            - libboost-system-dev
+            - libboost-filesystem-dev
             - clang-3.7
       env: COMPILER=clang++-3.7
 
