@@ -4,6 +4,8 @@
 #include <string>
 #include <cstring>
 
+#define _CRT_NONSTDC_NO_DEPRECATE
+
 extern "C" {
 
   CheeseBase* cheesebase_open(const char* file) {
