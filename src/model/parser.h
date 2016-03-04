@@ -3,6 +3,8 @@
 #include "common/common.h"
 #include "model.h"
 #include <cstdlib>
+#include <codecvt>
+#include <locale>
 
 namespace cheesebase {
 
@@ -45,27 +47,76 @@ private:
   model::String parseString() {
     expect('"');
     model::String str;
+
     for (; it != end && *it != '\"'; ++it) {
       auto c = *it;
-      if (!isprint(c)) throw ParserError("expected printable character");
+
       if (c == '\\') {
         if (++it == end)
           throw ParserError("unexpected end while reading string");
         c = *it;
-        if (c == '\"' || c == '\\')
-          ;
-        else if (c == 'n')
-          c = '\n';
-        else if (c == 'b')
-          c = '\b';
-        else if (c == 't')
-          c = '\t';
-        else if (c == 'r')
-          c = '\r';
-        else
-          throw ParserError("unexpected character after '\\'");
+
+        switch (c) {
+        case '\"':
+        case '/':
+        case '\\':
+          str.push_back(c);
+          break;
+
+        case 'n':
+          str.push_back('\n');
+          break;
+        case 'b':
+          str.push_back('\b');
+          break;
+        case 't':
+          str.push_back('\t');
+          break;
+        case 'r':
+          str.push_back('\r');
+          break;
+        case 'f':
+          str.push_back('\f');
+          break;
+
+        case 'u': {
+          wchar_t wc = 0;
+          for (int i = 3; i >= 0 && it != end; i--) {
+            if (++it == end)
+              throw ParserError("unexpected end while reading string");
+
+            char d = *it;
+
+            if (d >= '0' && d <= '9') {
+              wc += static_cast<wchar_t>(d - '0') << (4 * i);
+            } else if (d >= 'A' && d <= 'F') {
+              wc += static_cast<wchar_t>(d - 'A' + 10) << (4 * i);
+            } else if (d >= 'a' && d <= 'f') {
+              wc += static_cast<wchar_t>(d - 'a' + 10) << (4 * i);
+            } else {
+              throw ParserError(
+                  "unexpected character in string following '\\u'");
+            }
+          }
+
+          // convert utf16 char to utf8
+          std::wstring wstr;
+          wstr.push_back(wc);
+          std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>, wchar_t>
+              convert;
+          str.append(convert.to_bytes(wstr));
+        }
+
+        break;
+
+        default:
+          throw ParserError("unexpected character in string following '\\'");
+        }
+      } else if (c < ' ') {
+        throw ParserError("unexpected character in string");
+      } else {
+        str.push_back(c);
       }
-      str.push_back(c);
     }
     expect('"');
     return str;

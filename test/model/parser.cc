@@ -63,3 +63,17 @@ TEST_CASE("parse JSON") {
   REQUIRE(*dynamic_cast<model::Object*>(doc.get())->getChild("test") ==
           model::Scalar(123.));
 }
+
+TEST_CASE("parse escaped characters") {
+  std::string input = R"( "\"\\\/\b\f\n\r\t" )";
+  auto val = parseJson(input.begin(), input.end());
+  REQUIRE(*dynamic_cast<model::Scalar*>(val.get()) ==
+          model::Scalar(std::string("\"\\/\b\f\n\r\t")));
+}
+
+TEST_CASE("parse unicode escape") {
+  std::string input = R"( "\u0041" )";
+  auto val = parseJson(input.begin(), input.end());
+  REQUIRE(*dynamic_cast<model::Scalar*>(val.get()) ==
+          model::Scalar(std::string("A")));
+}
