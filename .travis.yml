@@ -13,6 +13,7 @@ matrix:
             - cmake
             - cmake-data
             - libboost1.55-all-dev
+            - libstdc++
             - g++-4.9
       env: COMPILER=g++-4.9
     - compiler: gcc
@@ -26,6 +27,7 @@ matrix:
             - cmake
             - cmake-data
             - libboost1.55-all-dev
+            - libstdc++
             - g++-5
       env: COMPILER=g++-5
     - compiler: clang
@@ -40,7 +42,7 @@ matrix:
             - cmake
             - cmake-data
             - libboost1.55-all-dev
-            - g++-5
+            - libstdc++
             - clang-3.6
       env: COMPILER=clang++-3.6
     - compiler: clang
@@ -55,14 +57,14 @@ matrix:
             - cmake
             - cmake-data
             - libboost1.55-all-dev
-            - g++-5
+            - libstdc++
             - clang-3.7
       env: COMPILER=clang++-3.7
 
 before_script:
     - mkdir build
     - cd build
-    - cmake -DTESTS=ON ..
+    - cmake -DTESTS=ON -Dstdlib=libstdc++ ..
 
 script: echo ${STDLIB} && make && make test
 
