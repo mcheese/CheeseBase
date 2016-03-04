@@ -10,6 +10,7 @@ matrix:
             - george-edison55-precise-backports
           packages:
             - cmake
+            - cmake-data
             - g++-4.9
       env: COMPILER=g++-4.9
     - compiler: gcc
@@ -20,6 +21,7 @@ matrix:
             - george-edison55-precise-backports
           packages:
             - cmake
+            - cmake-data
             - g++-5
       env: COMPILER=g++-5
     - compiler: clang
@@ -31,6 +33,7 @@ matrix:
             - llvm-toolchain-precise-3.6
           packages:
             - cmake
+            - cmake-data
             - clang-3.6
       env: COMPILER=clang++-3.6
     - compiler: clang
@@ -42,6 +45,7 @@ matrix:
             - llvm-toolchain-precise-3.7
           packages:
             - cmake
+            - cmake-data
             - clang-3.7
       env: COMPILER=clang++-3.7
 
@@ -50,5 +54,5 @@ before_script:
     - cd build
     - cmake -DTESTS=ON ..
 
-script: make
+script: make && make test
 
