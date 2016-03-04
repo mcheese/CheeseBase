@@ -8,6 +8,7 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
             - george-edison55-precise-backports
+            - boost-latest
           packages:
             - cmake
             - cmake-data
@@ -20,6 +21,7 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
             - george-edison55-precise-backports
+            - boost-latest
           packages:
             - cmake
             - cmake-data
@@ -32,6 +34,7 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
             - george-edison55-precise-backports
+            - boost-latest
             - llvm-toolchain-precise-3.6
           packages:
             - cmake
@@ -45,6 +48,7 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
             - george-edison55-precise-backports
+            - boost-latest
             - llvm-toolchain-precise-3.7
           packages:
             - cmake
