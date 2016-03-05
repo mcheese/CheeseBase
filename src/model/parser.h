@@ -2,9 +2,7 @@
 
 #include "common/common.h"
 #include "model.h"
-#include <cstdlib>
-#include <codecvt>
-#include <locale>
+#include <boost/locale/encoding_utf.hpp>
 
 namespace cheesebase {
 
@@ -100,11 +98,7 @@ private:
           }
 
           // convert utf16 char to utf8
-          std::wstring wstr;
-          wstr.push_back(wc);
-          std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>, wchar_t>
-              convert;
-          str.append(convert.to_bytes(wstr));
+          str.append(boost::locale::conv::utf_to_utf<char>(&wc, &wc + 1));
         }
 
         break;
