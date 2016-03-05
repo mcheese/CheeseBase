@@ -8,11 +8,9 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
             - george-edison55-precise-backports
-            - boost-latest
           packages:
             - cmake
             - cmake-data
-            - libboost1.55-all-dev
             - g++-5
       env: COMPILER=g++-5
     - compiler: clang
@@ -21,13 +19,10 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
             - george-edison55-precise-backports
-            - boost-latest
             - llvm-toolchain-precise-3.7
           packages:
             - cmake
             - cmake-data
-            - libboost1.55-all-dev
-            - libc++-dev
             - clang-3.7
       env: COMPILER=clang++-3.7 CLANG=1
 
@@ -40,7 +35,7 @@ install:
     - cd $BOOST
     - git submodule update --init --merge
     - ./bootstrap.sh
-    - ./b2 headers
+    - ./b2
     
 before_script:
     - cd $PROJECT_DIR
