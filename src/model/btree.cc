@@ -1113,7 +1113,7 @@ void RootInternalW::merge() {
   Expects(m_top == 2);
   Expects(m_childs.size() == 1);
 
-  auto childp = std::move(m_childs.nth(0)->second);
+  auto childp = std::move(m_childs.begin()->second);
   m_childs.clear();
 
   auto child_internal = dynamic_cast<InternalW*>(childp.get());
