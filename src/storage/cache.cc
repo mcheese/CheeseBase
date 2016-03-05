@@ -11,7 +11,7 @@ namespace fs = boost::filesystem;
 
 uint64_t Cache::extendFile(uint64_t size) {
   Expects(size > m_size);
-  for (uint64_t i = 0; i < size - m_size; ++i) m_fstream.put(0xAA);
+  for (uint64_t i = 0; i < size - m_size; ++i) m_fstream.put('\xAA');
   if (m_fstream.bad()) throw FileError("failed extending file");
   m_fstream.flush();
   if (m_fstream.bad()) throw FileError("failed extending file");
@@ -54,12 +54,12 @@ Cache::~Cache() {
 
 ReadRef Cache::readPage(PageNr page_nr) {
   auto p = getPage<ShLock<RwMutex>>(page_nr);
-  return {p.first.data, std::move(p.second)};
+  return { PageReadView(p.first.data), std::move(p.second) };
 }
 
 WriteRef Cache::writePage(PageNr page_nr) {
   auto p = getPage<ExLock<RwMutex>>(page_nr);
-  return { p.first.data, std::move(p.second) };
+  return { PageWriteView(p.first.data), std::move(p.second) };
 }
 
 std::pair<CachePage&, ExLock<RwMutex>>
