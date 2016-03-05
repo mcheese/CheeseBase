@@ -59,13 +59,13 @@ std::pair<Block, AllocWrites> PageAllocator::allocBlock() {
     m_free = next;
     return { { page, size() },
              { { hdrOffset(), m_free },
-               { page, DskBlockHdr(type(), 0).data } } };
+               { page, DskBlockHdr(type(), 0).data() } } };
   } else {
     auto page = m_eof;
     m_eof += k_page_size;
     return { { page, size() },
              { { offsetof(DskDatabaseHdr, end_of_file), m_eof },
-               { page, DskBlockHdr(type(), 0).data } } };
+               { page, DskBlockHdr(type(), 0).data() } } };
   }
 }
 
@@ -74,7 +74,7 @@ AllocWrites PageAllocator::freeBlock(Addr page) {
   m_free = page;
   auto hdr = DskBlockHdr(type(), next);
   m_next_cache[page] = hdr.next();
-  return { { hdrOffset(), m_free }, { page, hdr.data } };
+  return { { hdrOffset(), m_free }, { page, hdr.data() } };
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -101,7 +101,7 @@ std::pair<Block, AllocWrites> TierAllocator<ParentAlloc>::allocBlock() {
 
     return { { block, size() },
              { { hdrOffset(), m_free },
-               { block, DskBlockHdr(type(), 0).data } } };
+               { block, DskBlockHdr(type(), 0).data() } } };
   } else {
     std::pair<Block, AllocWrites> alloc = m_parent_alloc.allocBlock();
     auto& writes = alloc.second;
@@ -117,8 +117,8 @@ std::pair<Block, AllocWrites> TierAllocator<ParentAlloc>::allocBlock() {
 
     writes.reserve(writes.size() + 3);
     writes.push_back({ hdrOffset(), m_free });
-    writes.push_back({ m_free, DskBlockHdr(type(), 0).data });
-    writes.push_back({ block.addr, DskBlockHdr(type(), 0).data });
+    writes.push_back({ m_free, DskBlockHdr(type(), 0).data() });
+    writes.push_back({ block.addr, DskBlockHdr(type(), 0).data() });
 
     return { { block.addr, size() }, std::move(writes) };
   }
@@ -130,7 +130,7 @@ AllocWrites TierAllocator<ParentAlloc>::freeBlock(Addr block) {
   m_free = block;
   auto hdr = DskBlockHdr(type(), next);
   m_next_cache[block] = hdr.next();
-  return { { hdrOffset(), m_free }, { block, hdr.data } };
+  return { { hdrOffset(), m_free }, { block, hdr.data() } };
 }
 
 template class TierAllocator<PageAllocator>;

@@ -37,7 +37,7 @@ std::pair<Block, AllocWrites> AllocTransaction::allocBlock(size_t size) {
 AllocWrites AllocTransaction::freeBlock(Addr block) {
   DskBlockHdr hdr;
   if (m_writes.count(block) > 0) {
-    hdr.data = m_writes.at(block);
+    hdr.data_ = m_writes.at(block);
   } else {
     hdr = gsl::as_span<DskBlockHdr>(m_alloc->m_store.loadPage(toPageNr(block))
                                         ->subspan(toPageOffset(block)))[0];
@@ -106,7 +106,7 @@ Block AllocTransaction::allocExtension(Addr block, size_t size) {
 
   DskBlockHdr hdr;
   if (m_writes.count(block) > 0) {
-    hdr.data = m_writes.at(block);
+    hdr.data_ = m_writes.at(block);
   } else {
     hdr = gsl::as_span<DskBlockHdr>(m_alloc->m_store.loadPage(toPageNr(block))
                                         ->subspan(toPageOffset(block)))[0];
@@ -119,7 +119,7 @@ Block AllocTransaction::allocExtension(Addr block, size_t size) {
   auto& new_block = alloc.first;
   auto& writes = alloc.second;
 
-  m_writes[block] = DskBlockHdr(hdr.type(), new_block.addr).data;
+  m_writes[block] = DskBlockHdr(hdr.type(), new_block.addr).data();
 
   for (auto& w : writes) { m_writes[w.first] = w.second; }
 
@@ -132,7 +132,7 @@ std::vector<Write> AllocTransaction::commit() {
   writes.reserve(m_writes.size());
 
   for (auto& w : m_writes) {
-    writes.push_back({ w.first, gsl::as_bytes(gsl::span<Addr>(w.second)) });
+    writes.push_back({ w.first, gsl::as_bytes<Addr>(gsl::span<Addr>(w.second)) });
   }
 
   return writes;

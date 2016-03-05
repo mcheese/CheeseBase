@@ -114,8 +114,8 @@ TEST_CASE("allocate and free blocks") {
   REQUIRE(b9.addr == k_page_size * 1.75);
   REQUIRE(contains(writes, t2_addr, 0));
   REQUIRE(contains(writes, t1_addr, 0));
-  REQUIRE(contains(writes, b5.addr, DskBlockHdr(BlockType::t2, b8.addr).data));
-  REQUIRE(contains(writes, b8.addr, DskBlockHdr(BlockType::t1, b9.addr).data));
+  REQUIRE(contains(writes, b5.addr, DskBlockHdr(BlockType::t2, b8.addr).data()));
+  REQUIRE(contains(writes, b8.addr, DskBlockHdr(BlockType::t1, b9.addr).data()));
 
   store.storeWrite(writes);
   t.end();
@@ -135,7 +135,7 @@ TEST_CASE("allocate and free blocks") {
   //
   REQUIRE(contains(writes, t2_addr, b9.addr));
   REQUIRE(contains(writes, t1_addr, b8.addr));
-  REQUIRE(contains(writes, b9.addr, DskBlockHdr(BlockType::t2, b5.addr).data));
+  REQUIRE(contains(writes, b9.addr, DskBlockHdr(BlockType::t2, b5.addr).data()));
 
   store.storeWrite(writes);
 }

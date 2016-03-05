@@ -36,16 +36,18 @@ CB_PACKED(struct DskBlockHdr {
     auto type_value = static_cast<uint64_t>(type);
     Expects(type_value <= 0xff);
     Expects(next < ((uint64_t)1 << 56));
-    data = (type_value << 56) + (next & (((uint64_t)1 << 56) - 1));
+    data_ = (type_value << 56) + (next & (((uint64_t)1 << 56) - 1));
   };
 
-  PageNr next() const noexcept { return (data & (((uint64_t)1 << 56) - 1)); }
+  PageNr next() const noexcept { return (data_ & (((uint64_t)1 << 56) - 1)); }
 
   BlockType type() const noexcept {
-    return gsl::narrow_cast<BlockType>(data >> 56);
+    return gsl::narrow_cast<BlockType>(data_ >> 56);
   }
+  
+  uint64_t data() const { return data_; }
 
-  uint64_t data;
+  uint64_t data_;
 });
 
 const uint64_t magic = *((uint64_t const*)"CHSBSE01");
