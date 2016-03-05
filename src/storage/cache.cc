@@ -54,12 +54,12 @@ Cache::~Cache() {
 
 ReadRef Cache::readPage(PageNr page_nr) {
   auto p = getPage<ShLock<RwMutex>>(page_nr);
-  return { PageReadView(p.first.data), std::move(p.second) };
+return { p.first.data.first(k_page_size), std::move(p.second) };
 }
 
 WriteRef Cache::writePage(PageNr page_nr) {
   auto p = getPage<ExLock<RwMutex>>(page_nr);
-  return { PageWriteView(p.first.data), std::move(p.second) };
+  return { p.first.data.first(k_page_size), std::move(p.second) };
 }
 
 std::pair<CachePage&, ExLock<RwMutex>>
