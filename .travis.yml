@@ -35,7 +35,7 @@ install:
     - cd $BOOST
     - git submodule update --init --merge
     - ./bootstrap.sh
-    - ./b2 -with-atomic -with-container -with-filesystem -with-locale -with-system -with-thread stage
+    - ./b2 --with-atomic --with-container --with-filesystem --with-locale --with-system --with-thread stage
     
 before_script:
     - cd $PROJECT_DIR
