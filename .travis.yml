@@ -34,12 +34,19 @@ matrix:
 install:
     - if [ "$CXX" = "g++" ]; then export CXX="g++-5" CC="gcc-5"; fi
     - if [ "$CXX" = "clang++" ]; then export CXX="clang++-3.7" CC="clang-3.7"; fi
-    - export STDLIB="libc++"
+    - PROJECT_DIR=`pwd`
+    - BOOST=$HOME/boost
+    - git clone -b boost-1.58.0 https://github.com/boostorg/boost.git $BOOST
+    - cd $BOOST
+    - git submodule update --init --merge
+    - ./bootstrap.sh
+    - ./b2 headers
     
 before_script:
+    - cd $PROJECT_DIR
     - mkdir build
     - cd build
-    - cmake -DTESTS=ON ..
+    - cmake -DTESTS=ON -DBOOST_ROOT=$BOOST ..
 
 script: make && make test
 
