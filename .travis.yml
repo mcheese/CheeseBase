@@ -13,7 +13,7 @@ matrix:
             - cmake
             - cmake-data
             - libboost1.55-all-dev
-            - libstdc++
+            - libstdc++-5-dev
             - g++-4.9
       env: COMPILER=g++-4.9
     - compiler: gcc
@@ -27,7 +27,7 @@ matrix:
             - cmake
             - cmake-data
             - libboost1.55-all-dev
-            - libstdc++
+            - libstdc++-5-dev
             - g++-5
       env: COMPILER=g++-5
     - compiler: clang
@@ -42,7 +42,7 @@ matrix:
             - cmake
             - cmake-data
             - libboost1.55-all-dev
-            - libstdc++
+            - libstdc++-5-dev
             - clang-3.6
       env: COMPILER=clang++-3.6
     - compiler: clang
@@ -57,7 +57,7 @@ matrix:
             - cmake
             - cmake-data
             - libboost1.55-all-dev
-            - libstdc++
+            - libstdc++-5-dev
             - clang-3.7
       env: COMPILER=clang++-3.7
 
