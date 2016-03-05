@@ -42,5 +42,5 @@ before_script:
     - $SCAN --use-cc=$CC --use-c++=$CXX cmake -DTESTS=ON -DCMAKE_CXX_FLAGS="-lrt -pthread" ..
 
 script:
-    - make && make test && $SCAN make
+    - $SCAN make
 
