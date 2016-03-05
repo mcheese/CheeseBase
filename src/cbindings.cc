@@ -1,10 +1,10 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
 
+#define _CRT_NONSTDC_NO_DEPRECATE
+
 #include "cheesebase.h"
 #include <string>
 #include <cstring>
-
-#define _CRT_NONSTDC_NO_DEPRECATE
 
 extern "C" {
 
