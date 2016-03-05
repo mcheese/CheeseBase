@@ -14,37 +14,8 @@ matrix:
             - cmake-data
             - libboost1.55-all-dev
             - libstdc++-5-dev
-            - g++-4.9
-      env: COMPILER=g++-4.9
-    - compiler: gcc
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-            - george-edison55-precise-backports
-            - boost-latest
-          packages:
-            - cmake
-            - cmake-data
-            - libboost1.55-all-dev
-            - libstdc++-5-dev
             - g++-5
       env: COMPILER=g++-5
-    - compiler: clang
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-            - george-edison55-precise-backports
-            - boost-latest
-            - llvm-toolchain-precise-3.6
-          packages:
-            - cmake
-            - cmake-data
-            - libboost1.55-all-dev
-            - libstdc++-5-dev
-            - clang-3.6
-      env: COMPILER=clang++-3.6
     - compiler: clang
       addons:
         apt:
