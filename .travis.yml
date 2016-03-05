@@ -38,7 +38,7 @@ install:
 before_script:
     - mkdir build
     - cd build
-    - cmake -DTESTS=ON ..
+    - cmake -DTESTS=ON -DCMAKE_CXX_FLAGS="-pthread" ..
 
 script: make && make test
 
