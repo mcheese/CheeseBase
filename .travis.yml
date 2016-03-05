@@ -29,19 +29,16 @@ matrix:
 install:
     - if [ "$CXX" = "g++" ]; then export CXX="g++-5" CC="gcc-5"; fi
     - if [ "$CXX" = "clang++" ]; then export CXX="clang++-3.7" CC="clang-3.7"; fi
-    - PROJECT_DIR=`pwd`
-    - BOOST=$HOME/boost
-    - git clone -b boost-1.58.0 https://github.com/boostorg/boost.git $BOOST
-    - cd $BOOST
-    - git submodule update --init --merge
-    - ./bootstrap.sh
-    - ./b2  link=static --with-atomic --with-container --with-filesystem --with-locale --with-system --with-thread headers stage
+  # Get boost
+    - wget https://github.com/Viq111/travis-container-packets/releases/download/boost-1.57.0/boost.tar.bz2
+    - tar -xjf boost.tar.bz2
+    - rm boost.tar.bz2
+    - export BOOST_ROOT=$(pwd)/boost
     
 before_script:
-    - cd $PROJECT_DIR
     - mkdir build
     - cd build
-    - cmake -DTESTS=ON -DBOOST_ROOT=$BOOST -DBOOST_LIBRARYDIR=$BOOST/stage/lib ..
+    - cmake -DTESTS=ON ..
 
 script: make && make test
 
