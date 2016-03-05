@@ -44,11 +44,10 @@ Database::Database(const std::string& file) {
     DskBlockHdr cache_hdr{ BlockType::t1, 0 };
     DskKeyCacheSize cache_term = 0;
     m_store->storeWrite(Writes{
-        Write{ 0, gsl::as_bytes(gsl::span<DskDatabaseHdr>(hdr)) },
-        Write{ k_page_size / 2,
-               gsl::as_bytes(gsl::span<DskBlockHdr>(cache_hdr)) },
+        Write{ 0, gsl::as_bytes<DskDatabaseHdr>({ hdr }) },
+        Write{ k_page_size / 2, gsl::as_bytes<DskBlockHdr>({ cache_hdr }) },
         Write{ k_page_size / 2 + sizeof(DskBlockHdr),
-               gsl::as_bytes(gsl::span<DskKeyCacheSize>(cache_term)) } });
+               gsl::as_bytes<DskKeyCacheSize>({ cache_term }) } });
     m_alloc = std::make_unique<Allocator>(hdr, *m_store);
     m_keycache = std::make_unique<KeyCache>(
         Block{ k_page_size / 2, k_page_size / 2 }, *m_store);
