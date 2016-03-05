@@ -28,8 +28,8 @@ matrix:
       env: COMPILER=clang++-3.6
 
 install:
-    - if [ "$COMPILER" = "clang++-3.7" ]; then export CXX="clang++-3.7" CC="clang-3.7"; fi
-    - if [ "$COMPILER" = "clang++-3.6" ]; then export CXX="clang++-3.6" CC="clang-3.6"; fi
+    - if [ "$COMPILER" = "clang++-3.7" ]; then export CXX="clang++-3.7" CC="clang-3.7" SCAN="scan-build-3.7"; fi
+    - if [ "$COMPILER" = "clang++-3.6" ]; then export CXX="clang++-3.6" CC="clang-3.6" SCAN="scan-build-3.6"; fi
   # Get boost
     - wget https://github.com/Viq111/travis-container-packets/releases/download/boost-1.57.0/boost.tar.bz2
     - tar -xjf boost.tar.bz2
@@ -39,8 +39,8 @@ install:
 before_script:
     - mkdir build
     - cd build
-    - scan-build-3.7 cmake -DTESTS=ON -DCMAKE_CXX_FLAGS="-lrt -pthread" ..
+    - $SCAN cmake -DTESTS=ON -DCMAKE_CXX_FLAGS="-lrt -pthread" ..
 
 script:
-    - make && make test && scan-build-3.7 make
+    - make && make test && $SCAN make
 
