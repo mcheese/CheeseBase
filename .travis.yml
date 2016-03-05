@@ -35,13 +35,13 @@ install:
     - cd $BOOST
     - git submodule update --init --merge
     - ./bootstrap.sh
-    - ./b2
+    - ./b2 -with-atomic -with-container -with-filesystem -with-locale -with-system -with-thread stage
     
 before_script:
     - cd $PROJECT_DIR
     - mkdir build
     - cd build
-    - cmake -DTESTS=ON -DBOOST_ROOT=$BOOST ..
+    - cmake -DTESTS=ON -DBOOST_ROOT=$BOOST -DBOOST_LIBRARYDIR=$BOOST/stage/lib ..
 
 script: make && make test
 
