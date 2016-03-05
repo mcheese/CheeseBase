@@ -8,11 +8,9 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
             - george-edison55-precise-backports
-            - boost-latest
           packages:
             - cmake
             - cmake-data
-            - libboost1.55-all-dev
             - g++-5
       env: COMPILER=g++-5
     - compiler: clang
@@ -21,20 +19,21 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
             - george-edison55-precise-backports
-            - boost-latest
             - llvm-toolchain-precise-3.7
           packages:
             - cmake
             - cmake-data
-            - libboost1.55-all-dev
-            - libc++-dev
             - clang-3.7
       env: COMPILER=clang++-3.7 CLANG=1
 
 install:
     - if [ "$CXX" = "g++" ]; then export CXX="g++-5" CC="gcc-5"; fi
     - if [ "$CXX" = "clang++" ]; then export CXX="clang++-3.7" CC="clang-3.7"; fi
-    - export STDLIB="libc++"
+  # Get boost
+    - wget https://github.com/Viq111/travis-container-packets/releases/download/boost-1.57.0/boost.tar.bz2
+    - tar -xjf boost.tar.bz2
+    - rm boost.tar.bz2
+    - export BOOST_ROOT=$(pwd)/boost
     
 before_script:
     - mkdir build
