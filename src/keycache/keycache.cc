@@ -83,9 +83,9 @@ Writes KeyTransaction::commit() {
 
       if (block.size < off + sizeof(DskKeyCacheSize) + len) {
         if (block.size >= off + sizeof(DskKeyCacheSize)) {
-          writes.push_back({ block.addr + off,
-                             gsl::as_bytes(gsl::span<const DskKeyCacheSize>(
-                                 s_terminator)) });
+          writes.push_back(
+              { block.addr + off,
+                gsl::as_bytes<const DskKeyCacheSize>({ s_terminator }) });
         }
 
         block = m_alloc->allocExtension(block.addr,
@@ -95,19 +95,17 @@ Writes KeyTransaction::commit() {
       Ensures(block.size >= off + sizeof(DskKeyCacheSize) + len);
 
       writes.push_back(
-          { block.addr + off,
-            gsl::as_bytes(gsl::span<const DskKeyCacheSize>(len)) });
+          { block.addr + off, gsl::as_bytes<const DskKeyCacheSize>({ len }) });
       off += sizeof(DskKeyCacheSize);
-      writes.push_back({ block.addr + off, gsl::as_bytes(gsl::span<const char>(
-                                               str.data(), len)) });
+      writes.push_back(
+          { block.addr + off, gsl::as_bytes<const char>({ str.data(), len }) });
       off += len;
     }
   }
 
   if (block.size >= off + sizeof(DskKeyCacheSize)) {
-    writes.push_back(
-        { block.addr + off,
-          gsl::as_bytes(gsl::span<const DskKeyCacheSize>(s_terminator)) });
+    writes.push_back({ block.addr + off, gsl::as_bytes<const DskKeyCacheSize>(
+                                             { s_terminator }) });
   }
 
   m_cache->m_cur_block = block;
