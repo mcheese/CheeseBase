@@ -2,8 +2,8 @@
 #define _SCL_SECURE_NO_WARNINGS
 #endif
 #include "catch.hpp"
-#include "model/model.h"
-#include "model/parser.h"
+#include "model.h"
+#include "parser.h"
 #include <gsl.h>
 #include <iostream>
 #include <memory>

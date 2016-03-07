@@ -1,6 +1,6 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
 
-#include "common/common.h"
+#include "common.h"
 #include "model.h"
 #include <boost/locale/encoding_utf.hpp>
 

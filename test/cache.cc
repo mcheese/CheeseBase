@@ -2,7 +2,7 @@
 #define _SCL_SECURE_NO_WARNINGS
 #endif
 #include "catch.hpp"
-#include <storage/cache.h>
+#include "cache.h"
 
 using namespace cheesebase;
 

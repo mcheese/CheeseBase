@@ -2,10 +2,10 @@
 
 #include "core.h"
 
-#include "blockman/allocator.h"
-#include "keycache/keycache.h"
-#include "storage/storage.h"
-#include "model/btree.h"
+#include "allocator.h"
+#include "keycache.h"
+#include "storage.h"
+#include "btree.h"
 
 #include <boost/filesystem.hpp>
 

@@ -1,9 +1,16 @@
 cmake_minimum_required(VERSION 3.1)
 
-include_directories(.)
-add_subdirectory(storage)
-add_subdirectory(blockman)
-add_subdirectory(model)
-add_subdirectory(keycache)
-add_subdirectory(cb)
+add_executable(test-cheesebase
+  main.cc
+  alloc.cc
+  btree.cc
+  cache.cc
+  cheesebase.cc
+  keycache.cc
+  parser.cc
+  storage.cc
+)
+
+target_link_libraries(test-cheesebase cheesebase ${Boost_LIBRARIES})
+add_test(test-cheesebase test-cheesebase)
 

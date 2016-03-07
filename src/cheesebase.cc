@@ -3,8 +3,8 @@
 #include "cheesebase.h"
 
 #include "core.h"
-#include "model/btree.h"
-#include "model/parser.h"
+#include "btree.h"
+#include "parser.h"
 #include <sstream>
 
 using namespace cheesebase;

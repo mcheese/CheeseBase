@@ -18,7 +18,7 @@
 #include <boost/optional.hpp>
 #include <memory>
 #include <string>
-#include "common/common.h"
+#include "common.h"
 
 namespace cheesebase {
 

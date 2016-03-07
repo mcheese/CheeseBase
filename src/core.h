@@ -2,11 +2,11 @@
 
 #pragma once
 
-#include "common/common.h"
+#include "common.h"
 
-#include "blockman/allocator.h"
-#include "keycache/keycache.h"
-#include "storage/storage.h"
+#include "allocator.h"
+#include "keycache.h"
+#include "storage.h"
 
 #include <memory>
 #include <string>

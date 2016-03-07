@@ -2,10 +2,10 @@
 
 #pragma once
 
-#include "common/common.h"
-#include "common/structs.h"
+#include "common.h"
+#include "structs.h"
 #include "model.h"
-#include "storage/storage.h"
+#include "storage.h"
 #include <boost/container/flat_map.hpp>
 #include <memory>
 

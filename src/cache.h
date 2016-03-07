@@ -5,8 +5,8 @@
 
 #pragma once
 
-#include "common/common.h"
-#include "common/sync.h"
+#include "common.h"
+#include "sync.h"
 
 #include <unordered_map>
 #include <boost/interprocess/file_mapping.hpp>

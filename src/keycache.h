@@ -4,11 +4,11 @@
 
 #pragma once
 
-#include "common/common.h"
-#include "common/structs.h"
-#include "common/sync.h"
-#include "storage/storage.h"
-#include "blockman/allocator.h"
+#include "common.h"
+#include "structs.h"
+#include "sync.h"
+#include "storage.h"
+#include "allocator.h"
 #include <unordered_map>
 #include <boost/container/flat_map.hpp>
 #include <boost/optional.hpp>

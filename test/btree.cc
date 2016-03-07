@@ -2,9 +2,9 @@
 #define _SCL_SECURE_NO_WARNINGS
 #endif
 #include "catch.hpp"
-#include "keycache/keycache.h"
-#include "model/btree.h"
-#include "model/parser.h"
+#include "keycache.h"
+#include "btree.h"
+#include "parser.h"
 #include <boost/filesystem.hpp>
 
 #define private public

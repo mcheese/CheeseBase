@@ -58,6 +58,6 @@ TEST_CASE("JSON") {
     CheeseBase cb{ "test.db" };
     cb.insert("test", input);
     cb.update("test", "false");
-    std::cout << cb.get("test");
+    REQUIRE(cb.get("test") == "false");
   }
 }

@@ -1,11 +1,11 @@
 #ifdef _MSC_VER
 #define _SCL_SECURE_NO_WARNINGS
 #endif
-#include "blockman/allocator.h"
+#include "allocator.h"
 #include "catch.hpp"
-#include "common/common.h"
-#include "keycache/keycache.h"
-#include "storage/storage.h"
+#include "common.h"
+#include "keycache.h"
+#include "storage.h"
 #include <boost/filesystem.hpp>
 
 #define private public

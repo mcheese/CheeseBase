@@ -1,6 +1,6 @@
 #include "catch.hpp"
-#include "storage/storage.h"
-#include "common/common.h"
+#include "storage.h"
+#include "common.h"
 
 #include <array>
 #include <algorithm>
@@ -10,26 +10,27 @@ using namespace std;
 
 SCENARIO("stored data can be read") {
   GIVEN("A Storage and data") {
-    Storage store{"test", Storage::OpenMode::create_always};
+    Storage store{"test.db", OpenMode::create_always};
     const size_t size{500};
     const size_t offset{50'000};
-    vector<byte> data;
+    vector<Byte> data;
     data.reserve(size);
-    for (size_t i = 0; i < size; ++i) data.push_back(static_cast<byte>(i));
+    for (size_t i = 0; i < size; ++i) data.push_back(static_cast<Byte>(i));
 
     WHEN("data is stored") {
-      store.store(offset, data.data(), data.size());
+      store.storeWrite({ offset, data });
 
       AND_WHEN("same data is loaded") {
-        array<byte, size> loaded;
+        array<Byte, size> loaded;
         size_t to_read{size};
         size_t pos{0};
         while (to_read > 0) {
-          auto page = store.load(page_nr(offset + pos));
-          auto curr_read = std::min<size_t>(
-              to_read, k_page_size - page_offset(offset + pos));
 
-          copy_n(page->begin() + page_offset(offset + pos), curr_read,
+          auto page = store.loadPage(toPageNr(offset + pos));
+          auto curr_read = std::min<size_t>(
+              to_read, k_page_size - toPageOffset(offset + pos));
+
+          copy_n(page->begin() + toPageOffset(offset + pos), curr_read,
                  loaded.begin() + pos);
 
           pos += curr_read;
@@ -42,4 +43,4 @@ SCENARIO("stored data can be read") {
       }
     }
   }
-}
+  }

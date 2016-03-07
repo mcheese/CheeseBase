@@ -1,7 +1,7 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
 
 #include "block_alloc.h"
-#include "storage/storage.h"
+#include "storage.h"
 
 namespace cheesebase {
 

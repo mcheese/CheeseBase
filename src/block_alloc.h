@@ -2,8 +2,8 @@
 
 #pragma once
 
-#include "common/sync.h"
-#include "common/structs.h"
+#include "sync.h"
+#include "structs.h"
 #include <gsl.h>
 
 #include <map>

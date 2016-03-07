@@ -2,8 +2,8 @@
 
 #pragma once
 
-#include "common/common.h"
-#include "common/sync.h"
+#include "common.h"
+#include "sync.h"
 #include <atomic>
 #include <set>
 #include <unordered_map>

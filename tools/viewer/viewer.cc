@@ -1,5 +1,5 @@
-#include "common/structs.h"
-#include "common/common.h"
+#include "structs.h"
+#include "common.h"
 #include <fstream>
 #include <iostream>
 #include <map>
