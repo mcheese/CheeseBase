@@ -39,14 +39,12 @@ CB_PACKED(struct DskInternalEntry {
 
   uint64_t fromKey(Key k) {
     key = k;
-    magic[0] = '-';
-    magic[1] = '>';
     return *reinterpret_cast<uint64_t*>(this);
   }
 
   uint64_t word() { return *reinterpret_cast<uint64_t*>(this); }
 
-  char magic[2];
+  char magic[2]{ '-', '>' };
   DskKey key;
 });
 static_assert(sizeof(DskInternalEntry) == 8, "Invalid DskInternalEntry size");
@@ -140,7 +138,7 @@ std::unique_ptr<NodeR> openNodeR(Database& db, Addr addr) {
     return std::make_unique<InternalR>(db, addr, std::move(page));
 }
 
-size_t searchLeafPosition(Key key, gsl::span<const uint64_t> span) {
+size_t searchLeafPosition(Key key, Span<const Word> span) {
   for (size_t i = 1; i < static_cast<size_t>(span.size());
        i += entrySize(span[i])) {
     if (span[i] == 0 || keyFromWord(span[i]) >= key) return i;
@@ -148,7 +146,7 @@ size_t searchLeafPosition(Key key, gsl::span<const uint64_t> span) {
   return static_cast<size_t>(span.size());
 }
 
-size_t searchInternalPosition(Key key, gsl::span<const uint64_t> span) {
+size_t searchInternalPosition(Key key, Span<const uint64_t> span) {
   // 4, 6, 8... words: <hdr><addr>(<key><addr>)+
   Expects((span.size() >= 4 && span.size() % 2 == 0));
 
@@ -263,14 +261,14 @@ void NodeW::initFromDisk() {
     copySpan(m_ta.load(toPageNr(m_addr))
                  ->subspan(toPageOffset(m_addr) + sizeof(DskBlockHdr),
                            k_node_max_bytes),
-             gsl::as_writeable_bytes(gsl::span<uint64_t>(*m_buf)));
+             gsl::as_writeable_bytes(Span<uint64_t>(*m_buf)));
     m_top = findSize();
   }
 }
 
-std::pair<gsl::span<const uint64_t>, std::unique_ptr<ReadRef>>
+std::pair<Span<const uint64_t>, std::unique_ptr<ReadRef>>
 NodeW::getDataView() const {
-  if (m_buf) return { gsl::span<const uint64_t>(*m_buf), nullptr };
+  if (m_buf) return { Span<const uint64_t>(*m_buf), nullptr };
 
   auto p = std::make_unique<ReadRef>(m_ta.load(toPageNr(m_addr)));
   return { gsl::as_span<const uint64_t>((*p)->subspan(
@@ -297,7 +295,7 @@ Writes AbsLeafW::getWrites() const {
 
   if (m_buf)
     w.push_back({ m_addr + sizeof(DskBlockHdr),
-                  gsl::as_bytes(gsl::span<uint64_t>(*m_buf)) });
+                  gsl::as_bytes(Span<uint64_t>(*m_buf)) });
 
   for (auto& c : m_linked) {
     auto cw = c.second->getWrites();
@@ -402,7 +400,7 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
   return true;
 }
 
-void AbsLeafW::insert(gsl::span<const uint64_t> raw) {
+void AbsLeafW::insert(Span<const uint64_t> raw) {
   Expects(m_buf);
   Expects(k_node_max_words >= m_top + raw.size());
 
@@ -461,7 +459,7 @@ void LeafW::split(Key key, const model::Value& val, size_t pos) {
   Ensures(mid + (new_here ? new_val_len : 0) > k_leaf_min_words);
 
   right_leaf->insert(
-      gsl::span<uint64_t>(&m_buf->at(mid), gsl::narrow_cast<int>(m_top - mid)));
+      Span<uint64_t>(&m_buf->at(mid), gsl::narrow_cast<int>(m_top - mid)));
   std::fill(m_buf->begin() + mid, m_buf->begin() + m_top, 0);
   m_top = mid;
   m_buf->at(0) = DskLeafHdr().fromAddr(right_leaf->addr()).data;
@@ -499,7 +497,7 @@ void LeafW::merge() {
     if (sibl_key > first_key) {
       // is right sibl, merge here
 
-      insert(gsl::span<uint64_t>(sibl_buf).subspan(1, sibl.size() - 1));
+      insert(Span<uint64_t>(sibl_buf).subspan(1, sibl.size() - 1));
       buf[0] = sibl_buf[0]; // copy next ptr
       for (auto& c : sibl.m_linked) { m_linked.insert(std::move(c)); }
       sibl.m_linked.clear();
@@ -511,7 +509,7 @@ void LeafW::merge() {
     } else {
       // is left sibl, merge there
 
-      sibl.insert(gsl::span<uint64_t>(buf).subspan(1, m_top - 1));
+      sibl.insert(Span<uint64_t>(buf).subspan(1, m_top - 1));
       sibl_buf[0] = buf[0]; // copy next ptr
       for (auto& c : m_linked) { sibl.m_linked.insert(std::move(c)); }
       m_linked.clear();
@@ -538,7 +536,7 @@ void LeafW::merge() {
       Ensures(m_top + till - 1 <= k_node_max_words);
       Ensures(sibl.m_top - till + 1 >= k_leaf_min_words);
 
-      auto to_pull = gsl::span<uint64_t>(sibl_buf).subspan(1, till - 1);
+      auto to_pull = Span<uint64_t>(sibl_buf).subspan(1, till - 1);
       insert(to_pull);
 
       for (auto it = to_pull.begin(); it < to_pull.end(); ++it) {
@@ -571,7 +569,7 @@ void LeafW::merge() {
       Ensures(last >= k_leaf_min_words);
 
       auto to_pull =
-          gsl::span<const uint64_t>(sibl_buf).subspan(last, sibl.m_top - last);
+          Span<const uint64_t>(sibl_buf).subspan(last, sibl.m_top - last);
       for (auto it = to_pull.begin(); it < to_pull.end(); ++it) {
         auto entry = DskEntry(*it);
 
@@ -585,7 +583,7 @@ void LeafW::merge() {
       }
 
       shiftBuffer(1, gsl::narrow_cast<int>(to_pull.size()));
-      copySpan(to_pull, gsl::span<uint64_t>(buf).subspan(1, to_pull.size()));
+      copySpan(to_pull, Span<uint64_t>(buf).subspan(1, to_pull.size()));
       std::fill(sibl_buf.begin() + last, sibl_buf.begin() + sibl.m_top, 0);
       sibl.m_top = last;
       m_parent->updateMerged(DskEntry(buf[1]).key.key(), m_addr);
@@ -721,8 +719,8 @@ void AbsInternalW::insert(Key key, std::unique_ptr<NodeW> c) {
 
   if (k_node_max_words >= m_top + 2) {
     // can insert
-    auto pos = searchInternalPosition(
-        key, gsl::span<uint64_t>(*m_buf).subspan(0, m_top));
+    auto pos =
+        searchInternalPosition(key, Span<uint64_t>(*m_buf).subspan(0, m_top));
     auto addr = c->addr();
     shiftBuffer(pos + 1, 2);
     m_buf->at(pos + 1) = DskInternalEntry().fromKey(key);
@@ -749,7 +747,7 @@ Writes AbsInternalW::getWrites() const {
   if (m_buf) {
     m_buf->at(0) = DskInternalHdr().fromSize(m_top).data;
     w.push_back({ m_addr + sizeof(DskBlockHdr),
-                  gsl::as_bytes(gsl::span<uint64_t>(*m_buf)) });
+                  gsl::as_bytes(Span<uint64_t>(*m_buf)) });
   }
 
   for (auto& c : m_childs) {
@@ -815,8 +813,8 @@ NodeW& AbsInternalW::getSilbling(Key key, Addr addr) {
 Key AbsInternalW::removeMerged(Key key, Addr addr) {
   if (!m_buf) initFromDisk();
 
-  auto pos = searchInternalPosition(
-      key, gsl::span<uint64_t>(*m_buf).subspan(0, m_top));
+  auto pos =
+      searchInternalPosition(key, Span<uint64_t>(*m_buf).subspan(0, m_top));
 
   if (m_buf->at(pos) == addr && pos > 1) {
     Key removed = DskInternalEntry(m_buf->at(pos - 1)).key.key();
@@ -834,8 +832,8 @@ Key AbsInternalW::removeMerged(Key key, Addr addr) {
 Key AbsInternalW::updateMerged(Key key, Addr addr) {
   if (!m_buf) initFromDisk();
 
-  auto pos = searchInternalPosition(
-      key, gsl::span<uint64_t>(*m_buf).subspan(0, m_top));
+  auto pos =
+      searchInternalPosition(key, Span<uint64_t>(*m_buf).subspan(0, m_top));
 
   if (pos > 1 && m_buf->at(pos) == addr) {
     Key old = DskInternalEntry(m_buf->at(pos - 1)).key.key();
@@ -857,7 +855,7 @@ size_t AbsInternalW::findSize() {
 ////////////////////////////////////////////////////////////////////////////////
 // InternalW
 
-void InternalW::append(gsl::span<const uint64_t> raw) {
+void InternalW::append(Span<const uint64_t> raw) {
   Expects(raw.size() + m_top <= k_node_max_words);
   for (auto& c : raw) { m_buf->at(m_top++) = c; }
 }
@@ -934,7 +932,7 @@ void InternalW::merge() {
       // if we pull parent key now sibl would be deleted
       auto parent_key_insert_pos = m_top++;
 
-      append(gsl::span<uint64_t>(sibl_buf).subspan(1, sibl.size() - 1));
+      append(Span<uint64_t>(sibl_buf).subspan(1, sibl.size() - 1));
       for (auto& c : sibl.m_childs) appendChild(std::move(c));
 
       m_ta.free(sibl.addr());
@@ -946,7 +944,7 @@ void InternalW::merge() {
 
       auto parent_key_insert_pos = sibl.m_top++;
 
-      sibl.append(gsl::span<uint64_t>(buf).subspan(1, size() - 1));
+      sibl.append(Span<uint64_t>(buf).subspan(1, size() - 1));
       for (auto& c : m_childs) sibl.appendChild(std::move(c));
 
       m_ta.free(addr());
@@ -1167,7 +1165,7 @@ std::unique_ptr<model::Value> BtreeReadOnly::getValue(const std::string& key) {
 NodeR::NodeR(Database& db, Addr addr, ReadRef page)
     : Node(addr), m_db(db), m_page(std::move(page)) {}
 
-gsl::span<const uint64_t> NodeR::getData() const {
+Span<const uint64_t> NodeR::getData() const {
   return gsl::as_span<const uint64_t>(m_page->subspan(
       toPageOffset(m_addr) + sizeof(DskBlockHdr), k_node_max_bytes));
 }
@@ -1207,7 +1205,7 @@ std::unique_ptr<model::Value> LeafR::getValue(Key key) {
 }
 
 std::pair<model::Key, model::PValue>
-LeafR::readValue(gsl::span<const uint64_t>::const_iterator& it) {
+LeafR::readValue(Span<const uint64_t>::const_iterator& it) {
   auto entry = DskEntry(*it++);
   std::pair<model::Key, model::PValue> ret;
   ret.first = m_db.resolveKey(entry.key.key());

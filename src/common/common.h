@@ -22,9 +22,12 @@
     std::string m_text;                                                        \
   };
 
+namespace cheesebase {
+
 using Byte = gsl::byte;
 
-namespace cheesebase {
+template <class T>
+using Span = gsl::span<T, gsl::dynamic_range>;
 
 const uint64_t k_magic = *(uint64_t const*)"CHSBSE01";
 
@@ -54,13 +57,13 @@ constexpr Addr toAddr(PageNr nr) noexcept { return nr * k_page_size; }
 // Represents a write to disk.
 struct Write {
   Addr addr;
-  gsl::span<const Byte> data;
+  Span<const Byte> data;
 };
 
 using Writes = std::vector<Write>;
 
 template <typename T>
-void copySpan(gsl::span<const T> from, gsl::span<T> to) {
+void copySpan(Span<const T> from, Span<T> to) {
   Expects(from.size() <= to.size());
   auto output = to.begin();
   auto input = from.cbegin();

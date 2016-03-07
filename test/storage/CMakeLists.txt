@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.1)
 
 add_executable(test-storage
   main.cc
-  inc_prio_queue.cc
   cache.cc
 )
 

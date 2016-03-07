@@ -10,7 +10,6 @@ set(COMMON
 set(STORAGE
   storage/storage.h storage/storage.cc
   storage/cache.h storage/cache.cc
-  storage/inc_prio_queue.h
 )
 
 set(BLOCKMAN

@@ -20,6 +20,7 @@ namespace btree {
 // constants
 
 using Word = uint64_t;
+
 constexpr size_t k_entry_min_words = 1; // 6B header + 1B magic + 1B type
 constexpr size_t k_entry_max_words = 4; // min + 24 byte inline string
 constexpr size_t k_node_max_bytes = 256 - sizeof(DskBlockHdr);
@@ -109,7 +110,7 @@ protected:
 
   // get a view over internal data, independent of m_buf being initialized
   // second part of pair is needed to keep ReadRef locked if m_buf is not used
-  std::pair<gsl::span<const uint64_t>, std::unique_ptr<ReadRef>>
+  std::pair<Span<const Word>, std::unique_ptr<ReadRef>>
   getDataView() const;
 
   Transaction& m_ta;
@@ -127,7 +128,7 @@ public:
               AbsInternalW* parent) override;
 
   // append raw words without further checking
-  void insert(gsl::span<const uint64_t> raw);
+  void insert(Span<const Word> raw);
 
   bool remove(Key key, AbsInternalW* parent) override;
 
@@ -216,7 +217,7 @@ public:
   using AbsInternalW::AbsInternalW;
 
   // append words without further checking, increases top position
-  void append(gsl::span<const uint64_t> raw);
+  void append(Span<const Word> raw);
 
 private:
   void split(Key, std::unique_ptr<NodeW>) override;
@@ -262,7 +263,7 @@ public:
 protected:
   NodeR(Database& db, Addr addr, ReadRef page);
 
-  gsl::span<const uint64_t> getData() const;
+  Span<const Word> getData() const;
 
   Database& m_db;
   ReadRef m_page;
@@ -283,7 +284,7 @@ public:
 
 private:
   std::pair<model::Key, model::PValue>
-  readValue(gsl::span<const uint64_t>::const_iterator& it);
+  readValue(Span<const Word>::const_iterator& it);
 };
 
 class InternalR : public NodeR {
@@ -297,7 +298,7 @@ public:
 private:
   std::unique_ptr<NodeR> searchChild(Key k);
 
-  gsl::span<const uint64_t> m_data;
+  Span<const Word> m_data;
 };
 
 } // namespace btree
