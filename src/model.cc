@@ -24,9 +24,7 @@ size_t valueExtraWords(uint8_t t) {
 }
 
 void Object::append(Map<Key, PValue> a) {
-  if (childs_.empty()) {
-    childs_ = std::move(a);
-  } else {
+  if (childs_.empty()) { childs_ = std::move(a); } else {
     for (auto& e : a) childs_.insert(std::move(e));
   }
 }
@@ -36,8 +34,6 @@ void Object::append(std::pair<Key, PValue> p) { childs_.insert(std::move(p)); }
 void Object::append(Key k, PValue v) {
   childs_.emplace(std::move(k), std::move(v));
 }
-
-void Object::reserve(size_t s) { childs_.reserve(s); }
 
 boost::optional<const Value&> Object::getChild(Key k) const {
   auto lookup = childs_.find(k);
@@ -112,9 +108,7 @@ ValueType Scalar::type() const {
   }
   if (data_.type() == boost::typeindex::type_id<String>()) {
     auto len = boost::get<String>(data_).size();
-    if (len > k_short_string_limit) {
-      return ValueType::string;
-    } else {
+    if (len > k_short_string_limit) { return ValueType::string; } else {
       return ValueType(gsl::narrow_cast<uint8_t>(0b10000000 + len));
     }
   }
@@ -135,9 +129,7 @@ std::vector<uint64_t> Scalar::extraWords() const {
     ret.push_back(*((uint64_t*)&boost::get<Number>(data_)));
   } else if (data_.type() == boost::typeindex::type_id<String>()) {
     auto& str = boost::get<String>(data_);
-    if (str.size() > k_short_string_limit) {
-      ret.push_back(0);
-    } else {
+    if (str.size() > k_short_string_limit) { ret.push_back(0); } else {
       uint64_t word = 0;
       size_t i = 0;
       for (uint64_t c : str) {
@@ -146,9 +138,7 @@ std::vector<uint64_t> Scalar::extraWords() const {
           ret.push_back(word);
           word = 0;
           i = 0;
-        } else {
-          word >>= 8;
-        }
+        } else { word >>= 8; }
       }
       if (i > 0) {
         word >>= 8 * (7 - i);

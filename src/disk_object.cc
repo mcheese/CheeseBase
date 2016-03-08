@@ -1,11 +1,11 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
 
-#include "btree.h"
+#include "disk_object.h"
 #include "core.h"
 #include "model.h"
 
 namespace cheesebase {
-namespace btree {
+namespace disk {
 
 ////////////////////////////////////////////////////////////////////////////////
 // on disk structures
@@ -115,9 +115,9 @@ bool isNodeLeaf(const ReadRef& page, Addr addr) {
 
   // first byte of Addr is always 0
   // next-ptr of leafs put a flag in the first byte, marking the node as leaf
-  return gsl::as_span<const DskLeafHdr>(page->subspan(
-      toPageOffset(addr) + sizeof(DskBlockHdr), sizeof(DskLeafHdr)))[0]
-      .hasMagic();
+  return gsl::as_span<const DskLeafHdr>(
+             page->subspan(toPageOffset(addr) + sizeof(DskBlockHdr),
+                           sizeof(DskLeafHdr)))[0].hasMagic();
 }
 
 std::unique_ptr<NodeW> openNodeW(Transaction& ta, Addr addr) {
@@ -184,7 +184,7 @@ Addr Node::addr() const { return addr_; }
 ////////////////////////////////////////////////////////////////////////////////
 // BtreeWriteable
 
-BtreeWritable::BtreeWritable(Transaction& ta, Addr root) : ta_(ta) {
+BtreeWritable::BtreeWritable(Transaction& ta, Addr root) : ValueW(ta, root) {
   auto page = ta.load(toPageNr(root));
   if (isNodeLeaf(page, root))
     root_ = std::make_unique<RootLeafW>(ta, root, *this);
@@ -192,11 +192,10 @@ BtreeWritable::BtreeWritable(Transaction& ta, Addr root) : ta_(ta) {
     root_ = std::make_unique<RootInternalW>(ta, root, *this);
 }
 
-BtreeWritable::BtreeWritable(Transaction& ta) : ta_(ta) {
+BtreeWritable::BtreeWritable(Transaction& ta) : ValueW(ta, 0) {
   root_ = std::make_unique<RootLeafW>(AllocateNew(), ta, 0, *this);
+  addr_ = root_->addr();
 }
-
-Addr BtreeWritable::addr() const { return root_->addr(); }
 
 bool BtreeWritable::insert(Key key, const model::Value& val, Overwrite o) {
   return root_->insert(key, val, o, nullptr);
@@ -362,9 +361,7 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
 
       auto extra = gsl::narrow_cast<int>(old_entry.extraWords());
       shiftBuffer(pos + extra, extra_words - extra);
-    } else {
-      shiftBuffer(pos, 1 + extra_words);
-    }
+    } else { shiftBuffer(pos, 1 + extra_words); }
 
     // put the first word
     auto t = val.type();
@@ -374,13 +371,13 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
     // recurse into inserting remotely stored elements if needed
     if (t == model::ValueType::object) {
       auto& obj = dynamic_cast<const model::Object&>(val);
-      auto emp = linked_.emplace(key, std::make_unique<BtreeWritable>(ta_));
+      auto el = std::make_unique<BtreeWritable>(ta_);
       for (auto& c : obj) {
-        auto r = emp.first->second->insert(ta_.key(c.first), *c.second,
-                                           Overwrite::Insert);
-        Expects(r == true);
+        el->insert(ta_.key(c.first), *c.second, Overwrite::Insert);
       }
-      buf_->at(pos + 1) = emp.first->second->addr();
+      buf_->at(pos + 1) = el->addr();
+      auto emp = linked_.emplace(key, std::move(el));
+      Expects(emp.second);
     } else if (t == model::ValueType::list) {
       throw std::runtime_error("NIY");
     } else if (t == model::ValueType::string) {
@@ -391,9 +388,7 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
       }
     }
 
-  } else {
-    split(key, val, pos);
-  }
+  } else { split(key, val, pos); }
 
   return true;
 }
@@ -442,9 +437,7 @@ void LeafW::split(Key key, const model::Value& val, size_t pos) {
     if ((new_here && new_mid + new_val_len > top_ / 2 + 1) ||
         (!new_here && new_mid > top_ / 2 + new_val_len + 1)) {
       break;
-    } else {
-      mid = new_mid;
-    }
+    } else { mid = new_mid; }
     auto entry = DskEntry(buf_->at(new_mid));
     if (entry.key.key() >= key) { new_here = true; }
     new_mid += entry.extraWords();
@@ -766,9 +759,7 @@ NodeW& AbsInternalW::searchChild(Key k) {
   Addr addr = buf[pos];
 
   auto lookup = childs_.find(addr);
-  if (lookup != childs_.end()) {
-    return *lookup->second;
-  } else {
+  if (lookup != childs_.end()) { return *lookup->second; } else {
     auto emplace = childs_.emplace_hint(lookup, addr, openNodeW(ta_, addr));
     return *emplace->second;
   }
@@ -801,9 +792,7 @@ NodeW& AbsInternalW::getSilbling(Key key, Addr addr) {
   Addr sibl = buf[(pos == 1 ? pos + 2 : pos - 2)];
 
   auto lookup = childs_.find(sibl);
-  if (lookup != childs_.end()) {
-    return *lookup->second;
-  } else {
+  if (lookup != childs_.end()) { return *lookup->second; } else {
     return *childs_.emplace_hint(lookup, sibl, openNodeW(ta_, sibl))->second;
   }
 }
@@ -871,9 +860,7 @@ void InternalW::split(Key key, std::unique_ptr<NodeW> c) {
   if (mid_pos % 2 != 0) {
     if (DskInternalEntry(buf_->at(mid_pos + 1)).key.key() < key) {
       ++mid_pos;
-    } else {
-      --mid_pos;
-    }
+    } else { --mid_pos; }
   }
 
   auto mid_key = DskInternalEntry(buf_->at(mid_pos)).key.key();
@@ -1052,9 +1039,7 @@ void RootInternalW::split(Key key, std::unique_ptr<NodeW> c) {
     if (DskInternalEntry(buf_->at(mid_pos + 1)).key.key() < key) {
       new_left = false;
       ++mid_pos;
-    } else {
-      --mid_pos;
-    }
+    } else { --mid_pos; }
   } else {
     if (DskInternalEntry(buf_->at(mid_pos)).key.key() < key) {
       new_left = false;
@@ -1276,5 +1261,5 @@ std::unique_ptr<NodeR> InternalR::searchChild(Key k) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-} // namespace btree
+} // namespace disk
 } // namespace cheesebase

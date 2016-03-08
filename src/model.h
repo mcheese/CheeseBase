@@ -12,8 +12,7 @@
 
 #pragma once
 
-#include <boost/container/flat_map.hpp>
-#include <boost/container/stable_vector.hpp>
+#include <map>
 #include <boost/variant.hpp>
 #include <boost/optional.hpp>
 #include <memory>
@@ -58,10 +57,10 @@ using Key = String;
 ////////////////////////////////////////////////////////////////////////////////
 // collections
 template <typename K, typename V>
-using Map = boost::container::flat_map<K, V>;
+using Map = std::map<K, V>;
 
 template <typename T>
-using List = boost::container::stable_vector<T>;
+using List = std::vector<T>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // values
@@ -88,8 +87,6 @@ public:
   void append(Map<Key, PValue> a);
   void append(std::pair<Key, PValue> p);
   void append(Key, PValue);
-
-  void reserve(size_t s);
 
   boost::optional<const Value&> getChild(Key) const;
 

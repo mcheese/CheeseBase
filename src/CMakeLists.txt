@@ -11,7 +11,8 @@ set(SRC
   block_alloc.h block_alloc.cc
   block_locks.h block_locks.cc
   model.h model.cc
-  btree.h btree.cc
+  disk_value.h
+  disk_object.h disk_object.cc
   parser.h
   keycache.h keycache.cc
   murmurhash3.h murmurhash3.cc

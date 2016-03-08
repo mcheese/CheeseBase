@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.1)
 add_executable(test-cheesebase
   main.cc
   alloc.cc
-  btree.cc
+  disk_object.cc
   cache.cc
   cheesebase.cc
   keycache.cc

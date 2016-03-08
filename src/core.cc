@@ -5,7 +5,7 @@
 #include "allocator.h"
 #include "keycache.h"
 #include "storage.h"
-#include "btree.h"
+#include "disk_object.h"
 
 #include <boost/filesystem.hpp>
 
@@ -53,13 +53,13 @@ Database::Database(const std::string& file) {
         Block{ k_page_size / 2, k_page_size / 2 }, *store_);
 
     auto ta = startTransaction();
-    btree::BtreeWritable tree(ta);
+    disk::BtreeWritable tree(ta);
     Expects(tree.addr() == k_root);
     ta.commit(tree.getWrites());
   }
 
   auto ta = startTransaction();
-  btree::BtreeWritable(ta, k_root);
+  disk::BtreeWritable(ta, k_root);
 }
 
 Transaction Database::startTransaction() { return Transaction(*this); };

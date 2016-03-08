@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "disk_value.h"
 #include "common.h"
 #include "structs.h"
 #include "model.h"
@@ -14,7 +15,7 @@ namespace cheesebase {
 class Transaction;
 class Database;
 
-namespace btree {
+namespace disk {
 
 ////////////////////////////////////////////////////////////////////////////////
 // constants
@@ -59,7 +60,7 @@ class NodeW;
 class AbsInternalW;
 class AbsLeafW;
 
-class BtreeWritable {
+class BtreeWritable : public ValueW {
   friend class RootLeafW;
   friend class RootInternalW;
 
@@ -69,16 +70,14 @@ public:
   // open existing tree
   BtreeWritable(Transaction& ta, Addr root);
 
-  Addr addr() const;
   bool insert(Key key, const model::Value& val, Overwrite);
   bool insert(const std::string& key, const model::Value& val, Overwrite);
   bool remove(Key key);
   bool remove(const std::string& key);
   void destroy();
-  Writes getWrites() const;
+  Writes getWrites() const override;
 
 private:
-  Transaction& ta_;
   std::unique_ptr<NodeW> root_;
 };
 
@@ -135,7 +134,7 @@ public:
 
   void destroy() override;
 
-  boost::container::flat_map<Key, std::unique_ptr<BtreeWritable>> linked_;
+  std::map<Key, std::unique_ptr<ValueW>> linked_;
 
 protected:
   size_t findSize() override;
@@ -300,5 +299,5 @@ private:
   Span<const Word> data_;
 };
 
-} // namespace btree
+} // namespace disk
 } // namespace cheesebase
