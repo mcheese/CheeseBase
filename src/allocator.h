@@ -39,9 +39,9 @@ private:
   std::pair<Block, AllocWrites> allocBlock(size_t size);
   AllocWrites freeBlock(Addr block);
 
-  Allocator* m_alloc;
-  ExLock<Mutex> m_lock;
-  std::map<Addr, Addr> m_writes;
+  Allocator* alloc_;
+  ExLock<Mutex> lock_;
+  std::map<Addr, Addr> writes_;
 };
 
 class Allocator {
@@ -55,13 +55,13 @@ public:
 private:
   void clearCache();
 
-  Storage& m_store;
-  Mutex m_mutex;
-  PageAllocator m_pg_alloc;
-  T1Allocator m_t1_alloc;
-  T2Allocator m_t2_alloc;
-  T3Allocator m_t3_alloc;
-  T4Allocator m_t4_alloc;
+  Storage& store_;
+  Mutex mutex_;
+  PageAllocator pg_alloc_;
+  T1Allocator t1_alloc_;
+  T2Allocator t2_alloc_;
+  T3Allocator t3_alloc_;
+  T4Allocator t4_alloc_;
 };
 
 } // namespace cheesebase

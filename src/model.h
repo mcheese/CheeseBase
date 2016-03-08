@@ -81,7 +81,7 @@ using PValue = std::unique_ptr<Value>;
 class Object : public Value {
 public:
   Object() = default;
-  Object(Map<Key, PValue> childs) : m_childs(std::move(childs)) {}
+  Object(Map<Key, PValue> childs) : childs_(std::move(childs)) {}
   ~Object() override = default;
   MOVE_ONLY(Object);
 
@@ -102,14 +102,15 @@ public:
   Map<Key, PValue>::const_iterator end() const;
 
   bool operator==(const Value& o) const override;
+
 private:
-  Map<Key, PValue> m_childs;
+  Map<Key, PValue> childs_;
 };
 
 class Array : public Value {
 public:
   Array() = default;
-  Array(List<PValue> childs) : m_childs(std::move(childs)) {}
+  Array(List<PValue> childs) : childs_(std::move(childs)) {}
   ~Array() override = default;
   MOVE_ONLY(Array);
 
@@ -122,13 +123,14 @@ public:
   bool operator==(const Value& o) const override;
 
 private:
-  List<PValue> m_childs;
+  List<PValue> childs_;
 };
 
 class Scalar : public Value {
 public:
   template <typename T>
-  Scalar(T a) : m_data{ a } {};
+  Scalar(T a)
+      : data_{ a } {};
 
   ~Scalar() override = default;
 
@@ -139,7 +141,7 @@ public:
   bool operator==(const Value& o) const override;
 
 private:
-  boost::variant<String, Number, Bool, Null> m_data;
+  boost::variant<String, Number, Bool, Null> data_;
 };
 
 } // namespace model

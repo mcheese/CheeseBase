@@ -12,7 +12,7 @@ int main() {
   auto t3 = std::chrono::high_resolution_clock::now();
 
   std::cout << "\n\n";
-  //doc.prettyPrint(std::cout);
+  // doc.prettyPrint(std::cout);
 
   std::cout << "  Reading: "
             << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1)

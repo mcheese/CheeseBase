@@ -7,22 +7,22 @@ namespace cheesebase {
 
 Key KeyTransaction::getKey(const std::string& str) {
   if (str.size() > 256) throw KeyCacheError("key too long");
-  Expects(m_cache != nullptr);
+  Expects(cache_ != nullptr);
   auto h = hashString(str);
 
   // check local cache
-  if (m_local.count(h) > 0) {
-    for (auto& p : m_local[h]) {
+  if (local_.count(h) > 0) {
+    for (auto& p : local_[h]) {
       if (p.second.first == str) return DskKey(h, p.first + 1).key();
     }
   }
 
   ShLock<UgMutex> lck;
-  if (!m_ug_lck.owns_lock()) lck = ShLock<UgMutex>(m_cache->m_mtx);
+  if (!ug_lck_.owns_lock()) lck = ShLock<UgMutex>(cache_->mtx_);
   // check global cache
-  auto lookup = m_cache->m_cache.find(h);
+  auto lookup = cache_->cache_.find(h);
   size_t i = 0;
-  if (lookup != m_cache->m_cache.end()) {
+  if (lookup != cache_->cache_.end()) {
     for (; i < lookup->second.size(); ++i) {
       if (lookup->second[i] == str) {
         return DskKey(h, gsl::narrow<KeyIndex>(i + 1)).key();
@@ -31,16 +31,17 @@ Key KeyTransaction::getKey(const std::string& str) {
   }
 
   // needs to be inserted
-  if (!m_ug_lck.owns_lock()) {
+  if (!ug_lck_.owns_lock()) {
     lck.unlock();
-    m_ug_lck = UgLock<UgMutex>(m_cache->m_mtx);
+    ug_lck_ = UgLock<UgMutex>(cache_->mtx_);
   }
-  Ensures(m_ug_lck.owns_lock());
+  Ensures(ug_lck_.owns_lock());
   // nobody else can write now, need to check if str is there now
-  lookup = m_cache->m_cache.find(h);
-  if (lookup != m_cache->m_cache.end()) {
+  lookup = cache_->cache_.find(h);
+  if (lookup != cache_->cache_.end()) {
     for (; i < lookup->second.size(); ++i) {
-      if (lookup->second[i] == str) return DskKey(h, gsl::narrow<KeyIndex>(i) + 1).key();
+      if (lookup->second[i] == str)
+        return DskKey(h, gsl::narrow<KeyIndex>(i) + 1).key();
     }
   }
 
@@ -48,30 +49,30 @@ Key KeyTransaction::getKey(const std::string& str) {
     throw KeyCacheError("can not store key name");
   auto idx = gsl::narrow_cast<KeyIndex>(i);
 
-  m_local[h].emplace(idx, std::pair<std::string, DskKeyCacheSize>{
-                              str, gsl::narrow<DskKeyCacheSize>(str.size()) });
+  local_[h].emplace(idx, std::pair<std::string, DskKeyCacheSize>{
+                             str, gsl::narrow<DskKeyCacheSize>(str.size()) });
 
   return DskKey(h, idx + 1).key();
 }
 
 void KeyTransaction::upgrade() {
-  Expects(m_cache != nullptr);
-  if (!m_ug_lck.owns_lock()) { m_ug_lck = UgLock<UgMutex>(m_cache->m_mtx); }
+  Expects(cache_ != nullptr);
+  if (!ug_lck_.owns_lock()) { ug_lck_ = UgLock<UgMutex>(cache_->mtx_); }
 }
 
 Writes KeyTransaction::commit() {
   Writes writes;
-  Expects(m_cache != nullptr);
-  if (m_local.empty()) return writes;
-  Expects(m_ug_lck.owns_lock());
+  Expects(cache_ != nullptr);
+  if (local_.empty()) return writes;
+  Expects(ug_lck_.owns_lock());
 
-  auto block = m_cache->m_cur_block;
-  auto off = m_cache->m_offset;
+  auto block = cache_->cur_block_;
+  auto off = cache_->offset_;
 
-  m_ex_lck = std::move(m_ug_lck);
+  ex_lck_ = std::move(ug_lck_);
 
-  for (const auto& v : m_local) {
-    auto& main_vec = m_cache->m_cache[v.first];
+  for (const auto& v : local_) {
+    auto& main_vec = cache_->cache_[v.first];
 
     for (const auto& s : v.second) {
       auto idx = s.first;
@@ -88,8 +89,8 @@ Writes KeyTransaction::commit() {
                 gsl::as_bytes<const DskKeyCacheSize>({ s_terminator }) });
         }
 
-        block = m_alloc->allocExtension(block.addr,
-                                        k_page_size - sizeof(DskBlockHdr));
+        block = alloc_->allocExtension(block.addr,
+                                       k_page_size - sizeof(DskBlockHdr));
         off = sizeof(DskBlockHdr);
       }
       Ensures(block.size >= off + sizeof(DskKeyCacheSize) + len);
@@ -108,66 +109,66 @@ Writes KeyTransaction::commit() {
                                              { s_terminator }) });
   }
 
-  m_cache->m_cur_block = block;
-  m_cache->m_offset = off;
+  cache_->cur_block_ = block;
+  cache_->offset_ = off;
   return writes;
 }
 
 void KeyTransaction::end() {
-  m_local.clear();
-  m_cache = nullptr;
-  m_alloc = nullptr;
-  if (m_ug_lck.owns_lock()) m_ug_lck.unlock();
-  if (m_ex_lck.owns_lock()) m_ex_lck.unlock();
+  local_.clear();
+  cache_ = nullptr;
+  alloc_ = nullptr;
+  if (ug_lck_.owns_lock()) ug_lck_.unlock();
+  if (ex_lck_.owns_lock()) ex_lck_.unlock();
 }
 
 KeyCache::KeyCache(Block first_block, Storage& store)
-    : m_cur_block(first_block), m_store(store) {
+    : cur_block_(first_block), store_(store) {
   // empty string is always known
-  m_cache[hashString("")].emplace_back("");
+  cache_[hashString("")].emplace_back("");
 
   // go through all linked blocks adding every string
   auto next = first_block.addr;
   while (next != 0) {
-    m_cur_block.addr = next;
-    auto page = m_store.loadPage(toPageNr(m_cur_block.addr));
-    auto block = page->subspan(toPageOffset(m_cur_block.addr));
+    cur_block_.addr = next;
+    auto page = store_.loadPage(toPageNr(cur_block_.addr));
+    auto block = page->subspan(toPageOffset(cur_block_.addr));
     auto hdr = gsl::as_span<DskBlockHdr>(block)[0];
-    m_cur_block.size = toBlockSize(hdr.type());
-    block = block.subspan(0, m_cur_block.size);
+    cur_block_.size = toBlockSize(hdr.type());
+    block = block.subspan(0, cur_block_.size);
     next = hdr.next();
-    m_offset = sizeof(DskBlockHdr);
+    offset_ = sizeof(DskBlockHdr);
 
-    while (m_offset + sizeof(DskKeyCacheSize) <= m_cur_block.size) {
+    while (offset_ + sizeof(DskKeyCacheSize) <= cur_block_.size) {
       auto size = gsl::as_span<DskKeyCacheSize>(
-          block.subspan(m_offset, sizeof(DskKeyCacheSize)))[0];
+          block.subspan(offset_, sizeof(DskKeyCacheSize)))[0];
       if (size == 0) break;
-      m_offset += sizeof(DskKeyCacheSize);
-      auto str_span = gsl::as_span<const char>(block.subspan(m_offset, size));
+      offset_ += sizeof(DskKeyCacheSize);
+      auto str_span = gsl::as_span<const char>(block.subspan(offset_, size));
       std::string str{ str_span.begin(), str_span.end() };
-      m_offset += size;
-      m_cache[hashString(str)].emplace_back(std::move(str));
+      offset_ += size;
+      cache_[hashString(str)].emplace_back(std::move(str));
     }
   }
 }
 
 std::string KeyCache::getString(Key k) {
-  ShLock<UgMutex> lck{ m_mtx };
+  ShLock<UgMutex> lck{ mtx_ };
   DskKey key{ k };
   Expects(key.index > 0);
-  auto lookup = m_cache.find(key.hash);
-  if (lookup == m_cache.end() || lookup->second.size() < key.index)
+  auto lookup = cache_.find(key.hash);
+  if (lookup == cache_.end() || lookup->second.size() < key.index)
     throw KeyCacheError("key not known");
   return lookup->second[key.index - 1];
 }
 
 boost::optional<Key> KeyCache::getKey(const std::string& str) {
-  ShLock<UgMutex> lck{ m_mtx };
+  ShLock<UgMutex> lck{ mtx_ };
 
   auto h = hashString(str);
-  auto lookup = m_cache.find(h);
+  auto lookup = cache_.find(h);
   size_t i = 0;
-  if (lookup != m_cache.end()) {
+  if (lookup != cache_.end()) {
     for (; i < lookup->second.size(); ++i) {
       if (lookup->second[i] == str) {
         Expects(i <= std::numeric_limits<KeyIndex>::max());
@@ -180,6 +181,6 @@ boost::optional<Key> KeyCache::getKey(const std::string& str) {
 }
 
 KeyTransaction KeyCache::startTransaction(AllocTransaction& alloc) {
-  return KeyTransaction(this, &alloc, ShLock<UgMutex>(m_mtx));
+  return KeyTransaction(this, &alloc, ShLock<UgMutex>(mtx_));
 }
 }

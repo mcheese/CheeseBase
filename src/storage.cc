@@ -5,12 +5,12 @@
 namespace cheesebase {
 
 Storage::Storage(const std::string& filename, OpenMode mode)
-    : m_cache(filename, mode, k_default_cache_size / k_page_size) {}
+    : cache_(filename, mode, k_default_cache_size / k_page_size) {}
 
-ReadRef Storage::loadPage(PageNr page_nr) { return m_cache.readPage(page_nr); }
+ReadRef Storage::loadPage(PageNr page_nr) { return cache_.readPage(page_nr); }
 
 void Storage::storeWrite(Write write) {
-  auto p = m_cache.writePage(toPageNr(write.addr));
+  auto p = cache_.writePage(toPageNr(write.addr));
   copySpan(write.data, p->subspan(toPageOffset(write.addr)));
 }
 
@@ -24,7 +24,7 @@ void Storage::storeWrite(std::vector<Write> transaction) {
   auto it = transaction.begin();
   while (it != transaction.end()) {
     auto nr = toPageNr(it->addr);
-    auto ref = m_cache.writePage(nr);
+    auto ref = cache_.writePage(nr);
     do {
       copySpan(it->data, ref->subspan(toPageOffset(it->addr)));
       ++it;

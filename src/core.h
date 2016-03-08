@@ -32,9 +32,9 @@ public:
 private:
   Transaction(Database& db);
 
-  Storage& m_storage;
-  AllocTransaction m_alloc;
-  KeyTransaction m_kcache;
+  Storage& storage_;
+  AllocTransaction alloc_;
+  KeyTransaction kcache_;
 };
 
 const Addr k_root{ k_page_size };
@@ -52,9 +52,9 @@ public:
 private:
   // for test cases
   Database() = default;
-  std::unique_ptr<Storage> m_store;
-  std::unique_ptr<Allocator> m_alloc;
-  std::unique_ptr<KeyCache> m_keycache;
+  std::unique_ptr<Storage> store_;
+  std::unique_ptr<Allocator> alloc_;
+  std::unique_ptr<KeyCache> keycache_;
 };
 
 } // namespace cheesebase

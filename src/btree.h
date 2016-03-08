@@ -49,7 +49,7 @@ public:
 
 protected:
   Node(Addr addr);
-  Addr m_addr;
+  Addr addr_;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -78,8 +78,8 @@ public:
   Writes getWrites() const;
 
 private:
-  Transaction& m_ta;
-  std::unique_ptr<NodeW> m_root;
+  Transaction& ta_;
+  std::unique_ptr<NodeW> root_;
 };
 
 class NodeW : public Node {
@@ -108,14 +108,13 @@ protected:
   void initFromDisk();
   virtual size_t findSize() = 0;
 
-  // get a view over internal data, independent of m_buf being initialized
-  // second part of pair is needed to keep ReadRef locked if m_buf is not used
-  std::pair<Span<const Word>, std::unique_ptr<ReadRef>>
-  getDataView() const;
+  // get a view over internal data, independent of buf_ being initialized
+  // second part of pair is needed to keep ReadRef locked if buf_ is not used
+  std::pair<Span<const Word>, std::unique_ptr<ReadRef>> getDataView() const;
 
-  Transaction& m_ta;
-  std::unique_ptr<std::array<Word, k_node_max_words>> m_buf;
-  size_t m_top{ 0 }; // size in Words
+  Transaction& ta_;
+  std::unique_ptr<std::array<Word, k_node_max_words>> buf_;
+  size_t top_{ 0 }; // size in Words
 };
 
 class AbsLeafW : public NodeW {
@@ -136,7 +135,7 @@ public:
 
   void destroy() override;
 
-  boost::container::flat_map<Key, std::unique_ptr<BtreeWritable>> m_linked;
+  boost::container::flat_map<Key, std::unique_ptr<BtreeWritable>> linked_;
 
 protected:
   size_t findSize() override;
@@ -145,7 +144,7 @@ protected:
   // Destroy value at pos (if remote). Return size of the entry.
   template <typename ConstIt>
   size_t destroyValue(ConstIt it);
-  AbsInternalW* m_parent;
+  AbsInternalW* parent_;
 };
 
 class LeafW : public AbsLeafW {
@@ -169,7 +168,7 @@ public:
 
 private:
   RootLeafW(LeafW&&, Addr addr, BtreeWritable& parent);
-  BtreeWritable& m_tree;
+  BtreeWritable& tree_;
   void split(Key, const model::Value&, size_t insert_pos) override;
   void merge() override;
 };
@@ -204,8 +203,8 @@ public:
 
 protected:
   size_t findSize() override;
-  AbsInternalW* m_parent;
-  boost::container::flat_map<Addr, std::unique_ptr<NodeW>> m_childs;
+  AbsInternalW* parent_;
+  boost::container::flat_map<Addr, std::unique_ptr<NodeW>> childs_;
 
 private:
   virtual void split(Key, std::unique_ptr<NodeW>) = 0;
@@ -237,7 +236,7 @@ private:
                 BtreeWritable& parent);
   void split(Key, std::unique_ptr<NodeW>) override;
   void merge() override;
-  BtreeWritable& m_parent;
+  BtreeWritable& parent_;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -251,8 +250,8 @@ public:
   std::unique_ptr<model::Value> getValue(const std::string& key);
 
 private:
-  Database& m_db;
-  Addr m_root;
+  Database& db_;
+  Addr root_;
 };
 
 class NodeR : public Node {
@@ -265,8 +264,8 @@ protected:
 
   Span<const Word> getData() const;
 
-  Database& m_db;
-  ReadRef m_page;
+  Database& db_;
+  ReadRef page_;
 };
 
 class LeafR : public NodeR {
@@ -298,7 +297,7 @@ public:
 private:
   std::unique_ptr<NodeR> searchChild(Key k);
 
-  Span<const Word> m_data;
+  Span<const Word> data_;
 };
 
 } // namespace btree

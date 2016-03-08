@@ -33,11 +33,11 @@ public:
   void unlockAll();
 
 private:
-  BlockLockSession(BlockLocker& locker) : m_locker(locker) {}
+  BlockLockSession(BlockLocker& locker) : locker_(locker) {}
 
-  BlockLocker& m_locker;
-  std::set<Addr> m_read_locks;
-  std::set<Addr> m_write_locks;
+  BlockLocker& locker_;
+  std::set<Addr> read_locks_;
+  std::set<Addr> write_locks_;
 };
 
 class BlockLocker {
@@ -56,9 +56,9 @@ private:
 
   std::shared_ptr<BlockLock> getLock(Addr);
 
-  Mutex m_mtx;
-  Cond m_cnd;
-  std::unordered_map<Addr, std::shared_ptr<BlockLock>> m_locks;
+  Mutex mtx_;
+  Cond cnd_;
+  std::unordered_map<Addr, std::shared_ptr<BlockLock>> locks_;
 };
 
 } // namespace cheesebase

@@ -39,17 +39,17 @@ template <class View, class Lock>
 class PageRef {
 public:
   PageRef() = default;
-  PageRef(View page, Lock lock) : m_page(page), m_lock(std::move(lock)){};
+  PageRef(View page, Lock lock) : page_(page), lock_(std::move(lock)){};
 
   MOVE_ONLY(PageRef);
 
-  View get() const { return m_page; };
-  View operator*() const { return m_page; };
-  const View* operator->() const { return &m_page; };
+  View get() const { return page_; };
+  View operator*() const { return page_; };
+  const View* operator->() const { return &page_; };
 
 private:
-  const View m_page;
-  Lock m_lock;
+  const View page_;
+  Lock lock_;
 };
 
 using ReadRef = PageRef<PageReadView, ShLock<RwMutex>>;
@@ -82,16 +82,16 @@ private:
 
   uint64_t extendFile(uint64_t size);
 
-  boost::interprocess::file_mapping m_file;
-  std::ofstream m_fstream;
-  uint64_t m_size{ 0 };
-  Mutex m_pages_mtx;
-  std::unique_ptr<CachePage[]> m_pages;
-  CachePage* m_least_recent;
-  CachePage* m_most_recent;
+  boost::interprocess::file_mapping file_;
+  std::ofstream fstream_;
+  uint64_t size_{ 0 };
+  Mutex pages_mtx_;
+  std::unique_ptr<CachePage[]> pages_;
+  CachePage* least_recent_;
+  CachePage* most_recent_;
 
-  RwMutex m_map_mtx;
-  std::unordered_map<PageNr, CachePage&> m_map;
+  RwMutex map_mtx_;
+  std::unordered_map<PageNr, CachePage&> map_;
 };
 
 } // namespace cheesebase

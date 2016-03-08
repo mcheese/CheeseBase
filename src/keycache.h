@@ -21,12 +21,13 @@ class KeyCache;
 using KeyHash = decltype(DskKey::hash);
 using KeyIndex = decltype(DskKey::index);
 
-static const DskKeyCacheSize s_terminator{0};
+static const DskKeyCacheSize s_terminator{ 0 };
 
 class KeyTransaction {
   friend KeyCache;
+
 public:
-  KeyTransaction() : m_cache(nullptr), m_alloc(nullptr) {}
+  KeyTransaction() : cache_(nullptr), alloc_(nullptr) {}
   MOVE_ONLY(KeyTransaction);
 
   Key getKey(const std::string& str);
@@ -38,19 +39,20 @@ public:
 private:
   KeyTransaction(gsl::not_null<KeyCache*> cache,
                  gsl::not_null<AllocTransaction*> alloc, ShLock<UgMutex> lck)
-      : m_cache(cache), m_alloc(alloc) {}
+      : cache_(cache), alloc_(alloc) {}
 
-  KeyCache* m_cache;
-  AllocTransaction* m_alloc;
-  UgLock<UgMutex> m_ug_lck;
-  ExLock<UgMutex> m_ex_lck;
-  boost::container::flat_map < KeyHash,
-      boost::container::flat_map<
-          KeyIndex, std::pair<std::string, DskKeyCacheSize>>> m_local;
+  KeyCache* cache_;
+  AllocTransaction* alloc_;
+  UgLock<UgMutex> ug_lck_;
+  ExLock<UgMutex> ex_lck_;
+  boost::container::flat_map<
+      KeyHash, boost::container::flat_map<
+                   KeyIndex, std::pair<std::string, DskKeyCacheSize>>> local_;
 };
 
 class KeyCache {
   friend KeyTransaction;
+
 public:
   KeyCache(Block first_block, Storage& store);
 
@@ -69,11 +71,11 @@ public:
   KeyTransaction startTransaction(AllocTransaction& alloc);
 
 private:
-  Storage& m_store;
-  std::unordered_map<KeyHash, std::vector<std::string>> m_cache;
-  UgMutex m_mtx;
-  Block m_cur_block;
-  Offset m_offset{ sizeof(DskBlockHdr) };
+  Storage& store_;
+  std::unordered_map<KeyHash, std::vector<std::string>> cache_;
+  UgMutex mtx_;
+  Block cur_block_;
+  Offset offset_{ sizeof(DskBlockHdr) };
 };
 
 } // namespace cheesebase

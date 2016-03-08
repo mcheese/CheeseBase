@@ -10,14 +10,14 @@
 using namespace cheesebase;
 
 CheeseBase::CheeseBase(const std::string& db_name)
-    : m_db(std::make_unique<Database>(db_name)) {}
+    : db_(std::make_unique<Database>(db_name)) {}
 
 CheeseBase::~CheeseBase() {}
 
 bool CheeseBase::insert(const std::string& location, const std::string& json) {
   try {
     auto value = parseJson(json.begin(), json.end());
-    auto ta = m_db->startTransaction();
+    auto ta = db_->startTransaction();
     btree::BtreeWritable tree{ ta, k_root };
     auto success = tree.insert(location, *value, btree::Overwrite::Insert);
     if (success) ta.commit(tree.getWrites());
@@ -31,7 +31,7 @@ bool CheeseBase::insert(const std::string& location, const std::string& json) {
 bool CheeseBase::update(const std::string& location, const std::string& json) {
   try {
     auto value = parseJson(json.begin(), json.end());
-    auto ta = m_db->startTransaction();
+    auto ta = db_->startTransaction();
     btree::BtreeWritable tree{ ta, k_root };
     auto success = tree.insert(location, *value, btree::Overwrite::Update);
     if (success) ta.commit(tree.getWrites());
@@ -45,7 +45,7 @@ bool CheeseBase::update(const std::string& location, const std::string& json) {
 bool CheeseBase::upsert(const std::string& location, const std::string& json) {
   try {
     auto value = parseJson(json.begin(), json.end());
-    auto ta = m_db->startTransaction();
+    auto ta = db_->startTransaction();
     btree::BtreeWritable tree{ ta, k_root };
     auto success = tree.insert(location, *value, btree::Overwrite::Upsert);
     if (success) ta.commit(tree.getWrites());
@@ -59,7 +59,7 @@ bool CheeseBase::upsert(const std::string& location, const std::string& json) {
 std::string CheeseBase::get(const std::string& location) {
   try {
     std::ostringstream ss;
-    auto tree = btree::BtreeReadOnly(*m_db, k_root);
+    auto tree = btree::BtreeReadOnly(*db_, k_root);
     auto v = (location.length() == 0
                   ? std::make_unique<model::Object>(tree.getObject())
                   : tree.getValue(location));
@@ -73,7 +73,7 @@ std::string CheeseBase::get(const std::string& location) {
 
 bool CheeseBase::remove(const std::string& location) {
   try {
-    auto ta = m_db->startTransaction();
+    auto ta = db_->startTransaction();
     btree::BtreeWritable tree{ ta, k_root };
     auto success = tree.remove(location);
     if (success) ta.commit(tree.getWrites());

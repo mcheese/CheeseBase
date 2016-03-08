@@ -44,7 +44,7 @@ CB_PACKED(struct DskBlockHdr {
   BlockType type() const noexcept {
     return gsl::narrow_cast<BlockType>(data_ >> 56);
   }
-  
+
   uint64_t data() const { return data_; }
 
   uint64_t data_;

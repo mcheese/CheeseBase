@@ -7,40 +7,40 @@ namespace cheesebase {
 BlockLockSession::~BlockLockSession() { unlockAll(); }
 
 void BlockLockSession::readLock(Addr block) {
-  auto lookup = m_read_locks.find(block);
+  auto lookup = read_locks_.find(block);
 
-  if (lookup != m_read_locks.end())
+  if (lookup != read_locks_.end())
     throw BlockLockError("read requested lock already locked");
-  if (m_write_locks.count(block) > 0)
+  if (write_locks_.count(block) > 0)
     throw BlockLockError("read requested lock already write locked");
 
-  m_locker.readLock(block);
-  m_read_locks.emplace_hint(lookup, block);
+  locker_.readLock(block);
+  read_locks_.emplace_hint(lookup, block);
 }
 
 void BlockLockSession::writeLock(Addr block) {
-  auto lookup = m_write_locks.find(block);
+  auto lookup = write_locks_.find(block);
 
-  if (lookup != m_write_locks.end())
+  if (lookup != write_locks_.end())
     throw BlockLockError("write requested lock already locked");
-  if (m_read_locks.count(block) > 0)
+  if (read_locks_.count(block) > 0)
     throw BlockLockError("write requested lock already write locked");
 
-  m_locker.writeLock(block);
-  m_write_locks.emplace_hint(lookup, block);
+  locker_.writeLock(block);
+  write_locks_.emplace_hint(lookup, block);
 }
 
 void BlockLockSession::unlock(Addr block) {
-  if (m_read_locks.count(block) > 0) return m_locker.readUnlock(block);
-  if (m_write_locks.count(block) > 0) return m_locker.writeUnlock(block);
+  if (read_locks_.count(block) > 0) return locker_.readUnlock(block);
+  if (write_locks_.count(block) > 0) return locker_.writeUnlock(block);
   throw BlockLockError("unlock requested lock not locked");
 }
 
 void BlockLockSession::unlockAll() {
-  for (auto a : m_read_locks) m_locker.readUnlock(a);
-  for (auto a : m_write_locks) m_locker.writeUnlock(a);
-  m_read_locks.clear();
-  m_write_locks.clear();
+  for (auto a : read_locks_) locker_.readUnlock(a);
+  for (auto a : write_locks_) locker_.writeUnlock(a);
+  read_locks_.clear();
+  write_locks_.clear();
 }
 
 BlockLockSession BlockLocker::startSession() { return BlockLockSession(*this); }
@@ -48,10 +48,10 @@ BlockLockSession BlockLocker::startSession() { return BlockLockSession(*this); }
 std::shared_ptr<BlockLock> BlockLocker::getLock(Addr block) {
   std::shared_ptr<BlockLock> block_lock;
 
-  auto lookup = m_locks.find(block);
-  if (lookup == m_locks.end()) {
+  auto lookup = locks_.find(block);
+  if (lookup == locks_.end()) {
     auto emplace =
-        m_locks.emplace_hint(lookup, block, std::make_shared<BlockLock>());
+        locks_.emplace_hint(lookup, block, std::make_shared<BlockLock>());
     block_lock = emplace->second;
   } else {
     block_lock = lookup->second;
@@ -63,28 +63,28 @@ std::shared_ptr<BlockLock> BlockLocker::getLock(Addr block) {
 }
 
 void BlockLocker::readLock(Addr block) {
-  ExLock<Mutex> lck{ m_mtx };
+  ExLock<Mutex> lck{ mtx_ };
 
   auto block_lock = getLock(block);
 
-  while (block_lock->writer != BlockLock::Writer::None) m_cnd.wait(lck);
+  while (block_lock->writer != BlockLock::Writer::None) cnd_.wait(lck);
   ++(block_lock->reader);
 }
 
 void BlockLocker::writeLock(Addr block) {
-  ExLock<Mutex> lck{ m_mtx };
+  ExLock<Mutex> lck{ mtx_ };
 
   auto block_lock = getLock(block);
 
-  while (block_lock->writer != BlockLock::Writer::None) m_cnd.wait(lck);
+  while (block_lock->writer != BlockLock::Writer::None) cnd_.wait(lck);
   block_lock->writer = BlockLock::Writer::Waiting;
-  while (block_lock->reader > 0) m_cnd.wait(lck);
+  while (block_lock->reader > 0) cnd_.wait(lck);
   block_lock->writer = BlockLock::Writer::Locked;
 }
 
 void BlockLocker::readUnlock(Addr block) {
-  ExLock<Mutex> lck{ m_mtx };
-  auto lookup = m_locks.find(block);
+  ExLock<Mutex> lck{ mtx_ };
+  auto lookup = locks_.find(block);
 
   auto block_lock = getLock(block);
 
@@ -97,15 +97,15 @@ void BlockLocker::readUnlock(Addr block) {
   if (block_lock.use_count() == 2) {
     if (block_lock->reader == 0 &&
         block_lock->writer == BlockLock::Writer::None) {
-      m_locks.erase(block);
+      locks_.erase(block);
     }
   } else {
-    m_cnd.notify_all();
+    cnd_.notify_all();
   }
 }
 
 void BlockLocker::writeUnlock(Addr block) {
-  ExLock<Mutex> lck{ m_mtx };
+  ExLock<Mutex> lck{ mtx_ };
 
   auto block_lock = getLock(block);
 
@@ -119,10 +119,10 @@ void BlockLocker::writeUnlock(Addr block) {
   if (block_lock.use_count() == 2) {
     if (block_lock->reader == 0 &&
         block_lock->writer == BlockLock::Writer::None) {
-      m_locks.erase(block);
+      locks_.erase(block);
     }
   } else {
-    m_cnd.notify_all();
+    cnd_.notify_all();
   }
 }
 

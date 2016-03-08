@@ -5,76 +5,84 @@
 
 namespace cheesebase {
 
-template<>
+template <>
 Addr T1Allocator::hdrOffset() {
   return offsetof(DskDatabaseHdr, free_alloc_t1);
 }
 
-template<>
+template <>
 Addr T2Allocator::hdrOffset() {
   return offsetof(DskDatabaseHdr, free_alloc_t2);
 }
 
-template<>
+template <>
 Addr T3Allocator::hdrOffset() {
   return offsetof(DskDatabaseHdr, free_alloc_t3);
 }
 
-template<>
+template <>
 Addr T4Allocator::hdrOffset() {
   return offsetof(DskDatabaseHdr, free_alloc_t4);
 }
 
-template<>
-BlockType T1Allocator::type() { return BlockType::t1; }
+template <>
+BlockType T1Allocator::type() {
+  return BlockType::t1;
+}
 
-template<>
-BlockType T2Allocator::type() { return BlockType::t2; }
+template <>
+BlockType T2Allocator::type() {
+  return BlockType::t2;
+}
 
-template<>
-BlockType T3Allocator::type() { return BlockType::t3; }
+template <>
+BlockType T3Allocator::type() {
+  return BlockType::t3;
+}
 
-template<>
-BlockType T4Allocator::type() { return BlockType::t4; }
+template <>
+BlockType T4Allocator::type() {
+  return BlockType::t4;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // PageAllocator
 
 std::pair<Block, AllocWrites> PageAllocator::allocBlock() {
-  if (m_free != 0) {
-    auto page = m_free;
+  if (free_ != 0) {
+    auto page = free_;
 
     Addr next;
-    auto lookup = m_next_cache.find(page);
-    if (lookup != m_next_cache.end()) {
+    auto lookup = next_cache_.find(page);
+    if (lookup != next_cache_.end()) {
       next = lookup->second;
     } else {
       auto hdr = gsl::as_span<const DskBlockHdr>(
-          m_store.loadPage(toPageNr(m_free))->subspan(toPageOffset(m_free)))[0];
+          store_.loadPage(toPageNr(free_))->subspan(toPageOffset(free_)))[0];
       next = hdr.next();
       if (hdr.type() != type() || toPageOffset(next) != 0)
         throw ConsistencyError("Invalid header in block of free list");
     }
 
-    m_free = next;
+    free_ = next;
     return { { page, size() },
-             { { hdrOffset(), m_free },
+             { { hdrOffset(), free_ },
                { page, DskBlockHdr(type(), 0).data() } } };
   } else {
-    auto page = m_eof;
-    m_eof += k_page_size;
+    auto page = eof_;
+    eof_ += k_page_size;
     return { { page, size() },
-             { { offsetof(DskDatabaseHdr, end_of_file), m_eof },
+             { { offsetof(DskDatabaseHdr, end_of_file), eof_ },
                { page, DskBlockHdr(type(), 0).data() } } };
   }
 }
 
 AllocWrites PageAllocator::freeBlock(Addr page) {
-  auto next = m_free;
-  m_free = page;
+  auto next = free_;
+  free_ = page;
   auto hdr = DskBlockHdr(type(), next);
-  m_next_cache[page] = hdr.next();
-  return { { hdrOffset(), m_free }, { page, hdr.data() } };
+  next_cache_[page] = hdr.next();
+  return { { hdrOffset(), free_ }, { page, hdr.data() } };
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -82,28 +90,28 @@ AllocWrites PageAllocator::freeBlock(Addr page) {
 
 template <class ParentAlloc>
 std::pair<Block, AllocWrites> TierAllocator<ParentAlloc>::allocBlock() {
-  if (m_free != 0) {
-    auto block = m_free;
+  if (free_ != 0) {
+    auto block = free_;
 
     Addr next;
-    auto lookup = m_next_cache.find(block);
-    if (lookup != m_next_cache.end()) {
+    auto lookup = next_cache_.find(block);
+    if (lookup != next_cache_.end()) {
       next = lookup->second;
     } else {
       auto hdr = gsl::as_span<const DskBlockHdr>(
-          m_store.loadPage(toPageNr(m_free))->subspan(toPageOffset(m_free)))[0];
+          store_.loadPage(toPageNr(free_))->subspan(toPageOffset(free_)))[0];
       next = hdr.next();
       if (hdr.type() != type() || next % size() != 0)
         throw ConsistencyError("Invalid header in block of free list");
     }
 
-    m_free = next;
+    free_ = next;
 
     return { { block, size() },
-             { { hdrOffset(), m_free },
+             { { hdrOffset(), free_ },
                { block, DskBlockHdr(type(), 0).data() } } };
   } else {
-    std::pair<Block, AllocWrites> alloc = m_parent_alloc.allocBlock();
+    std::pair<Block, AllocWrites> alloc = parent_alloc_.allocBlock();
     auto& writes = alloc.second;
     auto& block = alloc.first;
 
@@ -112,12 +120,12 @@ std::pair<Block, AllocWrites> TierAllocator<ParentAlloc>::allocBlock() {
     Expects(block.addr % size() == 0);
 
     // half of the parent block is unused
-    m_free = block.addr + size();
-    m_next_cache.emplace(m_free, 0);
+    free_ = block.addr + size();
+    next_cache_.emplace(free_, 0);
 
     writes.reserve(writes.size() + 3);
-    writes.push_back({ hdrOffset(), m_free });
-    writes.push_back({ m_free, DskBlockHdr(type(), 0).data() });
+    writes.push_back({ hdrOffset(), free_ });
+    writes.push_back({ free_, DskBlockHdr(type(), 0).data() });
     writes.push_back({ block.addr, DskBlockHdr(type(), 0).data() });
 
     return { { block.addr, size() }, std::move(writes) };
@@ -126,11 +134,11 @@ std::pair<Block, AllocWrites> TierAllocator<ParentAlloc>::allocBlock() {
 
 template <class ParentAlloc>
 AllocWrites TierAllocator<ParentAlloc>::freeBlock(Addr block) {
-  auto next = m_free;
-  m_free = block;
+  auto next = free_;
+  free_ = block;
   auto hdr = DskBlockHdr(type(), next);
-  m_next_cache[block] = hdr.next();
-  return { { hdrOffset(), m_free }, { block, hdr.data() } };
+  next_cache_[block] = hdr.next();
+  return { { hdrOffset(), free_ }, { block, hdr.data() } };
 }
 
 template class TierAllocator<PageAllocator>;

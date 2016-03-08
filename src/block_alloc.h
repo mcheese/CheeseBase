@@ -23,21 +23,21 @@ using AllocWrites = std::vector<AllocWrite>;
 
 class BlockAllocator {
 public:
-  void setFirstFree(Addr free) { m_free = free; }
-  Addr getFirstFree() const { return m_free; }
-  void clearCache() { m_next_cache.clear(); }
+  void setFirstFree(Addr free) { free_ = free; }
+  Addr getFirstFree() const { return free_; }
+  void clearCache() { next_cache_.clear(); }
 
 protected:
-  BlockAllocator(Storage& store, Addr free) : m_store(store), m_free(free) {}
-  Addr m_free{ 0 };
-  Storage& m_store;
-  std::map<Addr, Addr> m_next_cache;
+  BlockAllocator(Storage& store, Addr free) : store_(store), free_(free) {}
+  Addr free_{ 0 };
+  Storage& store_;
+  std::map<Addr, Addr> next_cache_;
 };
 
 class PageAllocator : public BlockAllocator {
 public:
   PageAllocator(Storage& store, Addr free, Addr eof)
-      : BlockAllocator(store, free), m_eof(eof) {}
+      : BlockAllocator(store, free), eof_(eof) {}
   static constexpr size_t size() { return k_page_size; };
   static constexpr Addr hdrOffset() {
     return offsetof(DskDatabaseHdr, free_alloc_pg);
@@ -47,14 +47,14 @@ public:
   AllocWrites freeBlock(Addr);
 
 private:
-  Addr m_eof;
+  Addr eof_;
 };
 
 template <class ParentAlloc>
 class TierAllocator : public BlockAllocator {
 public:
   TierAllocator(Storage& store, Addr free, ParentAlloc& parent)
-      : BlockAllocator(store, free), m_parent_alloc(parent) {}
+      : BlockAllocator(store, free), parent_alloc_(parent) {}
   static constexpr size_t size() noexcept { return ParentAlloc::size() / 2; }
   static Addr hdrOffset();
   static BlockType type();
@@ -62,7 +62,7 @@ public:
   AllocWrites freeBlock(Addr);
 
 private:
-  ParentAlloc& m_parent_alloc;
+  ParentAlloc& parent_alloc_;
 };
 
 using T1Allocator = TierAllocator<PageAllocator>;

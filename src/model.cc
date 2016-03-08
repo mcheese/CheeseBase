@@ -24,30 +24,30 @@ size_t valueExtraWords(uint8_t t) {
 }
 
 void Object::append(Map<Key, PValue> a) {
-  if (m_childs.empty()) {
-    m_childs = std::move(a);
+  if (childs_.empty()) {
+    childs_ = std::move(a);
   } else {
-    for (auto& e : a) m_childs.insert(std::move(e));
+    for (auto& e : a) childs_.insert(std::move(e));
   }
 }
 
-void Object::append(std::pair<Key, PValue> p) { m_childs.insert(std::move(p)); }
+void Object::append(std::pair<Key, PValue> p) { childs_.insert(std::move(p)); }
 
 void Object::append(Key k, PValue v) {
-  m_childs.emplace(std::move(k), std::move(v));
+  childs_.emplace(std::move(k), std::move(v));
 }
 
-void Object::reserve(size_t s) { m_childs.reserve(s); }
+void Object::reserve(size_t s) { childs_.reserve(s); }
 
 boost::optional<const Value&> Object::getChild(Key k) const {
-  auto lookup = m_childs.find(k);
-  if (lookup != m_childs.end()) return *lookup->second;
+  auto lookup = childs_.find(k);
+  if (lookup != childs_.end()) return *lookup->second;
   return boost::none;
 }
 
 std::ostream& Object::print(std::ostream& os) const {
-  auto beg = std::begin(m_childs);
-  auto end = std::end(m_childs);
+  auto beg = std::begin(childs_);
+  auto end = std::end(childs_);
   for (auto it = beg; it != end; ++it) {
     if (it != beg) os << ", ";
     os << it->first << " : ";
@@ -59,8 +59,8 @@ std::ostream& Object::print(std::ostream& os) const {
 std::ostream& Object::prettyPrint(std::ostream& os, size_t depth) const {
   auto indent = std::string(depth, ' ');
   os << "{";
-  auto beg = std::begin(m_childs);
-  auto end = std::end(m_childs);
+  auto beg = std::begin(childs_);
+  auto end = std::end(childs_);
   for (auto it = beg; it != end; ++it) {
     if (it != beg) os << ",";
     os << '\n' << indent << "  \"" << it->first << "\": ";
@@ -76,15 +76,15 @@ std::vector<uint64_t> Object::extraWords() const {
 }
 
 Map<Key, PValue>::const_iterator Object::begin() const {
-  return m_childs.cbegin();
+  return childs_.cbegin();
 }
 
-Map<Key, PValue>::const_iterator Object::end() const { return m_childs.cend(); }
+Map<Key, PValue>::const_iterator Object::end() const { return childs_.cend(); }
 
 bool Object::operator==(const Value& o) const {
   auto other = dynamic_cast<const Object*>(&o);
   if (other == nullptr) return false;
-  for (const auto& c : m_childs) {
+  for (const auto& c : childs_) {
     auto partner = other->getChild(c.first);
     if (!partner.is_initialized() || *c.second != partner.value()) return false;
   }
@@ -97,32 +97,32 @@ std::ostream& operator<<(std::ostream& os, Bool b) {
   return os << (b ? "true" : "false");
 }
 
-std::ostream& Scalar::print(std::ostream& os) const { return os << m_data; }
+std::ostream& Scalar::print(std::ostream& os) const { return os << data_; }
 
 std::ostream& Scalar::prettyPrint(std::ostream& os, size_t depth) const {
-  if (m_data.type() == boost::typeindex::type_id<Bool>())
-    return os << (boost::get<Bool>(m_data) ? "true" : "false");
-  auto q = (m_data.type() == boost::typeindex::type_id<String>() ? "\"" : "");
-  return os << q << m_data << q;
+  if (data_.type() == boost::typeindex::type_id<Bool>())
+    return os << (boost::get<Bool>(data_) ? "true" : "false");
+  auto q = (data_.type() == boost::typeindex::type_id<String>() ? "\"" : "");
+  return os << q << data_ << q;
 }
 
 ValueType Scalar::type() const {
-  if (m_data.type() == boost::typeindex::type_id<Number>()) {
+  if (data_.type() == boost::typeindex::type_id<Number>()) {
     return ValueType::number;
   }
-  if (m_data.type() == boost::typeindex::type_id<String>()) {
-    auto len = boost::get<String>(m_data).size();
+  if (data_.type() == boost::typeindex::type_id<String>()) {
+    auto len = boost::get<String>(data_).size();
     if (len > k_short_string_limit) {
       return ValueType::string;
     } else {
       return ValueType(gsl::narrow_cast<uint8_t>(0b10000000 + len));
     }
   }
-  if (m_data.type() == boost::typeindex::type_id<Bool>()) {
-    return (boost::get<Bool>(m_data) ? ValueType::boolean_true
-                                     : ValueType::boolean_false);
+  if (data_.type() == boost::typeindex::type_id<Bool>()) {
+    return (boost::get<Bool>(data_) ? ValueType::boolean_true
+                                    : ValueType::boolean_false);
   }
-  if (m_data.type() == boost::typeindex::type_id<Null>()) {
+  if (data_.type() == boost::typeindex::type_id<Null>()) {
     return ValueType::null;
   }
   throw ModelError("Invalid scalar type");
@@ -131,10 +131,10 @@ ValueType Scalar::type() const {
 std::vector<uint64_t> Scalar::extraWords() const {
   std::vector<uint64_t> ret;
 
-  if (m_data.type() == boost::typeindex::type_id<Number>()) {
-    ret.push_back(*((uint64_t*)&boost::get<Number>(m_data)));
-  } else if (m_data.type() == boost::typeindex::type_id<String>()) {
-    auto& str = boost::get<String>(m_data);
+  if (data_.type() == boost::typeindex::type_id<Number>()) {
+    ret.push_back(*((uint64_t*)&boost::get<Number>(data_)));
+  } else if (data_.type() == boost::typeindex::type_id<String>()) {
+    auto& str = boost::get<String>(data_);
     if (str.size() > k_short_string_limit) {
       ret.push_back(0);
     } else {
@@ -163,15 +163,15 @@ std::vector<uint64_t> Scalar::extraWords() const {
 bool Scalar::operator==(const Value& o) const {
   auto other = dynamic_cast<const Scalar*>(&o);
   if (other == nullptr) return false;
-  return m_data == other->m_data;
+  return data_ == other->data_;
 }
 
-void Array::append(PValue v) { m_childs.push_back(std::move(v)); }
+void Array::append(PValue v) { childs_.push_back(std::move(v)); }
 
 std::ostream& Array::print(std::ostream& os) const {
   os << "[";
-  auto beg = std::begin(m_childs);
-  auto end = std::end(m_childs);
+  auto beg = std::begin(childs_);
+  auto end = std::end(childs_);
   for (auto it = beg; it != end; ++it) {
     if (it != beg) os << ",";
     (*it)->print(os);
@@ -182,8 +182,8 @@ std::ostream& Array::print(std::ostream& os) const {
 std::ostream& Array::prettyPrint(std::ostream& os, size_t depth) const {
   auto indent = std::string(depth, ' ');
   os << "[";
-  auto beg = std::begin(m_childs);
-  auto end = std::end(m_childs);
+  auto beg = std::begin(childs_);
+  auto end = std::end(childs_);
   for (auto it = beg; it != end; ++it) {
     if (it != beg) os << ",";
     os << '\n' << indent << "  ";
@@ -201,7 +201,7 @@ std::vector<uint64_t> Array::extraWords() const {
 bool Array::operator==(const Value& o) const {
   auto other = dynamic_cast<const Array*>(&o);
   if (other == nullptr) return false;
-  return m_childs == other->m_childs;
+  return childs_ == other->childs_;
 }
 
 } // namespace model

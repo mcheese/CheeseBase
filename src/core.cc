@@ -15,8 +15,8 @@ Database::Database(const std::string& file) {
   DskDatabaseHdr hdr;
 
   if (boost::filesystem::exists(file)) {
-    m_store = std::make_unique<Storage>(file, OpenMode::open_existing);
-    auto page = m_store->loadPage(0);
+    store_ = std::make_unique<Storage>(file, OpenMode::open_existing);
+    auto page = store_->loadPage(0);
     hdr = gsl::as_span<const DskDatabaseHdr>(
         page->subspan(0, sizeof(DskDatabaseHdr)))[0];
 
@@ -30,12 +30,12 @@ Database::Database(const std::string& file) {
         kc_blk.type() != BlockType::t1)
       throw DatabaseError("Invalid database header");
 
-    m_alloc = std::make_unique<Allocator>(hdr, *m_store);
-    m_keycache = std::make_unique<KeyCache>(
-        Block{ k_page_size / 2, k_page_size / 2 }, *m_store);
+    alloc_ = std::make_unique<Allocator>(hdr, *store_);
+    keycache_ = std::make_unique<KeyCache>(
+        Block{ k_page_size / 2, k_page_size / 2 }, *store_);
 
   } else {
-    m_store = std::make_unique<Storage>(file, OpenMode::create_new);
+    store_ = std::make_unique<Storage>(file, OpenMode::create_new);
     memset(&hdr, 0, sizeof(hdr));
     hdr.magic = k_magic;
     hdr.end_of_file = k_page_size;
@@ -43,14 +43,14 @@ Database::Database(const std::string& file) {
     // manually create first block of KeyCache
     DskBlockHdr cache_hdr{ BlockType::t1, 0 };
     DskKeyCacheSize cache_term = 0;
-    m_store->storeWrite(Writes{
+    store_->storeWrite(Writes{
         Write{ 0, gsl::as_bytes<DskDatabaseHdr>({ hdr }) },
         Write{ k_page_size / 2, gsl::as_bytes<DskBlockHdr>({ cache_hdr }) },
         Write{ k_page_size / 2 + sizeof(DskBlockHdr),
                gsl::as_bytes<DskKeyCacheSize>({ cache_term }) } });
-    m_alloc = std::make_unique<Allocator>(hdr, *m_store);
-    m_keycache = std::make_unique<KeyCache>(
-        Block{ k_page_size / 2, k_page_size / 2 }, *m_store);
+    alloc_ = std::make_unique<Allocator>(hdr, *store_);
+    keycache_ = std::make_unique<KeyCache>(
+        Block{ k_page_size / 2, k_page_size / 2 }, *store_);
 
     auto ta = startTransaction();
     btree::BtreeWritable tree(ta);
@@ -64,38 +64,38 @@ Database::Database(const std::string& file) {
 
 Transaction Database::startTransaction() { return Transaction(*this); };
 
-ReadRef Database::loadPage(PageNr p) { return m_store->loadPage(p); }
+ReadRef Database::loadPage(PageNr p) { return store_->loadPage(p); }
 
 std::string Database::resolveKey(Key k) const {
-  return m_keycache->getString(k);
+  return keycache_->getString(k);
 }
 
 boost::optional<Key> Database::getKey(const std::string& k) const {
-  return m_keycache->getKey(k);
+  return keycache_->getKey(k);
 }
 
-ReadRef Transaction::load(PageNr p) { return m_storage.loadPage(p); };
+ReadRef Transaction::load(PageNr p) { return storage_.loadPage(p); };
 
-Block Transaction::alloc(size_t s) { return m_alloc.alloc(s); };
+Block Transaction::alloc(size_t s) { return alloc_.alloc(s); };
 
-void Transaction::free(Addr a) { return m_alloc.free(a); }
+void Transaction::free(Addr a) { return alloc_.free(a); }
 
-Key Transaction::key(const std::string& s) { return m_kcache.getKey(s); }
+Key Transaction::key(const std::string& s) { return kcache_.getKey(s); }
 
 Transaction::Transaction(Database& db)
     : db(db)
-    , m_storage(*db.m_store)
-    , m_alloc(db.m_alloc->startTransaction())
-    , m_kcache(db.m_keycache->startTransaction(m_alloc)) {}
+    , storage_(*db.store_)
+    , alloc_(db.alloc_->startTransaction())
+    , kcache_(db.keycache_->startTransaction(alloc_)) {}
 
 void Transaction::commit(Writes w) {
   // kcache commit does allocation, so be sure to commit it before allocator
-  auto w1 = m_kcache.commit();
-  auto w2 = m_alloc.commit();
+  auto w1 = kcache_.commit();
+  auto w2 = alloc_.commit();
   w.reserve(w.size() + w1.size() + w2.size());
   std::move(w1.begin(), w1.end(), std::back_inserter(w));
   std::move(w2.begin(), w2.end(), std::back_inserter(w));
-  m_storage.storeWrite(std::move(w));
+  storage_.storeWrite(std::move(w));
 }
 
 } // namespace cheesebase

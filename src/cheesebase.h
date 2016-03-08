@@ -22,5 +22,5 @@ public:
   bool remove(const std::string& location);
 
 private:
-  std::unique_ptr<cheesebase::Database> m_db;
+  std::unique_ptr<cheesebase::Database> db_;
 };

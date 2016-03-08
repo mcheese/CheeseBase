@@ -16,10 +16,10 @@
 
 #define DEF_EXCEPTION(NAME)                                                    \
   struct NAME : public std::exception {                                        \
-    NAME() : m_text(#NAME) {}                                                  \
-    NAME(std::string text) : m_text(std::move(text)) {}                        \
-    const char* what() const noexcept { return m_text.c_str(); }               \
-    std::string m_text;                                                        \
+    NAME() : text_(#NAME) {}                                                   \
+    NAME(std::string text) : text_(std::move(text)) {}                         \
+    const char* what() const noexcept { return text_.c_str(); }                \
+    std::string text_;                                                         \
   };
 
 namespace cheesebase {

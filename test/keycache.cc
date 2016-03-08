@@ -78,8 +78,8 @@ TEST_CASE("KeyCache database") {
   boost::filesystem::remove("test.db");
   Database db{ "test.db" };
 
-  auto ta = db.m_alloc->startTransaction();
-  auto tk = db.m_keycache->startTransaction(ta);
+  auto ta = db.alloc_->startTransaction();
+  auto tk = db.keycache_->startTransaction(ta);
 
   SECTION("different strings produce different hashes") {
     auto k1 = tk.getKey("test string 1");
@@ -96,16 +96,16 @@ TEST_CASE("KeyCache database") {
   }
 
   SECTION("KeyCache knows new keys after commit") {
-    auto fail = db.m_keycache->getKey(teststr);
+    auto fail = db.keycache_->getKey(teststr);
     REQUIRE_FALSE(fail);
     auto k1 = tk.getKey(teststr);
     auto writes = tk.commit();
     tk.end();
 
-    auto key = db.m_keycache->getKey(teststr);
+    auto key = db.keycache_->getKey(teststr);
     REQUIRE(k1 == key.value());
 
-    auto str = db.m_keycache->getString(k1);
+    auto str = db.keycache_->getString(k1);
     REQUIRE(str == teststr);
   }
 
@@ -113,9 +113,9 @@ TEST_CASE("KeyCache database") {
     auto k1 = tk.getKey(teststr);
     tk.end();
 
-    auto fail = db.m_keycache->getKey(teststr);
+    auto fail = db.keycache_->getKey(teststr);
     REQUIRE_FALSE(fail);
-    REQUIRE_THROWS_AS(db.m_keycache->getString(k1), KeyCacheError);
+    REQUIRE_THROWS_AS(db.keycache_->getString(k1), KeyCacheError);
   }
 
   SECTION("committed keys are known after db restart") {
@@ -123,15 +123,16 @@ TEST_CASE("KeyCache database") {
     auto writes = tk.commit();
     auto writes2 = ta.commit();
     std::move(writes2.begin(), writes2.end(), std::back_inserter(writes));
-    db.m_store->storeWrite(writes);
+    db.store_->storeWrite(writes);
 
     // destruct old db and open new
-    tk.end(); ta.end();
+    tk.end();
+    ta.end();
     db = Database();
     db = Database("test.db");
-    auto key = db.m_keycache->getKey(teststr);
+    auto key = db.keycache_->getKey(teststr);
     REQUIRE(key.value() == k1);
-    auto str = db.m_keycache->getString(k1);
+    auto str = db.keycache_->getString(k1);
     REQUIRE(str == teststr);
   }
 
@@ -142,12 +143,13 @@ TEST_CASE("KeyCache database") {
     // do not call storeWrites
 
     // destruct old db and open new
-    tk.end(); ta.end();
+    tk.end();
+    ta.end();
     db = Database();
     db = Database("test.db");
-    auto key = db.m_keycache->getKey(teststr);
+    auto key = db.keycache_->getKey(teststr);
     REQUIRE_FALSE(key);
-    REQUIRE_THROWS_AS(db.m_keycache->getString(k1), KeyCacheError);
+    REQUIRE_THROWS_AS(db.keycache_->getString(k1), KeyCacheError);
   }
 
   SECTION("many keys are inserted and tested") {
@@ -165,17 +167,18 @@ TEST_CASE("KeyCache database") {
     auto writes = tk.commit();
     auto writes2 = ta.commit();
     std::move(writes2.begin(), writes2.end(), std::back_inserter(writes));
-    db.m_store->storeWrite(writes);
+    db.store_->storeWrite(writes);
 
     // destruct old db and open new
-    tk.end(); ta.end();
+    tk.end();
+    ta.end();
     db = Database();
     db = Database("test.db");
 
     for (size_t i = 0; i < amount; ++i) {
-      auto key = db.m_keycache->getKey(vec[i]);
-      REQUIRE(key.value()  == keys[i]);
-      auto str = db.m_keycache->getString(keys[i]);
+      auto key = db.keycache_->getKey(vec[i]);
+      REQUIRE(key.value() == keys[i]);
+      auto str = db.keycache_->getString(keys[i]);
       REQUIRE(str == vec[i]);
     }
   }

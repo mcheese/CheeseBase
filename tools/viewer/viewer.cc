@@ -13,7 +13,8 @@ DskBlockHdr get_hdr(Addr addr, std::ifstream& fs) {
   fs.read((char*)&hdr, sizeof(hdr));
   return hdr;
 }
-bool check_free(std::set<Addr>& free, Addr first, BlockType type, int level, std::ifstream& fs) {
+bool check_free(std::set<Addr>& free, Addr first, BlockType type, int level,
+                std::ifstream& fs) {
 
   auto next = first;
   while (next != 0) {
@@ -50,16 +51,11 @@ int main(int argc, char* argv[]) {
   }
 
   std::set<Addr> free;
-  if (!check_free(free, db_hdr.free_alloc_pg, BlockType::pg, 1, fs))
-    return 1;
-  if (!check_free(free, db_hdr.free_alloc_t1, BlockType::t1, 2, fs))
-    return 1;
-  if (!check_free(free, db_hdr.free_alloc_t2, BlockType::t2, 4, fs))
-    return 1;
-  if (!check_free(free, db_hdr.free_alloc_t3, BlockType::t3, 8, fs))
-    return 1;
-  if (!check_free(free, db_hdr.free_alloc_t4, BlockType::t4, 16, fs))
-    return 1;
+  if (!check_free(free, db_hdr.free_alloc_pg, BlockType::pg, 1, fs)) return 1;
+  if (!check_free(free, db_hdr.free_alloc_t1, BlockType::t1, 2, fs)) return 1;
+  if (!check_free(free, db_hdr.free_alloc_t2, BlockType::t2, 4, fs)) return 1;
+  if (!check_free(free, db_hdr.free_alloc_t3, BlockType::t3, 8, fs)) return 1;
+  if (!check_free(free, db_hdr.free_alloc_t4, BlockType::t4, 16, fs)) return 1;
 
   size_t n = 1;
 

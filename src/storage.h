@@ -35,7 +35,7 @@ public:
   void storeWrite(std::vector<Write> transaction);
 
 private:
-  Cache m_cache;
+  Cache cache_;
 };
 
 } // namespace cheesebase
