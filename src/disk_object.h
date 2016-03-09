@@ -74,7 +74,7 @@ public:
   bool insert(const std::string& key, const model::Value& val, Overwrite);
   bool remove(Key key);
   bool remove(const std::string& key);
-  void destroy();
+  void destroy() override;
   Writes getWrites() const override;
 
 private:

@@ -192,9 +192,7 @@ TEST_CASE("B+Tree insert") {
             for (size_t i = 0; i < times / 2; ++i) {
               auto read = disk::BtreeReadOnly(db, root)
                               .getValue(c.first + "#" + std::to_string(i));
-              if (i < times) {
-                REQUIRE_FALSE(read);
-              } else {
+              if (i < times) { REQUIRE_FALSE(read); } else {
                 REQUIRE(read);
                 REQUIRE(*read == *c.second);
               }

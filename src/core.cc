@@ -78,6 +78,10 @@ ReadRef Transaction::load(PageNr p) { return storage_.loadPage(p); };
 
 Block Transaction::alloc(size_t s) { return alloc_.alloc(s); };
 
+Block Transaction::allocExtension(Addr block, size_t s) {
+  return alloc_.allocExtension(block, s);
+}
+
 void Transaction::free(Addr a) { return alloc_.free(a); }
 
 Key Transaction::key(const std::string& s) { return kcache_.getKey(s); }

@@ -48,7 +48,7 @@ public:
   const View* operator->() const { return &page_; };
 
 private:
-  const View page_;
+  View page_;
   Lock lock_;
 };
 

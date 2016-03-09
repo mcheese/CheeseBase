@@ -26,6 +26,7 @@ protected:
 class ValueW : public Value {
 public:
   virtual Writes getWrites() const = 0;
+  virtual void destroy() = 0;
 
 protected:
   ValueW(Transaction& ta, Addr addr) : ta_{ ta }, Value(addr) {}

@@ -53,9 +53,7 @@ std::shared_ptr<BlockLock> BlockLocker::getLock(Addr block) {
     auto emplace =
         locks_.emplace_hint(lookup, block, std::make_shared<BlockLock>());
     block_lock = emplace->second;
-  } else {
-    block_lock = lookup->second;
-  }
+  } else { block_lock = lookup->second; }
 
   Ensures(block_lock.use_count() >= 2);
 
@@ -99,9 +97,7 @@ void BlockLocker::readUnlock(Addr block) {
         block_lock->writer == BlockLock::Writer::None) {
       locks_.erase(block);
     }
-  } else {
-    cnd_.notify_all();
-  }
+  } else { cnd_.notify_all(); }
 }
 
 void BlockLocker::writeUnlock(Addr block) {
@@ -121,9 +117,7 @@ void BlockLocker::writeUnlock(Addr block) {
         block_lock->writer == BlockLock::Writer::None) {
       locks_.erase(block);
     }
-  } else {
-    cnd_.notify_all();
-  }
+  } else { cnd_.notify_all(); }
 }
 
 } // namespace cheesebase

@@ -125,6 +125,7 @@ private:
 
 class Scalar : public Value {
 public:
+  using value_type = boost::variant<String, Number, Bool, Null>;
   template <typename T>
   Scalar(T a)
       : data_{ a } {};
@@ -136,9 +137,10 @@ public:
   ValueType type() const override;
   std::vector<uint64_t> extraWords() const override;
   bool operator==(const Value& o) const override;
+  const value_type& data() const { return data_; }
 
 private:
-  boost::variant<String, Number, Bool, Null> data_;
+  value_type data_;
 };
 
 } // namespace model

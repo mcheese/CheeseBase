@@ -36,9 +36,7 @@ std::pair<Block, AllocWrites> AllocTransaction::allocBlock(size_t size) {
 
 AllocWrites AllocTransaction::freeBlock(Addr block) {
   DskBlockHdr hdr;
-  if (writes_.count(block) > 0) {
-    hdr.data_ = writes_.at(block);
-  } else {
+  if (writes_.count(block) > 0) { hdr.data_ = writes_.at(block); } else {
     hdr = gsl::as_span<DskBlockHdr>(alloc_->store_.loadPage(toPageNr(block))
                                         ->subspan(toPageOffset(block)))[0];
   }
@@ -105,9 +103,7 @@ Block AllocTransaction::allocExtension(Addr block, size_t size) {
   Expects(lock_.owns_lock());
 
   DskBlockHdr hdr;
-  if (writes_.count(block) > 0) {
-    hdr.data_ = writes_.at(block);
-  } else {
+  if (writes_.count(block) > 0) { hdr.data_ = writes_.at(block); } else {
     hdr = gsl::as_span<DskBlockHdr>(alloc_->store_.loadPage(toPageNr(block))
                                         ->subspan(toPageOffset(block)))[0];
   }

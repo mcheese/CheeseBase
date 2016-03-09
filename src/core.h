@@ -23,6 +23,7 @@ class Transaction {
 public:
   ReadRef load(PageNr p);
   Block alloc(size_t s);
+  Block allocExtension(Addr block, size_t s);
   void free(Addr a);
   Key key(const std::string& s);
 

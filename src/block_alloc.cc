@@ -54,9 +54,7 @@ std::pair<Block, AllocWrites> PageAllocator::allocBlock() {
 
     Addr next;
     auto lookup = next_cache_.find(page);
-    if (lookup != next_cache_.end()) {
-      next = lookup->second;
-    } else {
+    if (lookup != next_cache_.end()) { next = lookup->second; } else {
       auto hdr = gsl::as_span<const DskBlockHdr>(
           store_.loadPage(toPageNr(free_))->subspan(toPageOffset(free_)))[0];
       next = hdr.next();
@@ -95,9 +93,7 @@ std::pair<Block, AllocWrites> TierAllocator<ParentAlloc>::allocBlock() {
 
     Addr next;
     auto lookup = next_cache_.find(block);
-    if (lookup != next_cache_.end()) {
-      next = lookup->second;
-    } else {
+    if (lookup != next_cache_.end()) { next = lookup->second; } else {
       auto hdr = gsl::as_span<const DskBlockHdr>(
           store_.loadPage(toPageNr(free_))->subspan(toPageOffset(free_)))[0];
       next = hdr.next();

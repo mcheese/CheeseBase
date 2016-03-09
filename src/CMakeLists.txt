@@ -13,6 +13,7 @@ set(SRC
   model.h model.cc
   disk_value.h
   disk_object.h disk_object.cc
+  disk_string.h disk_string.cc
   parser.h
   keycache.h keycache.cc
   murmurhash3.h murmurhash3.cc

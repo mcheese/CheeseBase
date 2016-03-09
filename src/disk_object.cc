@@ -3,6 +3,7 @@
 #include "disk_object.h"
 #include "core.h"
 #include "model.h"
+#include "disk_string.h"
 
 namespace cheesebase {
 namespace disk {
@@ -327,9 +328,11 @@ size_t AbsLeafW::destroyValue(ConstIt it) {
   case model::ValueType::object:
     BtreeWritable(ta_, *(it + 1)).destroy();
     break;
-  case model::ValueType::list:
   case model::ValueType::string:
-    throw std::runtime_error("overwriting list or string NIY");
+    StringW(ta_, *(it + 1)).destroy();
+    break;
+  case model::ValueType::list:
+    throw std::runtime_error("overwriting list NIY");
     break;
   }
   return entry.extraWords() + 1;
@@ -358,8 +361,22 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
     // make space
     if (update) {
       auto old_entry = DskEntry(buf_->at(pos));
-
       auto extra = gsl::narrow_cast<int>(old_entry.extraWords());
+      auto old_type = old_entry.value.type;
+      switch (old_type) {
+      case model::ValueType::object:
+        BtreeWritable(ta_, buf_->at(pos + 1)).destroy();
+        linked_.erase(buf_->at(pos + 1));
+        break;
+      case model::ValueType::string:
+        StringW(ta_, buf_->at(pos + 1)).destroy();
+        linked_.erase(buf_->at(pos + 1));
+        break;
+      case model::ValueType::list:
+        throw std::runtime_error("Overwriting list NIY");
+        linked_.erase(buf_->at(pos + 1));
+        break;
+      }
       shiftBuffer(pos + extra, extra_words - extra);
     } else { shiftBuffer(pos, 1 + extra_words); }
 
@@ -379,9 +396,14 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
       auto emp = linked_.emplace(key, std::move(el));
       Expects(emp.second);
     } else if (t == model::ValueType::list) {
-      throw std::runtime_error("NIY");
+      throw std::runtime_error("list NIY");
     } else if (t == model::ValueType::string) {
-      throw std::runtime_error("NIY");
+      auto& str = dynamic_cast<const model::Scalar&>(val);
+      auto el =
+          std::make_unique<StringW>(ta_, boost::get<model::String>(str.data()));
+      buf_->at(pos + 1) = el->addr();
+      auto emp = linked_.emplace(key, std::move(el));
+      Expects(emp.second);
     } else {
       for (auto i = 0; i < extra_words; ++i) {
         buf_->at(pos + 1 + i) = extras[i];
@@ -1210,14 +1232,14 @@ LeafR::readValue(Span<const uint64_t>::const_iterator& it) {
           BtreeReadOnly(db_, *it++).getObject());
       break;
     case model::ValueType::list:
-      throw std::runtime_error("arrays NYI");
+      throw std::runtime_error("arrays NIY");
       break;
     case model::ValueType::number:
       ret.second = std::make_unique<model::Scalar>(
           *reinterpret_cast<const model::Number*>(&(*it++)));
       break;
     case model::ValueType::string:
-      throw std::runtime_error("long string NYI");
+      ret.second = StringR(db_, *it++).getValue();
       break;
     case model::ValueType::boolean_true:
       ret.second = std::make_unique<model::Scalar>(true);

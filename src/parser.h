@@ -108,9 +108,7 @@ private:
         }
       } else if (c < ' ') {
         throw ParserError("unexpected character in string");
-      } else {
-        str.push_back(c);
-      }
+      } else { str.push_back(c); }
     }
     expect('"');
     return str;
