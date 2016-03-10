@@ -1,9 +1,10 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
 
+#include "disk_btree.h"
 #include "disk_object.h"
+#include "disk_string.h"
 #include "core.h"
 #include "model.h"
-#include "disk_string.h"
 
 namespace cheesebase {
 namespace disk {
@@ -22,7 +23,7 @@ CB_PACKED(struct DskEntry {
   }
   DskEntry(Key k, model::ValueType t) : key{ k }, value{ '!', t } {}
 
-  size_t extraWords() const { return model::valueExtraWords(value.type); }
+  size_t extrauint64_ts() const { return model::valueExtraWords(value.type); }
   uint64_t word() { return *reinterpret_cast<uint64_t*>(this); }
 
   DskValueHdr value;
@@ -50,9 +51,9 @@ CB_PACKED(struct DskInternalEntry {
 });
 static_assert(sizeof(DskInternalEntry) == 8, "Invalid DskInternalEntry size");
 
-Key keyFromWord(uint64_t w) { return DskEntry(w).key.key(); }
+Key keyFromuint64_t(uint64_t w) { return DskEntry(w).key.key(); }
 
-size_t entrySize(uint64_t e) { return DskEntry(e).extraWords() + 1; }
+size_t entrySize(uint64_t e) { return DskEntry(e).extrauint64_ts() + 1; }
 
 CB_PACKED(struct DskLeafHdr {
   DskLeafHdr() = default;
@@ -102,6 +103,7 @@ static_assert(sizeof(DskInternalHdr) == 8, "Invalid DskInternalHdr size");
 
 } // anonymous namespace
 
+using namespace btree;
 ////////////////////////////////////////////////////////////////////////////////
 // free functions
 
@@ -139,10 +141,10 @@ std::unique_ptr<NodeR> openNodeR(Database& db, Addr addr) {
     return std::make_unique<InternalR>(db, addr, std::move(page));
 }
 
-size_t searchLeafPosition(Key key, Span<const Word> span) {
+size_t searchLeafPosition(Key key, Span<const uint64_t> span) {
   for (size_t i = 1; i < static_cast<size_t>(span.size());
        i += entrySize(span[i])) {
-    if (span[i] == 0 || keyFromWord(span[i]) >= key) return i;
+    if (span[i] == 0 || keyFromuint64_t(span[i]) >= key) return i;
   }
   return static_cast<size_t>(span.size());
 }
@@ -185,7 +187,7 @@ Addr Node::addr() const { return addr_; }
 ////////////////////////////////////////////////////////////////////////////////
 // BtreeWriteable
 
-BtreeWritable::BtreeWritable(Transaction& ta, Addr root) : ValueW(ta, root) {
+BtreeWritable::BtreeWritable(Transaction& ta, Addr root) {
   auto page = ta.load(toPageNr(root));
   if (isNodeLeaf(page, root))
     root_ = std::make_unique<RootLeafW>(ta, root, *this);
@@ -193,27 +195,19 @@ BtreeWritable::BtreeWritable(Transaction& ta, Addr root) : ValueW(ta, root) {
     root_ = std::make_unique<RootInternalW>(ta, root, *this);
 }
 
-BtreeWritable::BtreeWritable(Transaction& ta) : ValueW(ta, 0) {
+BtreeWritable::BtreeWritable(Transaction& ta) {
   root_ = std::make_unique<RootLeafW>(AllocateNew(), ta, 0, *this);
-  addr_ = root_->addr();
+}
+
+Addr BtreeWritable::addr() const {
+  return root_->addr();
 }
 
 bool BtreeWritable::insert(Key key, const model::Value& val, Overwrite o) {
   return root_->insert(key, val, o, nullptr);
 }
 
-bool BtreeWritable::insert(const std::string& key, const model::Value& val,
-                           Overwrite ow) {
-  return insert(ta_.key(key), val, ow);
-}
-
 bool BtreeWritable::remove(Key key) { return root_->remove(key, nullptr); }
-
-bool BtreeWritable::remove(const std::string& key) {
-  auto k = ta_.db.getKey(key);
-  if (!k) return false;
-  return remove(*k);
-}
 
 void BtreeWritable::destroy() { root_->destroy(); }
 
@@ -335,7 +329,7 @@ size_t AbsLeafW::destroyValue(ConstIt it) {
     throw std::runtime_error("overwriting list NIY");
     break;
   }
-  return entry.extraWords() + 1;
+  return entry.extrauint64_ts() + 1;
 }
 
 bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
@@ -349,7 +343,7 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
   // find position to insert
   auto pos = searchLeafPosition(key, *buf_);
   Ensures(pos < k_node_max_words + extra_words);
-  bool update = pos < top_ && keyFromWord(buf_->at(pos)) == key;
+  bool update = pos < top_ && keyFromuint64_t(buf_->at(pos)) == key;
   if ((ow == Overwrite::Update && !update) ||
       (ow == Overwrite::Insert && update)) {
     return false;
@@ -361,11 +355,11 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
     // make space
     if (update) {
       auto old_entry = DskEntry(buf_->at(pos));
-      auto extra = gsl::narrow_cast<int>(old_entry.extraWords());
+      auto extra = gsl::narrow_cast<int>(old_entry.extrauint64_ts());
       auto old_type = old_entry.value.type;
       switch (old_type) {
       case model::ValueType::object:
-        BtreeWritable(ta_, buf_->at(pos + 1)).destroy();
+        ObjectW(ta_, buf_->at(pos + 1)).destroy();
         linked_.erase(buf_->at(pos + 1));
         break;
       case model::ValueType::string:
@@ -388,7 +382,7 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
     // recurse into inserting remotely stored elements if needed
     if (t == model::ValueType::object) {
       auto& obj = dynamic_cast<const model::Object&>(val);
-      auto el = std::make_unique<BtreeWritable>(ta_);
+      auto el = std::make_unique<ObjectW>(ta_);
       for (auto& c : obj) {
         el->insert(ta_.key(c.first), *c.second, Overwrite::Insert);
       }
@@ -431,7 +425,7 @@ bool AbsLeafW::remove(Key key, AbsInternalW* parent) {
   auto pos = searchLeafPosition(key, *buf_);
 
   // return false if not found
-  if (pos >= top_ || keyFromWord(buf_->at(pos)) != key) return false;
+  if (pos >= top_ || keyFromuint64_t(buf_->at(pos)) != key) return false;
 
   auto size = destroyValue(buf_->begin() + pos);
   shiftBuffer(pos + size, -gsl::narrow_cast<int>(size));
@@ -462,7 +456,7 @@ void LeafW::split(Key key, const model::Value& val, size_t pos) {
     } else { mid = new_mid; }
     auto entry = DskEntry(buf_->at(new_mid));
     if (entry.key.key() >= key) { new_here = true; }
-    new_mid += entry.extraWords();
+    new_mid += entry.extrauint64_ts();
   }
 
   auto split_key = DskEntry(buf_->at(mid)).key.key();
@@ -561,7 +555,7 @@ void LeafW::merge() {
           sibl.linked_.erase(lookup);
         }
 
-        it += entry.extraWords();
+        it += entry.extrauint64_ts();
       }
       sibl.shiftBuffer(till, 1 - gsl::narrow_cast<int>(till));
 
@@ -592,7 +586,7 @@ void LeafW::merge() {
           sibl.linked_.erase(lookup);
         }
 
-        it += entry.extraWords();
+        it += entry.extrauint64_ts();
       }
 
       shiftBuffer(1, gsl::narrow_cast<int>(to_pull.size()));
@@ -640,7 +634,7 @@ void RootLeafW::split(Key key, const model::Value& val, size_t pos) {
   size_t new_val_size = 1 + valueExtraWords(val.type());
   for (size_t i = 1; i < top_; ++i) {
     auto entry = DskEntry(buf[i]);
-    auto extra = entry.extraWords();
+    auto extra = entry.extrauint64_ts();
 
     // check if new key needs to be put now
     if (new_val_size > 0 && i >= pos /*&& entry.key.key() > key*/) {
@@ -715,7 +709,7 @@ AbsInternalW::AbsInternalW(AllocateNew, Transaction& ta)
 
 AbsInternalW::AbsInternalW(
     Transaction& ta, Addr addr, size_t top,
-    std::unique_ptr<std::array<Word, k_node_max_words>> buf)
+    std::unique_ptr<std::array<uint64_t, k_node_max_words>> buf)
     : NodeW(ta, addr) {
   buf_ = std::move(buf);
   top_ = top;
@@ -1156,7 +1150,8 @@ model::Object BtreeReadOnly::getObject() {
   return obj;
 }
 
-std::unique_ptr<model::Value> BtreeReadOnly::getValue(const std::string& key) {
+std::unique_ptr<model::Value>
+BtreeReadOnly::getChildValue(const std::string& key) {
   auto k = db_.getKey(key);
   if (!k) return nullptr;
   return openNodeR(db_, root_)->getValue(*k);

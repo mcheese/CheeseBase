@@ -3,301 +3,62 @@
 #pragma once
 
 #include "disk_value.h"
-#include "common.h"
-#include "structs.h"
+#include "disk_btree.h"
 #include "model.h"
-#include "storage.h"
-#include <boost/container/flat_map.hpp>
-#include <memory>
 
 namespace cheesebase {
-
-class Transaction;
-class Database;
-
 namespace disk {
 
-////////////////////////////////////////////////////////////////////////////////
-// constants
-
-using Word = uint64_t;
-
-constexpr size_t k_entry_min_words = 1; // 6B header + 1B magic + 1B type
-constexpr size_t k_entry_max_words = 4; // min + 24 byte inline string
-constexpr size_t k_node_max_bytes = 256 - sizeof(DskBlockHdr);
-constexpr BlockType k_block_type = BlockType::t4;
-static_assert(toBlockSize(k_block_type) ==
-                  k_node_max_bytes + sizeof(DskBlockHdr),
-              "Node should occupy a whole block");
-constexpr size_t k_node_max_words = k_node_max_bytes / sizeof(uint64_t);
-constexpr size_t k_leaf_min_words =
-    k_node_max_words / 2 - (k_entry_max_words - k_entry_min_words);
-constexpr size_t k_internal_min_words = k_node_max_words / 2 - 1;
-
-////////////////////////////////////////////////////////////////////////////////
-// classes
-
-// Dummy type used as argument
-enum class AllocateNew {};
-enum class DontRead {};
-
-// argument for insert queries
-enum class Overwrite { Insert, Update, Upsert };
-
-class Node {
+class ObjectW : public ValueW {
 public:
-  Addr addr() const;
+  ObjectW(Transaction& ta) : ValueW(ta, 0), tree_{ ta } {
+    addr_ = tree_.addr();
+  }
 
-protected:
-  Node(Addr addr);
-  Addr addr_;
-};
+  ObjectW(Transaction& ta, Addr addr) : ValueW(ta, addr), tree_{ ta, addr } {}
 
-////////////////////////////////////////////////////////////////////////////////
-// Writable
+  Writes getWrites() const override { return tree_.getWrites(); }
 
-class NodeW;
-class AbsInternalW;
-class AbsLeafW;
+  void destroy() override { return tree_.destroy(); }
 
-class BtreeWritable : public ValueW {
-  friend class RootLeafW;
-  friend class RootInternalW;
+  bool insert(Key key, const model::Value& val, Overwrite ow) {
+    return tree_.insert(key, val, ow);
+  }
 
-public:
-  // create new tree
-  BtreeWritable(Transaction& ta);
-  // open existing tree
-  BtreeWritable(Transaction& ta, Addr root);
+  bool insert(const std::string& key, const model::Value& val, Overwrite ow) {
+    return tree_.insert(ta_.key(key), val, ow);
+  }
 
-  bool insert(Key key, const model::Value& val, Overwrite);
-  bool insert(const std::string& key, const model::Value& val, Overwrite);
-  bool remove(Key key);
-  bool remove(const std::string& key);
-  void destroy() override;
-  Writes getWrites() const override;
+  bool remove(Key key) { return tree_.remove(key); }
+
+  bool remove(const std::string& key) { 
+    auto k = ta_.db.getKey(key);
+    if (!k) return false;
+    return tree_.remove(*k);
+  }
 
 private:
-  std::unique_ptr<NodeW> root_;
+  btree::BtreeWritable tree_;
 };
 
-class NodeW : public Node {
-  friend class RootInternalW;
-
+class ObjectR : public ValueR {
 public:
-  NodeW(Transaction& ta, Addr addr);
+  ObjectR(Database& db, Addr addr) : ValueR(db, addr), tree_{ db, addr } {}
 
-  virtual Writes getWrites() const = 0;
+  model::PValue getValue() override {
+    return std::make_unique<model::Object>(tree_.getObject());
+  };
 
-  // inserts value, returns true on success
-  virtual bool insert(Key key, const model::Value&, Overwrite,
-                      AbsInternalW* parent) = 0;
+  model::PValue getChildValue(const std::string& key) {
+    return tree_.getChildValue(key);
+  }
 
-  // deallocate node and all its children
-  virtual void destroy() = 0;
-
-  // delete value, returns true if found and removed
-  virtual bool remove(Key key, AbsInternalW* parent) = 0;
-
-  // filled size in words
-  size_t size() const;
-
-protected:
-  void shiftBuffer(size_t pos, int amount);
-  void initFromDisk();
-  virtual size_t findSize() = 0;
-
-  // get a view over internal data, independent of buf_ being initialized
-  // second part of pair is needed to keep ReadRef locked if buf_ is not used
-  std::pair<Span<const Word>, std::unique_ptr<ReadRef>> getDataView() const;
-
-  Transaction& ta_;
-  std::unique_ptr<std::array<Word, k_node_max_words>> buf_;
-  size_t top_{ 0 }; // size in Words
-};
-
-class AbsLeafW : public NodeW {
-public:
-  AbsLeafW(AllocateNew, Transaction& ta, Addr next);
-  AbsLeafW(Transaction& ta, Addr addr);
-
-  // serialize and insert value, may trigger split
-  bool insert(Key key, const model::Value&, Overwrite,
-              AbsInternalW* parent) override;
-
-  // append raw words without further checking
-  void insert(Span<const Word> raw);
-
-  bool remove(Key key, AbsInternalW* parent) override;
-
-  Writes getWrites() const override;
-
-  void destroy() override;
-
-  std::map<Key, std::unique_ptr<ValueW>> linked_;
-
-protected:
-  size_t findSize() override;
-  virtual void split(Key, const model::Value&, size_t insert_pos) = 0;
-  virtual void merge() = 0;
-  // Destroy value at pos (if remote). Return size of the entry.
-  template <typename ConstIt>
-  size_t destroyValue(ConstIt it);
-  AbsInternalW* parent_;
-};
-
-class LeafW : public AbsLeafW {
-  friend class RootLeafW;
-
-public:
-  using AbsLeafW::AbsLeafW;
+  model::Object getObject() { return tree_.getObject(); }
 
 private:
-  void split(Key, const model::Value&, size_t insert_pos) override;
-  void merge() override;
-};
-
-// tree just a single leaf
-class RootLeafW : public AbsLeafW {
-  friend class RootInternalW;
-
-public:
-  RootLeafW(AllocateNew, Transaction& ta, Addr next, BtreeWritable& tree);
-  RootLeafW(Transaction& ta, Addr addr, BtreeWritable& tree);
-
-private:
-  RootLeafW(LeafW&&, Addr addr, BtreeWritable& parent);
-  BtreeWritable& tree_;
-  void split(Key, const model::Value&, size_t insert_pos) override;
-  void merge() override;
-};
-
-class AbsInternalW : public NodeW {
-  friend class RootInternalW;
-
-public:
-  AbsInternalW(Transaction& ta, Addr addr);
-  AbsInternalW(AllocateNew, Transaction& ta);
-
-  // used when extending single root leaf to internal root
-  AbsInternalW(Transaction& ta, Addr addr, size_t top,
-               std::unique_ptr<std::array<Word, k_node_max_words>> buf);
-
-  bool insert(Key key, const model::Value&, Overwrite,
-              AbsInternalW* parent) override;
-  void insert(Key key, std::unique_ptr<NodeW> c);
-  bool remove(Key key, AbsInternalW* parent) override;
-  Writes getWrites() const override;
-  NodeW& searchChild(Key k);
-  void destroy() override;
-  void appendChild(std::pair<Addr, std::unique_ptr<NodeW>>&&);
-  NodeW& getSilbling(Key key, Addr addr);
-
-  // Remove Key+Addr after *a*. *k* search should find *a*. Returns removed Key.
-  Key removeMerged(Key k, Addr a);
-
-  // Replace Key after *a* with *k*. *k* search should find *a*. Returns
-  // replaced Key.
-  Key updateMerged(Key k, Addr a);
-
-protected:
-  size_t findSize() override;
-  AbsInternalW* parent_;
-  boost::container::flat_map<Addr, std::unique_ptr<NodeW>> childs_;
-
-private:
-  virtual void split(Key, std::unique_ptr<NodeW>) = 0;
-  virtual void merge() = 0;
-};
-
-class InternalW : public AbsInternalW {
-public:
-  using AbsInternalW::AbsInternalW;
-
-  // append words without further checking, increases top position
-  void append(Span<const Word> raw);
-
-private:
-  void split(Key, std::unique_ptr<NodeW>) override;
-  void merge() override;
-};
-
-class RootInternalW : public AbsInternalW {
-  friend class RootLeafW;
-
-public:
-  RootInternalW(Transaction& ta, Addr addr, BtreeWritable& parent);
-
-private:
-  // used to construct while splitting RootLeafW
-  RootInternalW(Transaction& ta, Addr addr, size_t top,
-                std::unique_ptr<std::array<uint64_t, k_node_max_words>> buf,
-                BtreeWritable& parent);
-  void split(Key, std::unique_ptr<NodeW>) override;
-  void merge() override;
-  BtreeWritable& parent_;
-};
-
-////////////////////////////////////////////////////////////////////////////////
-// ReadOnly
-
-class BtreeReadOnly {
-public:
-  BtreeReadOnly(Database& db, Addr root);
-
-  model::Object getObject();
-  std::unique_ptr<model::Value> getValue(const std::string& key);
-
-private:
-  Database& db_;
-  Addr root_;
-};
-
-class NodeR : public Node {
-public:
-  virtual void getAll(model::Object& obj) = 0;
-  virtual std::unique_ptr<model::Value> getValue(Key key) = 0;
-
-protected:
-  NodeR(Database& db, Addr addr, ReadRef page);
-
-  Span<const Word> getData() const;
-
-  Database& db_;
-  ReadRef page_;
-};
-
-class LeafR : public NodeR {
-public:
-  LeafR(Database& db, Addr addr, ReadRef page);
-  LeafR(Database& db, Addr addr);
-
-  // fill obj with values in this and all following leafs
-  void getAll(model::Object& obj) override;
-
-  // fill obj with values in this leaf, returns next leaf address
-  Addr getAllInLeaf(model::Object& obj);
-
-  std::unique_ptr<model::Value> getValue(Key key) override;
-
-private:
-  std::pair<model::Key, model::PValue>
-  readValue(Span<const Word>::const_iterator& it);
-};
-
-class InternalR : public NodeR {
-public:
-  InternalR(Database& db, Addr addr, ReadRef page);
-
-  void getAll(model::Object& obj) override;
-
-  std::unique_ptr<model::Value> getValue(Key key) override;
-
-private:
-  std::unique_ptr<NodeR> searchChild(Key k);
-
-  Span<const Word> data_;
+  btree::BtreeReadOnly tree_;
 };
 
 } // namespace disk
 } // namespace cheesebase
+

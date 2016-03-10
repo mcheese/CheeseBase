@@ -53,13 +53,13 @@ Database::Database(const std::string& file) {
         Block{ k_page_size / 2, k_page_size / 2 }, *store_);
 
     auto ta = startTransaction();
-    disk::BtreeWritable tree(ta);
+    disk::ObjectW tree(ta);
     Expects(tree.addr() == k_root);
     ta.commit(tree.getWrites());
   }
 
   auto ta = startTransaction();
-  disk::BtreeWritable(ta, k_root);
+  disk::ObjectW(ta, k_root);
 }
 
 Transaction Database::startTransaction() { return Transaction(*this); };
