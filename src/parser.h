@@ -1,5 +1,7 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
 
+#pragma once
+
 #include "common.h"
 #include "model.h"
 #include <boost/locale/encoding_utf.hpp>
@@ -228,8 +230,12 @@ private:
 };
 
 template <class InputIt>
-model::PValue parseJson(InputIt begin, InputIt end) {
+inline model::PValue parseJson(InputIt begin, InputIt end) {
   return JsonParser<InputIt>::parse(begin, end);
+}
+
+inline model::PValue parseJson(const std::string& str) {
+  return parseJson(str.begin(), str.end());
 }
 
 } // namespace cheesebase

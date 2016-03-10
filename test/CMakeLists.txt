@@ -5,6 +5,7 @@ add_executable(test-cheesebase
   alloc.cc
   disk_object.cc
   disk_string.cc
+  disk_array.cc
   cache.cc
   cheesebase.cc
   keycache.cc

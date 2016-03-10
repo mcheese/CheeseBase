@@ -60,9 +60,8 @@ std::string CheeseBase::get(const std::string& location) {
   try {
     std::ostringstream ss;
     auto object = disk::ObjectR(*db_, k_root);
-    auto v = (location.length() == 0
-                  ? object.getValue()
-                  : object.getChildValue(location));
+    auto v = (location.length() == 0 ? object.getValue()
+                                     : object.getChildValue(location));
     if (v) v->prettyPrint(dynamic_cast<std::ostream&>(ss), 0);
     return ss.str();
   } catch (std::exception& e) {

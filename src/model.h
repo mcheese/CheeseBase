@@ -53,14 +53,10 @@ struct Null {
 };
 
 using Key = String;
+using Index = uint64_t;
 
-////////////////////////////////////////////////////////////////////////////////
-// collections
 template <typename K, typename V>
 using Map = std::map<K, V>;
-
-template <typename T>
-using List = std::vector<T>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // values
@@ -107,20 +103,29 @@ private:
 class Array : public Value {
 public:
   Array() = default;
-  Array(List<PValue> childs) : childs_(std::move(childs)) {}
+  Array(Map<Index, PValue> childs) : childs_(std::move(childs)) {}
+  Array(std::vector<PValue>&& childs);
   ~Array() override = default;
   MOVE_ONLY(Array);
 
   void append(PValue v);
+  void append(std::pair<Index, PValue> p);
+  void append(Index, PValue);
+
+  boost::optional<const Value&> getChild(Index) const;
 
   std::ostream& print(std::ostream& os) const override;
   std::ostream& prettyPrint(std::ostream& os, size_t depth = 0) const override;
   ValueType type() const override;
   std::vector<uint64_t> extraWords() const override;
+
+  Map<Index, PValue>::const_iterator begin() const;
+  Map<Index, PValue>::const_iterator end() const;
+
   bool operator==(const Value& o) const override;
 
 private:
-  List<PValue> childs_;
+  Map<Index, PValue> childs_;
 };
 
 class Scalar : public Value {

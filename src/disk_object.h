@@ -31,7 +31,7 @@ public:
 
   bool remove(Key key) { return tree_.remove(key); }
 
-  bool remove(const std::string& key) { 
+  bool remove(const std::string& key) {
     auto k = ta_.db.getKey(key);
     if (!k) return false;
     return tree_.remove(*k);
@@ -50,7 +50,9 @@ public:
   };
 
   model::PValue getChildValue(const std::string& key) {
-    return tree_.getChildValue(key);
+    auto k = db_.getKey(key);
+    if (!k) return nullptr;
+    return tree_.getChildValue(*k);
   }
 
   model::Object getObject() { return tree_.getObject(); }
@@ -61,4 +63,3 @@ private:
 
 } // namespace disk
 } // namespace cheesebase
-

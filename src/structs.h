@@ -65,18 +65,16 @@ static_assert(sizeof(DskDatabaseHdr) <= k_page_size / 2,
               "Database header should be smaller than half of the page size");
 
 using Key = uint64_t;
+const Key kMaxKey = static_cast<Key>(-1);
 
 CB_PACKED(struct DskKey {
   DskKey() = default;
   DskKey(uint32_t h, uint16_t i) : hash(h), index(i) {}
   DskKey(Key k) {
-    k >>= 16;
     index = gsl::narrow_cast<uint16_t>(k);
     hash = gsl::narrow_cast<uint32_t>(k >> 16);
   }
-  Key key() const {
-    return ((static_cast<uint64_t>(hash) << 16) + index) << 16;
-  }
+  Key key() const { return ((static_cast<uint64_t>(hash) << 16) + index); }
   uint32_t hash;
   uint16_t index;
 

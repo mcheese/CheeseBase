@@ -55,6 +55,7 @@ public:
   Addr addr() const;
   bool insert(Key key, const model::Value& val, Overwrite);
   bool remove(Key key);
+  Key append(const model::Value& val);
   void destroy();
   Writes getWrites() const;
 
@@ -67,7 +68,8 @@ public:
   BtreeReadOnly(Database& db, Addr root);
 
   model::Object getObject();
-  model::PValue getChildValue(const std::string& key);
+  model::Array getArray();
+  model::PValue getChildValue(Key key);
 
 private:
   Database& db_;
@@ -105,6 +107,9 @@ public:
   virtual bool insert(Key key, const model::Value&, Overwrite,
                       AbsInternalW* parent) = 0;
 
+  // inserts value at maximum existing key + 1 and returns this key
+  virtual Key append(const model::Value& val, AbsInternalW* parent) = 0;
+
   // deallocate node and all its children
   virtual void destroy() = 0;
 
@@ -136,6 +141,9 @@ public:
   // serialize and insert value, may trigger split
   bool insert(Key key, const model::Value&, Overwrite,
               AbsInternalW* parent) override;
+
+  // find maximum key and insert value as key+1
+  Key append(const model::Value&, AbsInternalW* parent) override;
 
   // append raw words without further checking
   void insert(Span<const uint64_t> raw);
@@ -197,6 +205,10 @@ public:
 
   bool insert(Key key, const model::Value&, Overwrite,
               AbsInternalW* parent) override;
+
+  // find maximum key and insert value as key+1
+  Key append(const model::Value&, AbsInternalW* parent) override;
+
   void insert(Key key, std::unique_ptr<NodeW> c);
   bool remove(Key key, AbsInternalW* parent) override;
   Writes getWrites() const override;
@@ -256,6 +268,7 @@ private:
 class NodeR : public Node {
 public:
   virtual void getAll(model::Object& obj) = 0;
+  virtual void getAll(model::Array& obj) = 0;
   virtual std::unique_ptr<model::Value> getValue(Key key) = 0;
 
 protected:
@@ -274,14 +287,16 @@ public:
 
   // fill obj with values in this and all following leafs
   void getAll(model::Object& obj) override;
+  void getAll(model::Array& obj) override;
 
   // fill obj with values in this leaf, returns next leaf address
   Addr getAllInLeaf(model::Object& obj);
+  Addr getAllInLeaf(model::Array& obj);
 
-  std::unique_ptr<model::Value> getValue(Key key) override;
+  model::PValue getValue(Key key) override;
 
 private:
-  std::pair<model::Key, model::PValue>
+  std::pair<Key, model::PValue>
   readValue(Span<const uint64_t>::const_iterator& it);
 };
 
@@ -290,6 +305,7 @@ public:
   InternalR(Database& db, Addr addr, ReadRef page);
 
   void getAll(model::Object& obj) override;
+  void getAll(model::Array& obj) override;
 
   std::unique_ptr<model::Value> getValue(Key key) override;
 

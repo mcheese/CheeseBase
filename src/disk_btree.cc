@@ -2,6 +2,7 @@
 
 #include "disk_btree.h"
 #include "disk_object.h"
+#include "disk_array.h"
 #include "disk_string.h"
 #include "core.h"
 #include "model.h"
@@ -23,7 +24,7 @@ CB_PACKED(struct DskEntry {
   }
   DskEntry(Key k, model::ValueType t) : key{ k }, value{ '!', t } {}
 
-  size_t extrauint64_ts() const { return model::valueExtraWords(value.type); }
+  size_t extraWords() const { return model::valueExtraWords(value.type); }
   uint64_t word() { return *reinterpret_cast<uint64_t*>(this); }
 
   DskValueHdr value;
@@ -53,7 +54,7 @@ static_assert(sizeof(DskInternalEntry) == 8, "Invalid DskInternalEntry size");
 
 Key keyFromuint64_t(uint64_t w) { return DskEntry(w).key.key(); }
 
-size_t entrySize(uint64_t e) { return DskEntry(e).extrauint64_ts() + 1; }
+size_t entrySize(uint64_t e) { return DskEntry(e).extraWords() + 1; }
 
 CB_PACKED(struct DskLeafHdr {
   DskLeafHdr() = default;
@@ -199,12 +200,14 @@ BtreeWritable::BtreeWritable(Transaction& ta) {
   root_ = std::make_unique<RootLeafW>(AllocateNew(), ta, 0, *this);
 }
 
-Addr BtreeWritable::addr() const {
-  return root_->addr();
-}
+Addr BtreeWritable::addr() const { return root_->addr(); }
 
 bool BtreeWritable::insert(Key key, const model::Value& val, Overwrite o) {
   return root_->insert(key, val, o, nullptr);
+}
+
+Key BtreeWritable::append(const model::Value& val) {
+  return root_->append(val, nullptr);
 }
 
 bool BtreeWritable::remove(Key key) { return root_->remove(key, nullptr); }
@@ -320,16 +323,32 @@ size_t AbsLeafW::destroyValue(ConstIt it) {
 
   switch (entry.value.type) {
   case model::ValueType::object:
-    BtreeWritable(ta_, *(it + 1)).destroy();
+    ObjectW(ta_, *(it + 1)).destroy();
     break;
   case model::ValueType::string:
     StringW(ta_, *(it + 1)).destroy();
     break;
   case model::ValueType::list:
-    throw std::runtime_error("overwriting list NIY");
+    ArrayW(ta_, *(it + 1)).destroy();
     break;
   }
-  return entry.extrauint64_ts() + 1;
+  return entry.extraWords() + 1;
+}
+
+Key AbsLeafW::append(const model::Value& val, AbsInternalW* parent) {
+  parent_ = parent;
+  if (!buf_) initFromDisk();
+
+  Key key = 0;
+  for (size_t i = 1; i < buf_->size() && buf_->at(i) != 0; i++) {
+    auto e = DskEntry(buf_->at(i));
+    key = e.key.key() + 1;
+    i += e.extraWords();
+  }
+
+  auto ins = insert(key, val, Overwrite::Insert, parent);
+  Ensures(ins == true);
+  return key;
 }
 
 bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
@@ -355,7 +374,7 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
     // make space
     if (update) {
       auto old_entry = DskEntry(buf_->at(pos));
-      auto extra = gsl::narrow_cast<int>(old_entry.extrauint64_ts());
+      auto extra = gsl::narrow_cast<int>(old_entry.extraWords());
       auto old_type = old_entry.value.type;
       switch (old_type) {
       case model::ValueType::object:
@@ -367,7 +386,7 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
         linked_.erase(buf_->at(pos + 1));
         break;
       case model::ValueType::list:
-        throw std::runtime_error("Overwriting list NIY");
+        ArrayW(ta_, buf_->at(pos + 1)).destroy();
         linked_.erase(buf_->at(pos + 1));
         break;
       }
@@ -389,8 +408,18 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
       buf_->at(pos + 1) = el->addr();
       auto emp = linked_.emplace(key, std::move(el));
       Expects(emp.second);
+
     } else if (t == model::ValueType::list) {
-      throw std::runtime_error("list NIY");
+      auto& arr = dynamic_cast<const model::Array&>(val);
+      auto el = std::make_unique<ArrayW>(ta_);
+      for (auto& c : arr) {
+        Expects(DskKey(c.first).key() == c.first);
+        el->insert(c.first, *c.second, Overwrite::Insert);
+      }
+      buf_->at(pos + 1) = el->addr();
+      auto emp = linked_.emplace(key, std::move(el));
+      Expects(emp.second);
+
     } else if (t == model::ValueType::string) {
       auto& str = dynamic_cast<const model::Scalar&>(val);
       auto el =
@@ -398,6 +427,7 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
       buf_->at(pos + 1) = el->addr();
       auto emp = linked_.emplace(key, std::move(el));
       Expects(emp.second);
+
     } else {
       for (auto i = 0; i < extra_words; ++i) {
         buf_->at(pos + 1 + i) = extras[i];
@@ -456,7 +486,7 @@ void LeafW::split(Key key, const model::Value& val, size_t pos) {
     } else { mid = new_mid; }
     auto entry = DskEntry(buf_->at(new_mid));
     if (entry.key.key() >= key) { new_here = true; }
-    new_mid += entry.extrauint64_ts();
+    new_mid += entry.extraWords();
   }
 
   auto split_key = DskEntry(buf_->at(mid)).key.key();
@@ -555,7 +585,7 @@ void LeafW::merge() {
           sibl.linked_.erase(lookup);
         }
 
-        it += entry.extrauint64_ts();
+        it += entry.extraWords();
       }
       sibl.shiftBuffer(till, 1 - gsl::narrow_cast<int>(till));
 
@@ -586,7 +616,7 @@ void LeafW::merge() {
           sibl.linked_.erase(lookup);
         }
 
-        it += entry.extrauint64_ts();
+        it += entry.extraWords();
       }
 
       shiftBuffer(1, gsl::narrow_cast<int>(to_pull.size()));
@@ -634,7 +664,7 @@ void RootLeafW::split(Key key, const model::Value& val, size_t pos) {
   size_t new_val_size = 1 + valueExtraWords(val.type());
   for (size_t i = 1; i < top_; ++i) {
     auto entry = DskEntry(buf[i]);
-    auto extra = entry.extrauint64_ts();
+    auto extra = entry.extraWords();
 
     // check if new key needs to be put now
     if (new_val_size > 0 && i >= pos /*&& entry.key.key() > key*/) {
@@ -738,6 +768,11 @@ void AbsInternalW::insert(Key key, std::unique_ptr<NodeW> c) {
 
     split(key, std::move(c));
   }
+}
+
+Key AbsInternalW::append(const model::Value& val, AbsInternalW* parent) {
+  parent_ = parent;
+  return searchChild(kMaxKey).append(val, this);
 }
 
 bool AbsInternalW::remove(Key key, AbsInternalW* parent) {
@@ -1150,11 +1185,14 @@ model::Object BtreeReadOnly::getObject() {
   return obj;
 }
 
-std::unique_ptr<model::Value>
-BtreeReadOnly::getChildValue(const std::string& key) {
-  auto k = db_.getKey(key);
-  if (!k) return nullptr;
-  return openNodeR(db_, root_)->getValue(*k);
+model::Array BtreeReadOnly::getArray() {
+  model::Array obj;
+  openNodeR(db_, root_)->getAll(obj);
+  return obj;
+}
+
+std::unique_ptr<model::Value> BtreeReadOnly::getChildValue(Key key) {
+  return openNodeR(db_, root_)->getValue(key);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1188,6 +1226,25 @@ Addr LeafR::getAllInLeaf(model::Object& obj) {
   auto end = data.end();
   auto next = DskLeafHdr().fromDsk(*it++).next();
 
+  while (it != end && *it != 0) {
+    auto pair = readValue(it);
+    obj.append(db_.resolveKey(pair.first), std::move(pair.second));
+  }
+
+  return next;
+}
+
+void LeafR::getAll(model::Array& obj) {
+  auto next = getAllInLeaf(obj);
+  while (next != 0) { next = LeafR(db_, next).getAllInLeaf(obj); }
+}
+
+Addr LeafR::getAllInLeaf(model::Array& obj) {
+  auto data = getData();
+  auto it = data.begin();
+  auto end = data.end();
+  auto next = DskLeafHdr().fromDsk(*it++).next();
+
   while (it != end && *it != 0) { obj.append(readValue(it)); }
 
   return next;
@@ -1202,11 +1259,11 @@ std::unique_ptr<model::Value> LeafR::getValue(Key key) {
   return readValue(it).second;
 }
 
-std::pair<model::Key, model::PValue>
+std::pair<Key, model::PValue>
 LeafR::readValue(Span<const uint64_t>::const_iterator& it) {
   auto entry = DskEntry(*it++);
-  std::pair<model::Key, model::PValue> ret;
-  ret.first = db_.resolveKey(entry.key.key());
+  std::pair<Key, model::PValue> ret;
+  ret.first = entry.key.key();
 
   if (entry.value.type & 0b10000000) {
     // short string
@@ -1223,11 +1280,10 @@ LeafR::readValue(Span<const uint64_t>::const_iterator& it) {
   } else {
     switch (entry.value.type) {
     case model::ValueType::object:
-      ret.second = std::make_unique<model::Object>(
-          BtreeReadOnly(db_, *it++).getObject());
+      ret.second = ObjectR(db_, *it++).getValue();
       break;
     case model::ValueType::list:
-      throw std::runtime_error("arrays NIY");
+      ret.second = ArrayR(db_, *it++).getValue();
       break;
     case model::ValueType::number:
       ret.second = std::make_unique<model::Scalar>(
@@ -1265,6 +1321,11 @@ InternalR::InternalR(Database& db, Addr addr, ReadRef page)
 void InternalR::getAll(model::Object& obj) {
   // just follow the left most path and let leafs go through
   searchChild(0)->getAll(obj);
+}
+
+void InternalR::getAll(model::Array& arr) {
+  // just follow the left most path and let leafs go through
+  searchChild(0)->getAll(arr);
 }
 
 std::unique_ptr<model::Value> InternalR::getValue(Key key) {

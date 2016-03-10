@@ -156,15 +156,45 @@ bool Scalar::operator==(const Value& o) const {
   return data_ == other->data_;
 }
 
-void Array::append(PValue v) { childs_.push_back(std::move(v)); }
+Array::Array(std::vector<PValue>&& childs) {
+  Index i = 0;
+  for (auto& c : childs) { childs_.emplace(i++, std::move(c)); }
+}
+
+void Array::append(PValue v) {
+  if (childs_.empty()) { childs_.emplace(0, std::move(v)); } else {
+    auto max_key = childs_.rbegin()->first;
+    childs_.emplace(max_key + 1, std::move(v));
+  }
+}
+
+void Array::append(std::pair<Index, PValue> p) { childs_.insert(std::move(p)); }
+
+void Array::append(Index idx, PValue val) {
+  childs_.emplace(idx, std::move(val));
+}
+
+boost::optional<const Value&> Array::getChild(Index k) const {
+  auto lookup = childs_.find(k);
+  if (lookup != childs_.end()) return *lookup->second;
+  return boost::none;
+}
+
+Map<Index, PValue>::const_iterator Array::begin() const {
+  return childs_.cbegin();
+}
+
+Map<Index, PValue>::const_iterator Array::end() const { return childs_.cend(); }
 
 std::ostream& Array::print(std::ostream& os) const {
   os << "[";
   auto beg = std::begin(childs_);
   auto end = std::end(childs_);
+  Index i = 0;
   for (auto it = beg; it != end; ++it) {
     if (it != beg) os << ",";
-    (*it)->print(os);
+    while (i++ < it->first) os << "null,";
+    it->second->print(os);
   }
   return os << ']';
 }
@@ -174,10 +204,15 @@ std::ostream& Array::prettyPrint(std::ostream& os, size_t depth) const {
   os << "[";
   auto beg = std::begin(childs_);
   auto end = std::end(childs_);
+  Index i = 0;
   for (auto it = beg; it != end; ++it) {
     if (it != beg) os << ",";
     os << '\n' << indent << "  ";
-    (*it)->prettyPrint(os, depth + 2);
+    while (i++ < it->first) {
+      os << "null,";
+      os << '\n' << indent << "  ";
+    }
+    it->second->prettyPrint(os, depth + 2);
   }
   return os << '\n' << indent << ']';
 }
@@ -191,7 +226,28 @@ std::vector<uint64_t> Array::extraWords() const {
 bool Array::operator==(const Value& o) const {
   auto other = dynamic_cast<const Array*>(&o);
   if (other == nullptr) return false;
-  return childs_ == other->childs_;
+
+  auto l = childs_.begin();
+  auto r = other->childs_.begin();
+
+  while (l != childs_.end() && r != other->childs_.end()) {
+    if (l->first == r->first) {
+      if (*l->second != *r->second) { return false; }
+      l++;
+      r++;
+    } else if (*l->second == Scalar(Null())) {
+      l++;
+    } else if (*r->second == Scalar(Null())) { r++; } else {
+      return false;
+    }
+  }
+  while (l != childs_.end()) {
+    if (*(l++)->second != Scalar(Null())) return false;
+  }
+  while (r != other->childs_.end()) {
+    if (*(r++)->second != Scalar(Null())) return false;
+  }
+  return true;
 }
 
 } // namespace model
