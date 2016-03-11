@@ -1,7 +1,7 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
 
-// Class representation of the object model used in the database. Closely
-// resembles JSON.
+// Class representation of the object model used in the database.
+// Basically JSON.
 //
 //   Object = [(Key, Value)]
 //   Key = String
@@ -25,24 +25,15 @@ DEF_EXCEPTION(ModelError);
 
 namespace model {
 
-////////////////////////////////////////////////////////////////////////////////
-// on disk type info
-constexpr size_t k_short_string_limit = 24;
-
-enum ValueType : uint8_t {
-  object = 'O',
-  list = 'A',
-  number = 'N',
-  string = 'S',
-  boolean_true = 'T',
-  boolean_false = 'F',
-  null = '0'
+enum class Type {
+  Object,
+  Array,
+  Number,
+  String,
+  Bool,
+  Null
 };
 
-size_t valueExtraWords(uint8_t t);
-
-////////////////////////////////////////////////////////////////////////////////
-// scalar
 using String = std::string;
 using Number = double;
 static_assert(sizeof(Number) == 8, "\'double\' should be 64 bit");
@@ -65,10 +56,11 @@ public:
   virtual ~Value() = default;
   virtual std::ostream& print(std::ostream& os) const = 0;
   virtual std::ostream& prettyPrint(std::ostream& os, size_t depth) const = 0;
-  virtual ValueType type() const = 0;
-  virtual std::vector<uint64_t> extraWords() const = 0;
+  virtual Type type() const = 0;
   virtual bool operator==(const Value& o) const = 0;
   bool operator!=(const Value& o) const { return !(*this == o); }
+  virtual const Value& operator[](Key) const;
+  virtual const Value& operator[](Index) const;
 };
 
 using PValue = std::unique_ptr<Value>;
@@ -85,11 +77,11 @@ public:
   void append(Key, PValue);
 
   boost::optional<const Value&> getChild(Key) const;
+  const Value& operator[](Key) const override;
 
   std::ostream& print(std::ostream& os) const override;
   std::ostream& prettyPrint(std::ostream& os, size_t depth = 0) const override;
-  ValueType type() const override;
-  std::vector<uint64_t> extraWords() const override;
+  Type type() const override;
 
   Map<Key, PValue>::const_iterator begin() const;
   Map<Key, PValue>::const_iterator end() const;
@@ -113,11 +105,11 @@ public:
   void append(Index, PValue);
 
   boost::optional<const Value&> getChild(Index) const;
+  const Value& operator[](Index) const override;
 
   std::ostream& print(std::ostream& os) const override;
   std::ostream& prettyPrint(std::ostream& os, size_t depth = 0) const override;
-  ValueType type() const override;
-  std::vector<uint64_t> extraWords() const override;
+  Type type() const override;
 
   Map<Index, PValue>::const_iterator begin() const;
   Map<Index, PValue>::const_iterator end() const;
@@ -139,10 +131,13 @@ public:
 
   std::ostream& print(std::ostream& os) const override;
   std::ostream& prettyPrint(std::ostream& os, size_t depth) const override;
-  ValueType type() const override;
-  std::vector<uint64_t> extraWords() const override;
+  Type type() const override;
   bool operator==(const Value& o) const override;
   const value_type& data() const { return data_; }
+
+  Bool getBool() const;
+  const String& getString() const;
+  Number getNumber() const;
 
 private:
   value_type data_;

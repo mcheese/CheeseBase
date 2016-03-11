@@ -6,6 +6,7 @@
 #include "disk_string.h"
 #include "core.h"
 #include "model.h"
+#include "disk_model.h"
 
 namespace cheesebase {
 namespace disk {
@@ -22,9 +23,9 @@ CB_PACKED(struct DskEntry {
     if (value.magic_byte != '!')
       throw ConsistencyError("No magic byte in value");
   }
-  DskEntry(Key k, model::ValueType t) : key{ k }, value{ '!', t } {}
+  DskEntry(Key k, ValueType t) : key{ k }, value{ '!', t } {}
 
-  size_t extraWords() const { return model::valueExtraWords(value.type); }
+  size_t extraWords() const { return nrExtraWords(value.type); }
   uint64_t word() { return *reinterpret_cast<uint64_t*>(this); }
 
   DskValueHdr value;
@@ -322,13 +323,13 @@ size_t AbsLeafW::destroyValue(ConstIt it) {
   auto entry = DskEntry(*it);
 
   switch (entry.value.type) {
-  case model::ValueType::object:
+  case ValueType::object:
     ObjectW(ta_, *(it + 1)).destroy();
     break;
-  case model::ValueType::string:
+  case ValueType::string:
     StringW(ta_, *(it + 1)).destroy();
     break;
-  case model::ValueType::list:
+  case ValueType::array:
     ArrayW(ta_, *(it + 1)).destroy();
     break;
   }
@@ -356,8 +357,7 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
   parent_ = parent;
   if (!buf_) initFromDisk();
 
-  auto extras = val.extraWords();
-  int extra_words = gsl::narrow_cast<int>(extras.size());
+  int extra_words = gsl::narrow_cast<int>(nrExtraWords(val));
 
   // find position to insert
   auto pos = searchLeafPosition(key, *buf_);
@@ -378,15 +378,15 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
       auto old_extra = gsl::narrow_cast<int>(old_entry.extraWords());
       auto old_type = old_entry.value.type;
       switch (old_type) {
-      case model::ValueType::object:
+      case ValueType::object:
         ObjectW(ta_, buf_->at(pos + 1)).destroy();
         linked_.erase(buf_->at(pos + 1));
         break;
-      case model::ValueType::string:
+      case ValueType::string:
         StringW(ta_, buf_->at(pos + 1)).destroy();
         linked_.erase(buf_->at(pos + 1));
         break;
-      case model::ValueType::list:
+      case ValueType::array:
         ArrayW(ta_, buf_->at(pos + 1)).destroy();
         linked_.erase(buf_->at(pos + 1));
         break;
@@ -395,12 +395,12 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
     } else { shiftBuffer(pos, 1 + extra_words); }
 
     // put the first word
-    auto t = val.type();
+    auto t = valueType(val);
     buf_->at(pos) = DskEntry{ key, t }.word();
 
     // put extra words
     // recurse into inserting remotely stored elements if needed
-    if (t == model::ValueType::object) {
+    if (t == ValueType::object) {
       auto& obj = dynamic_cast<const model::Object&>(val);
       auto el = std::make_unique<ObjectW>(ta_);
       for (auto& c : obj) {
@@ -410,7 +410,7 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
       auto emp = linked_.emplace(key, std::move(el));
       Expects(emp.second);
 
-    } else if (t == model::ValueType::list) {
+    } else if (t == ValueType::array) {
       auto& arr = dynamic_cast<const model::Array&>(val);
       auto el = std::make_unique<ArrayW>(ta_);
       for (auto& c : arr) {
@@ -421,7 +421,7 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
       auto emp = linked_.emplace(key, std::move(el));
       Expects(emp.second);
 
-    } else if (t == model::ValueType::string) {
+    } else if (t == ValueType::string) {
       auto& str = dynamic_cast<const model::Scalar&>(val);
       auto el =
           std::make_unique<StringW>(ta_, boost::get<model::String>(str.data()));
@@ -430,6 +430,7 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
       Expects(emp.second);
 
     } else {
+      auto extras = extraWords(dynamic_cast<const model::Scalar&>(val));
       for (auto i = 0; i < extra_words; ++i) {
         buf_->at(pos + 1 + i) = extras[i];
       }
@@ -477,7 +478,7 @@ void LeafW::split(Key key, const model::Value& val, size_t pos) {
   auto right_leaf = std::make_unique<LeafW>(
       AllocateNew(), ta_, DskLeafHdr().fromDsk(buf_->at(0)).next());
 
-  auto new_val_len = model::valueExtraWords(val.type()) + 1;
+  auto new_val_len = nrExtraWords(valueType(val)) + 1;
   bool new_here = false;
   size_t mid = 1;
   for (auto new_mid = mid; new_mid < top_; ++new_mid) {
@@ -662,7 +663,7 @@ void RootLeafW::split(Key key, const model::Value& val, size_t pos) {
   left_leaf->linked_ = std::move(linked_);
 
   Key mid{ 0 };
-  size_t new_val_size = 1 + valueExtraWords(val.type());
+  size_t new_val_size = 1 + nrExtraWords(val);
   for (size_t i = 1; i < top_; ++i) {
     auto entry = DskEntry(buf[i]);
     auto extra = entry.extraWords();
@@ -1280,26 +1281,26 @@ LeafR::readValue(Span<const uint64_t>::const_iterator& it) {
     ret.second = std::make_unique<model::Scalar>(std::move(str));
   } else {
     switch (entry.value.type) {
-    case model::ValueType::object:
+    case ValueType::object:
       ret.second = ObjectR(db_, *it++).getValue();
       break;
-    case model::ValueType::list:
+    case ValueType::array:
       ret.second = ArrayR(db_, *it++).getValue();
       break;
-    case model::ValueType::number:
+    case ValueType::number:
       ret.second = std::make_unique<model::Scalar>(
           *reinterpret_cast<const model::Number*>(&(*it++)));
       break;
-    case model::ValueType::string:
+    case ValueType::string:
       ret.second = StringR(db_, *it++).getValue();
       break;
-    case model::ValueType::boolean_true:
+    case ValueType::boolean_true:
       ret.second = std::make_unique<model::Scalar>(true);
       break;
-    case model::ValueType::boolean_false:
+    case ValueType::boolean_false:
       ret.second = std::make_unique<model::Scalar>(false);
       break;
-    case model::ValueType::null:
+    case ValueType::null:
       ret.second = std::make_unique<model::Scalar>(model::Null());
       break;
     default:

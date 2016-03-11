@@ -7,25 +7,8 @@
 namespace cheesebase {
 namespace model {
 
-size_t valueExtraWords(uint8_t t) {
-  if (t & 0b10000000) {
-    size_t l = (t & 0b00111111);
-    return (l == 0 ? 0 : (l - 1) / 8 + 1);
-  }
-  switch (t) {
-  case model::ValueType::object:
-  case model::ValueType::list:
-  case model::ValueType::number:
-  case model::ValueType::string:
-    return 1;
-  case model::ValueType::boolean_true:
-  case model::ValueType::boolean_false:
-  case model::ValueType::null:
-    return 0;
-  default:
-    throw ConsistencyError("Unknown value type");
-  }
-}
+const Value& Value::operator[](Key) const { throw ModelError(); }
+const Value& Value::operator[](Index) const { throw ModelError(); }
 
 void Object::append(Map<Key, PValue> a) {
   if (childs_.empty()) { childs_ = std::move(a); } else {
@@ -43,6 +26,12 @@ boost::optional<const Value&> Object::getChild(Key k) const {
   auto lookup = childs_.find(k);
   if (lookup != childs_.end()) return *lookup->second;
   return boost::none;
+}
+
+const Value& Object::operator[](Key k) const {
+  auto c = getChild(k);
+  if (!c) throw ModelError("Key not found");
+  return *c;
 }
 
 std::ostream& Object::print(std::ostream& os) const {
@@ -69,11 +58,7 @@ std::ostream& Object::prettyPrint(std::ostream& os, size_t depth) const {
   return os << '\n' << indent << '}';
 }
 
-ValueType Object::type() const { return ValueType::object; }
-
-std::vector<uint64_t> Object::extraWords() const {
-  return std::vector<uint64_t>({ 0 });
-}
+Type Object::type() const { return Type::Object; }
 
 Map<Key, PValue>::const_iterator Object::begin() const {
   return childs_.cbegin();
@@ -148,55 +133,25 @@ std::ostream& Scalar::prettyPrint(std::ostream& os, size_t depth) const {
   return os << data_;
 }
 
-ValueType Scalar::type() const {
+Type Scalar::type() const {
   if (data_.type() == boost::typeindex::type_id<Number>()) {
-    return ValueType::number;
+    return Type::Number;
   }
   if (data_.type() == boost::typeindex::type_id<String>()) {
-    auto len = boost::get<String>(data_).size();
-    if (len > k_short_string_limit) { return ValueType::string; } else {
-      return ValueType(gsl::narrow_cast<uint8_t>(0b10000000 + len));
-    }
+    return Type::String;
   }
   if (data_.type() == boost::typeindex::type_id<Bool>()) {
-    return (boost::get<Bool>(data_) ? ValueType::boolean_true
-                                    : ValueType::boolean_false);
+    return Type::Bool;
   }
   if (data_.type() == boost::typeindex::type_id<Null>()) {
-    return ValueType::null;
+    return Type::Null;
   }
   throw ModelError("Invalid scalar type");
 }
 
-std::vector<uint64_t> Scalar::extraWords() const {
-  std::vector<uint64_t> ret;
-
-  if (data_.type() == boost::typeindex::type_id<Number>()) {
-    ret.push_back(*((uint64_t*)&boost::get<Number>(data_)));
-  } else if (data_.type() == boost::typeindex::type_id<String>()) {
-    auto& str = boost::get<String>(data_);
-    if (str.size() > k_short_string_limit) {
-      ret.push_back(0);
-    } else {
-      uint64_t word = 0;
-      size_t i = 0;
-      for (uint64_t c : str) {
-        word += c << 56;
-        if (++i == 8) {
-          ret.push_back(word);
-          word = 0;
-          i = 0;
-        } else { word >>= 8; }
-      }
-      if (i > 0) {
-        word >>= 8 * (7 - i);
-        ret.push_back(word);
-      }
-    }
-  }
-
-  return ret;
-}
+Bool Scalar::getBool() const { return boost::get<Bool>(data_); }
+Number Scalar::getNumber() const { return boost::get<Number>(data_); }
+const String& Scalar::getString() const { return boost::get<String>(data_); }
 
 bool Scalar::operator==(const Value& o) const {
   auto other = dynamic_cast<const Scalar*>(&o);
@@ -226,6 +181,12 @@ boost::optional<const Value&> Array::getChild(Index k) const {
   auto lookup = childs_.find(k);
   if (lookup != childs_.end()) return *lookup->second;
   return boost::none;
+}
+
+const Value& Array::operator[](Index i) const {
+  auto c = getChild(i);
+  if (!c) throw ModelError("Index not found");
+  return *c;
 }
 
 Map<Index, PValue>::const_iterator Array::begin() const {
@@ -265,11 +226,7 @@ std::ostream& Array::prettyPrint(std::ostream& os, size_t depth) const {
   return os << '\n' << indent << ']';
 }
 
-ValueType Array::type() const { return ValueType::list; }
-
-std::vector<uint64_t> Array::extraWords() const {
-  return std::vector<uint64_t>({ 0 });
-}
+Type Array::type() const { return Type::Array; }
 
 bool Array::operator==(const Value& o) const {
   auto other = dynamic_cast<const Array*>(&o);
