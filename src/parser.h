@@ -49,7 +49,7 @@ private:
     model::String str;
 
     for (; it != end && *it != '\"'; ++it) {
-      auto c = *it;
+      unsigned char c = *it;
 
       if (c == '\\') {
         if (++it == end)

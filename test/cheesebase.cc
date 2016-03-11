@@ -10,7 +10,8 @@
 using namespace cheesebase;
 
 TEST_CASE("db insert") {
-  const std::string input = R"(
+  {
+    const std::string input = R"(
 {
     "glossary": {
         "title": "example glossary",
@@ -32,7 +33,7 @@ TEST_CASE("db insert") {
         }
     },
 "web-app": {
-  "servlet": [   
+  "servlet": [
     {
       "servlet-name": "cofaxCDS",
       "servlet-class": "org.cofax.cds.CDSServlet",
@@ -88,7 +89,7 @@ TEST_CASE("db insert") {
     {
       "servlet-name": "cofaxAdmin",
       "servlet-class": "org.cofax.cds.AdminServlet"},
- 
+
     {
       "servlet-name": "fileServlet",
       "servlet-class": "org.cofax.cds.FileServlet"},
@@ -115,26 +116,27 @@ TEST_CASE("db insert") {
     "cofaxAdmin": "/admin/*",
     "fileServlet": "/static/*",
     "cofaxTools": "/tools/*"},
- 
+
   "taglib": {
     "taglib-uri": "cofax.tld",
     "taglib-location": "/WEB-INF/tlds/cofax.tld"}}
 }
 )";
 
-  auto doc = parseJson(input);
-  boost::filesystem::remove("test.db");
-  {
-    CheeseBase cb{ "test.db" };
-    cb.insert("test", input);
-    //doc->prettyPrint(std::cout, 0);
-    auto read = parseJson(cb.get("test"));
-    //read->prettyPrint(std::cout, 0);
-    REQUIRE(*read == *doc);
-  }
-  // reopen
-  {
-    CheeseBase cb{ "test.db" };
-    REQUIRE(*parseJson(cb.get("test")) == *doc);
+    auto doc = parseJson(input);
+    boost::filesystem::remove("test.db");
+    {
+      CheeseBase cb{ "test.db" };
+      cb.insert("test", input);
+      //doc->prettyPrint(std::cout, 0);
+      auto read = parseJson(cb.get("test"));
+      //read->prettyPrint(std::cout, 0);
+      REQUIRE(*read == *doc);
+    }
+    // reopen
+    {
+      CheeseBase cb{ "test.db" };
+      REQUIRE(*parseJson(cb.get("test")) == *doc);
+    }
   }
 }
