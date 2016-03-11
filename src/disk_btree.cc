@@ -361,7 +361,7 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
 
   // find position to insert
   auto pos = searchLeafPosition(key, *buf_);
-  Ensures(pos < k_node_max_words + extra_words);
+  Ensures(pos <= top_);
   bool update = pos < top_ && keyFromWord(buf_->at(pos)) == key;
   if ((ow == Overwrite::Update && !update) ||
       (ow == Overwrite::Insert && update)) {
@@ -369,12 +369,13 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
   }
 
   // enough space to insert?
-  if (top_ + extra_words < k_node_max_words) {
+  if (top_ + extra_words - (update ? DskEntry(buf_->at(pos)).extraWords() : 0) <
+      k_node_max_words) {
 
     // make space
     if (update) {
       auto old_entry = DskEntry(buf_->at(pos));
-      auto extra = gsl::narrow_cast<int>(old_entry.extraWords());
+      auto old_extra = gsl::narrow_cast<int>(old_entry.extraWords());
       auto old_type = old_entry.value.type;
       switch (old_type) {
       case model::ValueType::object:
@@ -390,7 +391,7 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
         linked_.erase(buf_->at(pos + 1));
         break;
       }
-      shiftBuffer(pos + extra, extra_words - extra);
+      shiftBuffer(pos + old_extra, extra_words - old_extra);
     } else { shiftBuffer(pos, 1 + extra_words); }
 
     // put the first word

@@ -6,7 +6,8 @@ namespace model {
 
 size_t valueExtraWords(uint8_t t) {
   if (t & 0b10000000) {
-    return static_cast<size_t>((static_cast<int>(t & 0b00111111) - 1) / 8 + 1);
+    size_t l = (t & 0b00111111);
+    return (l == 0 ? 0 : (l - 1) / 8 + 1);
   }
   switch (t) {
   case model::ValueType::object:
@@ -129,7 +130,9 @@ std::vector<uint64_t> Scalar::extraWords() const {
     ret.push_back(*((uint64_t*)&boost::get<Number>(data_)));
   } else if (data_.type() == boost::typeindex::type_id<String>()) {
     auto& str = boost::get<String>(data_);
-    if (str.size() > k_short_string_limit) { ret.push_back(0); } else {
+    if (str.size() > k_short_string_limit) {
+      ret.push_back(0);
+    } else {
       uint64_t word = 0;
       size_t i = 0;
       for (uint64_t c : str) {

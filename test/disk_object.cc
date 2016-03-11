@@ -27,7 +27,7 @@ const std::string input = R"(
             "you": null, "and this is crazy": "but here is my #" },
       "9": 9,
       "A": 10,
-      "B": "blaaaaaaaaaaa",
+      "B": "",
       "C": 12,
       "D": 13,
       "E": 14,
