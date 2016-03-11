@@ -52,7 +52,7 @@ CB_PACKED(struct DskInternalEntry {
 });
 static_assert(sizeof(DskInternalEntry) == 8, "Invalid DskInternalEntry size");
 
-Key keyFromuint64_t(uint64_t w) { return DskEntry(w).key.key(); }
+Key keyFromWord(uint64_t w) { return DskEntry(w).key.key(); }
 
 size_t entrySize(uint64_t e) { return DskEntry(e).extraWords() + 1; }
 
@@ -145,7 +145,7 @@ std::unique_ptr<NodeR> openNodeR(Database& db, Addr addr) {
 size_t searchLeafPosition(Key key, Span<const uint64_t> span) {
   for (size_t i = 1; i < static_cast<size_t>(span.size());
        i += entrySize(span[i])) {
-    if (span[i] == 0 || keyFromuint64_t(span[i]) >= key) return i;
+    if (span[i] == 0 || keyFromWord(span[i]) >= key) return i;
   }
   return static_cast<size_t>(span.size());
 }
@@ -362,7 +362,7 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
   // find position to insert
   auto pos = searchLeafPosition(key, *buf_);
   Ensures(pos < k_node_max_words + extra_words);
-  bool update = pos < top_ && keyFromuint64_t(buf_->at(pos)) == key;
+  bool update = pos < top_ && keyFromWord(buf_->at(pos)) == key;
   if ((ow == Overwrite::Update && !update) ||
       (ow == Overwrite::Insert && update)) {
     return false;
@@ -455,7 +455,7 @@ bool AbsLeafW::remove(Key key, AbsInternalW* parent) {
   auto pos = searchLeafPosition(key, *buf_);
 
   // return false if not found
-  if (pos >= top_ || keyFromuint64_t(buf_->at(pos)) != key) return false;
+  if (pos >= top_ || keyFromWord(buf_->at(pos)) != key) return false;
 
   auto size = destroyValue(buf_->begin() + pos);
   shiftBuffer(pos + size, -gsl::narrow_cast<int>(size));
