@@ -21,18 +21,9 @@
 
 namespace cheesebase {
 
-DEF_EXCEPTION(ModelError);
-
 namespace model {
 
-enum class Type {
-  Object,
-  Array,
-  Number,
-  String,
-  Bool,
-  Null
-};
+enum class Type { Object, Array, Number, String, Bool, Null };
 
 using String = std::string;
 using Number = double;
@@ -55,7 +46,10 @@ class Value {
 public:
   virtual ~Value() = default;
   virtual std::ostream& print(std::ostream& os) const = 0;
-  virtual std::ostream& prettyPrint(std::ostream& os, size_t depth) const = 0;
+  virtual std::ostream& prettyPrint(std::ostream& os,
+                                    size_t depth = 0) const = 0;
+  std::ostream& operator<<(std::ostream& os) { return print(os); };
+  std::string toString() const;
   virtual Type type() const = 0;
   virtual bool operator==(const Value& o) const = 0;
   bool operator!=(const Value& o) const { return !(*this == o); }
@@ -127,10 +121,12 @@ public:
   Scalar(T a)
       : data_{ a } {};
 
+  Scalar(const char* s) : data_{ std::string(s) } {}
+
   ~Scalar() override = default;
 
   std::ostream& print(std::ostream& os) const override;
-  std::ostream& prettyPrint(std::ostream& os, size_t depth) const override;
+  std::ostream& prettyPrint(std::ostream& os, size_t depth = 0) const override;
   Type type() const override;
   bool operator==(const Value& o) const override;
   const value_type& data() const { return data_; }

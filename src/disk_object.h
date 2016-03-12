@@ -4,6 +4,7 @@
 
 #include "disk_value.h"
 #include "disk_btree.h"
+#include "exceptions.h"
 #include "model.h"
 
 namespace cheesebase {
@@ -53,6 +54,19 @@ public:
     auto k = db_.getKey(key);
     if (!k) return nullptr;
     return tree_.getChildValue(*k);
+  }
+
+  std::unique_ptr<disk::ValueW> getChildCollectionW(Transaction& ta,
+                                                    const std::string& key) {
+    auto k = db_.getKey(key);
+    if (!k) throw UnknownKeyError();
+    return tree_.getChildCollectionW(ta, *k);
+  }
+
+  std::unique_ptr<disk::ValueR> getChildCollectionR(const std::string& key) {
+    auto k = db_.getKey(key);
+    if (!k) throw UnknownKeyError();
+    return tree_.getChildCollectionR(*k);
   }
 
   model::Object getObject() { return tree_.getObject(); }

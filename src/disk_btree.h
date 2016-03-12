@@ -70,6 +70,9 @@ public:
   model::Object getObject();
   model::Array getArray();
   model::PValue getChildValue(Key key);
+  std::unique_ptr<ValueW> getChildCollectionW(Transaction&, Key key);
+  std::unique_ptr<ValueR> getChildCollectionR(Key key);
+  std::unique_ptr<ValueW> getChild(Key key);
 
 private:
   Database& db_;
@@ -269,7 +272,9 @@ class NodeR : public Node {
 public:
   virtual void getAll(model::Object& obj) = 0;
   virtual void getAll(model::Array& obj) = 0;
-  virtual std::unique_ptr<model::Value> getValue(Key key) = 0;
+  virtual std::unique_ptr<model::Value> getChildValue(Key) = 0;
+  virtual std::unique_ptr<ValueW> getChildCollectionW(Transaction&, Key) = 0;
+  virtual std::unique_ptr<ValueR> getChildCollectionR(Key) = 0;
 
 protected:
   NodeR(Database& db, Addr addr, ReadRef page);
@@ -293,7 +298,9 @@ public:
   Addr getAllInLeaf(model::Object& obj);
   Addr getAllInLeaf(model::Array& obj);
 
-  model::PValue getValue(Key key) override;
+  std::unique_ptr<model::Value> getChildValue(Key) override;
+  std::unique_ptr<ValueW> getChildCollectionW(Transaction&, Key) override;
+  std::unique_ptr<ValueR> getChildCollectionR(Key) override;
 
 private:
   std::pair<Key, model::PValue>
@@ -307,10 +314,12 @@ public:
   void getAll(model::Object& obj) override;
   void getAll(model::Array& obj) override;
 
-  std::unique_ptr<model::Value> getValue(Key key) override;
+  std::unique_ptr<model::Value> getChildValue(Key) override;
+  std::unique_ptr<ValueW> getChildCollectionW(Transaction&, Key) override;
+  std::unique_ptr<ValueR> getChildCollectionR(Key) override;
 
 private:
-  std::unique_ptr<NodeR> searchChild(Key k);
+  std::unique_ptr<NodeR> searchChildNode(Key k);
 
   Span<const uint64_t> data_;
 };

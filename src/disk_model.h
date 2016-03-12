@@ -22,23 +22,23 @@ enum ValueType : uint8_t {
 ValueType valueType(const model::Value& val) {
   auto t = val.type();
   switch (t) {
-    case model::Type::Object:
-      return ValueType::object;
-    case model::Type::Array:
-      return ValueType::array;
-    case model::Type::Number:
-      return ValueType::number;
-    case model::Type::Null:
-      return ValueType::null;
-    case model::Type::Bool:
-      return (dynamic_cast<const model::Scalar&>(val).getBool()
-                  ? ValueType::boolean_true
-                  : ValueType::boolean_false);
-    case model::Type::String:
-      auto len = dynamic_cast<const model::Scalar&>(val).getString().size();
-      if (len > kShortStringMaxLen) { return ValueType::string; } else {
-        return ValueType(gsl::narrow_cast<uint8_t>(0b10000000 + len));
-      }
+  case model::Type::Object:
+    return ValueType::object;
+  case model::Type::Array:
+    return ValueType::array;
+  case model::Type::Number:
+    return ValueType::number;
+  case model::Type::Null:
+    return ValueType::null;
+  case model::Type::Bool:
+    return (dynamic_cast<const model::Scalar&>(val).getBool()
+                ? ValueType::boolean_true
+                : ValueType::boolean_false);
+  case model::Type::String:
+    auto len = dynamic_cast<const model::Scalar&>(val).getString().size();
+    if (len > kShortStringMaxLen) { return ValueType::string; } else {
+      return ValueType(gsl::narrow_cast<uint8_t>(0b10000000 + len));
+    }
   }
 
   throw ConsistencyError("Unknown type");
@@ -76,9 +76,7 @@ std::vector<uint64_t> extraWords(const model::Scalar& val) {
     ret.push_back(*((uint64_t*)&n));
   } else if (val.type() == model::Type::String) {
     auto& str = val.getString();
-    if (str.size() > kShortStringMaxLen) {
-      ret.push_back(0);
-    } else {
+    if (str.size() > kShortStringMaxLen) { ret.push_back(0); } else {
       uint64_t word = 0;
       size_t i = 0;
       for (uint64_t c : str) {
@@ -101,4 +99,3 @@ std::vector<uint64_t> extraWords(const model::Scalar& val) {
 
 } // namespace disk
 } // namespace cheesebase
-

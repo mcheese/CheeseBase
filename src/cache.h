@@ -15,8 +15,6 @@
 
 namespace cheesebase {
 
-DEF_EXCEPTION(FileError);
-
 struct CachePage {
   RwMutex mutex;
   gsl::span<Byte> data;

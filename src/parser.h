@@ -5,10 +5,9 @@
 #include "common.h"
 #include "model.h"
 #include <boost/locale/encoding_utf.hpp>
+#include "exceptions.h"
 
 namespace cheesebase {
-
-DEF_EXCEPTION(ParserError);
 
 template <class InputIt>
 class JsonParser {

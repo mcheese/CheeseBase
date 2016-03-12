@@ -5,6 +5,7 @@
 #include "disk_value.h"
 #include "disk_btree.h"
 #include "model.h"
+#include "exceptions.h"
 
 namespace cheesebase {
 namespace disk {
@@ -40,10 +41,20 @@ public:
     return std::make_unique<model::Array>(tree_.getArray());
   };
 
-  model::PValue getChildValue(const std::string& key) {
-    auto k = db_.getKey(key);
-    if (!k) return nullptr;
-    return tree_.getChildValue(*k);
+  model::PValue getChildValue(model::Index index) {
+    if (index > kMaxKey) throw IndexOutOfRangeError();
+    return tree_.getChildValue(index);
+  }
+
+  std::unique_ptr<ValueW> getChildCollectionW(Transaction& ta,
+                                              model::Index index) {
+    if (index >= kMaxKey) throw IndexOutOfRangeError();
+    return tree_.getChildCollectionW(ta, index);
+  }
+
+  std::unique_ptr<ValueR> getChildCollectionR(model::Index index) {
+    if (index >= kMaxKey) throw IndexOutOfRangeError();
+    return tree_.getChildCollectionR(index);
   }
 
   model::Array getArray() { return tree_.getArray(); }

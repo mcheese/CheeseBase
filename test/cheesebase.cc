@@ -127,16 +127,25 @@ TEST_CASE("db insert") {
     boost::filesystem::remove("test.db");
     {
       CheeseBase cb{ "test.db" };
-      cb.insert("test", input);
-      //doc->prettyPrint(std::cout, 0);
-      auto read = parseJson(cb.get("test"));
-      //read->prettyPrint(std::cout, 0);
+      cb.insert("test", *doc);
+      auto read = cb["test"].get();
       REQUIRE(*read == *doc);
     }
     // reopen
     {
       CheeseBase cb{ "test.db" };
-      REQUIRE(*parseJson(cb.get("test")) == *doc);
+      REQUIRE(*cb["test"].get() == *doc);
+      REQUIRE(cb["test"]["web-app"]["servlet"][0]["servlet-name"]
+                  .get()
+                  ->toString() == R"("cofaxCDS")");
+      cb["test"]["web-app"]["servlet"][0].update("servlet-name",
+                                                 *parseJson(R"("test")"));
+      REQUIRE(cb["test"]["web-app"]["servlet"][0]["servlet-name"]
+                  .get()
+                  ->toString() == R"("test")");
+
+      cb["test"]["web-app"]["servlet"][0]["servlet-name"].remove();
+      REQUIRE_THROWS(cb["test"]["web-app"]["servlet"][0]["servlet-name"].get());
     }
   }
 }

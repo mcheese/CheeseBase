@@ -10,6 +10,12 @@ namespace model {
 const Value& Value::operator[](Key) const { throw ModelError(); }
 const Value& Value::operator[](Index) const { throw ModelError(); }
 
+std::string Value::toString() const {
+  std::stringstream ss;
+  print(ss);
+  return ss.str();
+}
+
 void Object::append(Map<Key, PValue> a) {
   if (childs_.empty()) { childs_ = std::move(a); } else {
     for (auto& e : a) childs_.insert(std::move(e));
@@ -110,9 +116,7 @@ std::string escapeJson(const std::string& s) {
     default:
       if ('\x00' <= *c && *c <= '\x1f') {
         o << "\\u" << std::hex << std::setw(4) << std::setfill('0') << (int)*c;
-      } else {
-        o << *c;
-      }
+      } else { o << *c; }
     }
   }
   return o.str();
@@ -140,12 +144,8 @@ Type Scalar::type() const {
   if (data_.type() == boost::typeindex::type_id<String>()) {
     return Type::String;
   }
-  if (data_.type() == boost::typeindex::type_id<Bool>()) {
-    return Type::Bool;
-  }
-  if (data_.type() == boost::typeindex::type_id<Null>()) {
-    return Type::Null;
-  }
+  if (data_.type() == boost::typeindex::type_id<Bool>()) { return Type::Bool; }
+  if (data_.type() == boost::typeindex::type_id<Null>()) { return Type::Null; }
   throw ModelError("Invalid scalar type");
 }
 

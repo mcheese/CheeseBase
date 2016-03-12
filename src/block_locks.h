@@ -10,8 +10,6 @@
 
 namespace cheesebase {
 
-DEF_EXCEPTION(BlockLockError);
-
 struct BlockLock {
   enum class Writer { None, Waiting, Locked };
   size_t reader{ 0 };

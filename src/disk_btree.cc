@@ -1194,7 +1194,16 @@ model::Array BtreeReadOnly::getArray() {
 }
 
 std::unique_ptr<model::Value> BtreeReadOnly::getChildValue(Key key) {
-  return openNodeR(db_, root_)->getValue(key);
+  return openNodeR(db_, root_)->getChildValue(key);
+}
+
+std::unique_ptr<ValueW> BtreeReadOnly::getChildCollectionW(Transaction& ta,
+                                                           Key key) {
+  return openNodeR(db_, root_)->getChildCollectionW(ta, key);
+}
+
+std::unique_ptr<ValueR> BtreeReadOnly::getChildCollectionR(Key key) {
+  return openNodeR(db_, root_)->getChildCollectionR(key);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1252,13 +1261,49 @@ Addr LeafR::getAllInLeaf(model::Array& obj) {
   return next;
 }
 
-std::unique_ptr<model::Value> LeafR::getValue(Key key) {
+std::unique_ptr<model::Value> LeafR::getChildValue(Key key) {
   auto view = getData();
   auto pos = searchLeafPosition(key, view);
   if (pos >= static_cast<size_t>(view.size()) || view[pos] == 0) return nullptr;
+
   if (DskEntry(view[pos]).key.key() != key) return nullptr;
+
   auto it = view.begin() + pos;
   return readValue(it).second;
+}
+
+std::unique_ptr<ValueW> LeafR::getChildCollectionW(Transaction& ta, Key key) {
+  auto view = getData();
+  auto pos = searchLeafPosition(key, view);
+  if (pos + 1 >= static_cast<size_t>(view.size()) || view[pos] == 0)
+    return nullptr;
+
+  auto entry = DskEntry(view[pos]);
+  if (entry.key.key() != key) return nullptr;
+
+  auto t = entry.value.type;
+  if (t == ValueType::object) {
+    return std::make_unique<ObjectW>(ta, view[pos + 1]);
+  } else if (t == ValueType::array) {
+    return std::make_unique<ArrayW>(ta, view[pos + 1]);
+  } else { return nullptr; }
+}
+
+std::unique_ptr<ValueR> LeafR::getChildCollectionR(Key key) {
+  auto view = getData();
+  auto pos = searchLeafPosition(key, view);
+  if (pos + 1 >= static_cast<size_t>(view.size()) || view[pos] == 0)
+    return nullptr;
+
+  auto entry = DskEntry(view[pos]);
+  if (entry.key.key() != key) return nullptr;
+
+  auto t = entry.value.type;
+  if (t == ValueType::object) {
+    return std::make_unique<ObjectR>(db_, view[pos + 1]);
+  } else if (t == ValueType::array) {
+    return std::make_unique<ArrayR>(db_, view[pos + 1]);
+  } else { return nullptr; }
 }
 
 std::pair<Key, model::PValue>
@@ -1322,19 +1367,28 @@ InternalR::InternalR(Database& db, Addr addr, ReadRef page)
 
 void InternalR::getAll(model::Object& obj) {
   // just follow the left most path and let leafs go through
-  searchChild(0)->getAll(obj);
+  searchChildNode(0)->getAll(obj);
 }
 
 void InternalR::getAll(model::Array& arr) {
   // just follow the left most path and let leafs go through
-  searchChild(0)->getAll(arr);
+  searchChildNode(0)->getAll(arr);
 }
 
-std::unique_ptr<model::Value> InternalR::getValue(Key key) {
-  return searchChild(key)->getValue(key);
+std::unique_ptr<model::Value> InternalR::getChildValue(Key key) {
+  return searchChildNode(key)->getChildValue(key);
 }
 
-std::unique_ptr<NodeR> InternalR::searchChild(Key k) {
+std::unique_ptr<ValueW> InternalR::getChildCollectionW(Transaction& ta,
+                                                       Key key) {
+  return searchChildNode(key)->getChildCollectionW(ta, key);
+}
+
+std::unique_ptr<ValueR> InternalR::getChildCollectionR(Key key) {
+  return searchChildNode(key)->getChildCollectionR(key);
+}
+
+std::unique_ptr<NodeR> InternalR::searchChildNode(Key k) {
   auto pos = searchInternalPosition(k, data_);
   auto addr = data_[pos];
   return openNodeR(db_, addr);

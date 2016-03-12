@@ -13,8 +13,6 @@
 
 namespace cheesebase {
 
-DEF_EXCEPTION(DatabaseError);
-
 class Database;
 
 class Transaction {
@@ -28,7 +26,7 @@ public:
   Key key(const std::string& s);
 
   void commit(Writes w);
-  const Database& db;
+  Database& db;
 
 private:
   Transaction(Database& db);

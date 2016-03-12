@@ -4,81 +4,227 @@
 
 #include "core.h"
 #include "disk_object.h"
+#include "disk_array.h"
 #include "parser.h"
+#include "exceptions.h"
 #include <sstream>
 
-using namespace cheesebase;
+namespace cheesebase {
+
+////////////////////////////////////////////////////////////////////////////////
+// Query
+
+Query::Query(CheeseBase& cb, Location loc, std::string key) : cb_{ cb } {
+  loc.push_back(std::move(key));
+  location_ = std::move(loc);
+}
+
+Query::Query(CheeseBase& cb, Location loc, uint64_t index) : cb_{ cb } {
+  loc.push_back(index);
+  location_ = std::move(loc);
+}
+
+Query Query::operator[](std::string key) {
+  return Query(cb_, location_, std::move(key));
+}
+
+Query Query::operator[](uint64_t index) { return Query(cb_, location_, index); }
+void Query::insert(const std::string& key, const model::Value& val) {
+  cb_.insert(key, val, location_);
+}
+
+void Query::insert(uint64_t index, const model::Value& val) {
+  cb_.insert(index, val, location_);
+}
+
+void Query::update(const std::string& key, const model::Value& val) {
+  cb_.update(key, val, location_);
+}
+
+void Query::update(uint64_t index, const model::Value& val) {
+  cb_.update(index, val, location_);
+}
+
+void Query::upsert(const std::string& key, const model::Value& val) {
+  cb_.upsert(key, val, location_);
+}
+
+void Query::upsert(uint64_t index, const model::Value& val) {
+  cb_.upsert(index, val, location_);
+}
+
+std::unique_ptr<model::Value> Query::get() const { return cb_.get(location_); }
+
+void Query::remove() { cb_.remove(location_); }
+
+////////////////////////////////////////////////////////////////////////////////
+// CheeseBase
 
 CheeseBase::CheeseBase(const std::string& db_name)
     : db_(std::make_unique<Database>(db_name)) {}
 
 CheeseBase::~CheeseBase() {}
 
-bool CheeseBase::insert(const std::string& location, const std::string& json) {
-  try {
-    auto value = parseJson(json.begin(), json.end());
-    auto ta = db_->startTransaction();
-    disk::ObjectW object{ ta, k_root };
-    auto success = object.insert(location, *value, disk::Overwrite::Insert);
-    if (success) ta.commit(object.getWrites());
-    return success;
-  } catch (std::exception& e) {
-    std::cerr << e.what() << std::endl;
-    return false;
-  }
+Query CheeseBase::operator[](std::string key) {
+  return Query(*this, {}, std::move(key));
 }
 
-bool CheeseBase::update(const std::string& location, const std::string& json) {
-  try {
-    auto value = parseJson(json.begin(), json.end());
-    auto ta = db_->startTransaction();
-    disk::ObjectW object{ ta, k_root };
-    auto success = object.insert(location, *value, disk::Overwrite::Update);
-    if (success) ta.commit(object.getWrites());
-    return success;
-  } catch (std::exception& e) {
-    std::cerr << e.what() << std::endl;
-    return false;
+Query CheeseBase::operator[](uint64_t index) { return Query(*this, {}, index); }
+
+// Traverses elements of location read only, the last element is opened writable
+// and returned.
+// May throw NotFoundError.
+std::unique_ptr<disk::ValueW> openWritable(Transaction& ta,
+                                           Location::const_iterator loc,
+                                           Location::const_iterator loc_end) {
+  if (loc == loc_end) {
+    return std::make_unique<disk::ObjectW>(ta, k_root);
+
+  } else {
+    std::unique_ptr<disk::ValueR> container =
+        std::make_unique<disk::ObjectR>(ta.db, k_root);
+
+    // loc is random-access-iterator, so end - 1 is OK
+    for (; loc != loc_end; loc++) {
+      if (loc->which() == 0) {
+        auto obj = dynamic_cast<disk::ObjectR*>(container.get());
+        if (obj == nullptr) throw NotFoundError();
+        if (loc == loc_end - 1)
+          return obj->getChildCollectionW(ta, boost::get<std::string>(*loc));
+        container = obj->getChildCollectionR(boost::get<std::string>(*loc));
+      } else {
+        auto obj = dynamic_cast<disk::ArrayR*>(container.get());
+        if (obj == nullptr) throw NotFoundError();
+        if (loc == loc_end - 1)
+          return obj->getChildCollectionW(ta, boost::get<uint64_t>(*loc));
+        container = obj->getChildCollectionR(boost::get<uint64_t>(*loc));
+      }
+    }
   }
+
+  // this actually should never be reached
+  throw NotFoundError();
 }
 
-bool CheeseBase::upsert(const std::string& location, const std::string& json) {
-  try {
-    auto value = parseJson(json.begin(), json.end());
-    auto ta = db_->startTransaction();
-    disk::ObjectW object{ ta, k_root };
-    auto success = object.insert(location, *value, disk::Overwrite::Upsert);
-    if (success) ta.commit(object.getWrites());
-    return success;
-  } catch (std::exception& e) {
-    std::cerr << e.what() << std::endl;
-    return false;
+// Traverses elements of location read only and returns the last.
+// May throw NotFoundError.
+std::unique_ptr<disk::ValueR> openReadonly(Database& db,
+                                           Location::const_iterator loc,
+                                           Location::const_iterator loc_end) {
+  std::unique_ptr<disk::ValueR> container =
+      std::make_unique<disk::ObjectR>(db, k_root);
+
+  for (; loc != loc_end; loc++) {
+    if (loc->which() == 0) {
+      auto obj = dynamic_cast<disk::ObjectR*>(container.get());
+      if (obj == nullptr) throw NotFoundError();
+      container = obj->getChildCollectionR(boost::get<std::string>(*loc));
+    } else {
+      auto arr = dynamic_cast<disk::ArrayR*>(container.get());
+      if (arr == nullptr) throw NotFoundError();
+      container = arr->getChildCollectionR(boost::get<uint64_t>(*loc));
+    }
   }
+  if (!container) throw NotFoundError();
+  return container;
 }
 
-std::string CheeseBase::get(const std::string& location) {
-  try {
-    std::ostringstream ss;
-    auto object = disk::ObjectR(*db_, k_root);
-    auto v = (location.length() == 0 ? object.getValue()
-                                     : object.getChildValue(location));
-    if (v) v->prettyPrint(dynamic_cast<std::ostream&>(ss), 0);
-    return ss.str();
-  } catch (std::exception& e) {
-    std::cerr << e.what() << std::endl;
-    return {};
-  }
+void insertValue(Database& db, const Location& location, const std::string& key,
+                 const model::Value& val, disk::Overwrite ow) {
+  auto ta = db.startTransaction();
+  auto coll = openWritable(ta, location.begin(), location.end());
+
+  auto obj = dynamic_cast<disk::ObjectW*>(coll.get());
+  if (obj == nullptr) throw NotFoundError();
+
+  if (obj->insert(key, val, ow))
+    ta.commit(obj->getWrites());
+  else
+    throw InsertError();
 }
 
-bool CheeseBase::remove(const std::string& location) {
-  try {
-    auto ta = db_->startTransaction();
-    disk::ObjectW object{ ta, k_root };
-    auto success = object.remove(location);
-    if (success) ta.commit(object.getWrites());
-    return success;
-  } catch (std::exception& e) {
-    std::cerr << e.what() << std::endl;
-    return false;
-  }
+void insertValue(Database& db, const Location& location, uint64_t index,
+                 const model::Value& val, disk::Overwrite ow) {
+  auto ta = db.startTransaction();
+  auto coll = openWritable(ta, location.begin(), location.end());
+
+  auto obj = dynamic_cast<disk::ArrayW*>(coll.get());
+  if (obj == nullptr) throw NotFoundError();
+
+  if (obj->insert(index, val, ow))
+    ta.commit(obj->getWrites());
+  else
+    throw InsertError();
 }
+
+void CheeseBase::insert(const std::string& key, const model::Value& val,
+                        const Location& location) {
+  insertValue(*db_, location, key, val, disk::Overwrite::Insert);
+}
+
+void CheeseBase::insert(uint64_t index, const model::Value& val,
+                        const Location& location) {
+  insertValue(*db_, location, index, val, disk::Overwrite::Insert);
+}
+
+void CheeseBase::update(const std::string& key, const model::Value& val,
+                        const Location& location) {
+  insertValue(*db_, location, key, val, disk::Overwrite::Update);
+}
+
+void CheeseBase::update(uint64_t index, const model::Value& val,
+                        const Location& location) {
+  insertValue(*db_, location, index, val, disk::Overwrite::Update);
+}
+
+void CheeseBase::upsert(const std::string& key, const model::Value& val,
+                        const Location& location) {
+  insertValue(*db_, location, key, val, disk::Overwrite::Upsert);
+}
+
+void CheeseBase::upsert(uint64_t index, const model::Value& val,
+                        const Location& location) {
+  insertValue(*db_, location, index, val, disk::Overwrite::Upsert);
+}
+
+std::unique_ptr<model::Value> CheeseBase::get(const Location& location) const {
+  std::unique_ptr<model::Value> ret;
+
+  auto coll = openReadonly(*db_, location.begin(), location.end() - 1);
+
+  if (location.back().which() == 0) {
+    auto obj = dynamic_cast<disk::ObjectR*>(coll.get());
+    if (obj == nullptr) throw NotFoundError();
+    ret = obj->getChildValue(boost::get<std::string>(location.back()));
+  } else {
+    auto arr = dynamic_cast<disk::ArrayR*>(coll.get());
+    if (arr == nullptr) throw NotFoundError();
+    ret = arr->getChildValue(boost::get<uint64_t>(location.back()));
+  }
+
+  if (!ret) throw NotFoundError();
+  return ret;
+}
+
+void CheeseBase::remove(const Location& location) {
+  auto ta = db_->startTransaction();
+  auto parent = openWritable(ta, location.begin(), location.end() - 1);
+
+  bool success;
+  if (location.back().which() == 0) {
+    auto obj = dynamic_cast<disk::ObjectW*>(parent.get());
+    if (obj == nullptr) throw NotFoundError();
+    success = obj->remove(boost::get<std::string>(location.back()));
+  } else {
+    auto arr = dynamic_cast<disk::ArrayW*>(parent.get());
+    if (arr == nullptr) throw NotFoundError();
+    success = arr->remove(boost::get<uint64_t>(location.back()));
+  }
+
+  if (success)
+    ta.commit(parent->getWrites());
+  else
+    throw NotFoundError();
+}
+
+} // namespace cheesebase

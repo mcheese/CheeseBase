@@ -15,8 +15,6 @@
 
 namespace cheesebase {
 
-DEF_EXCEPTION(KeyCacheError);
-
 class KeyCache;
 using KeyHash = decltype(DskKey::hash);
 using KeyIndex = decltype(DskKey::index);

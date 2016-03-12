@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include "exceptions.h"
+
 #include <boost/cstdint.hpp>
 #include <gsl.h>
 #include <vector>
@@ -13,14 +15,6 @@
   T& operator=(T const&) = delete;                                             \
   T(T&&) = default;                                                            \
   T& operator=(T&&) = default;
-
-#define DEF_EXCEPTION(NAME)                                                    \
-  struct NAME : public std::exception {                                        \
-    NAME() : text_(#NAME) {}                                                   \
-    NAME(std::string text) : text_(std::move(text)) {}                         \
-    const char* what() const noexcept { return text_.c_str(); }                \
-    std::string text_;                                                         \
-  };
 
 namespace cheesebase {
 
@@ -74,7 +68,5 @@ void copySpan(Span<const T> from, Span<T> to) {
   }
   Ensures(input == from.cend());
 }
-
-DEF_EXCEPTION(ConsistencyError);
 
 } // namespace cheesebase

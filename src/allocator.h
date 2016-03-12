@@ -6,8 +6,6 @@
 
 namespace cheesebase {
 
-DEF_EXCEPTION(AllocError);
-
 class Allocator;
 
 class AllocTransaction {
