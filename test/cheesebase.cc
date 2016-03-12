@@ -138,8 +138,8 @@ TEST_CASE("db insert") {
       REQUIRE(cb["test"]["web-app"]["servlet"][0]["servlet-name"]
                   .get()
                   ->toString() == R"("cofaxCDS")");
-      cb["test"]["web-app"]["servlet"][0].update("servlet-name",
-                                                 *parseJson(R"("test")"));
+      cb["test"]["web-app"]["servlet"][0]["servlet-name"].update(
+          model::Scalar("test"));
       REQUIRE(cb["test"]["web-app"]["servlet"][0]["servlet-name"]
                   .get()
                   ->toString() == R"("test")");

@@ -22,10 +22,13 @@ public:
 
   void insert(const std::string& key, const model::Value&);
   void insert(const uint64_t, const model::Value&);
+  void insert(const model::Value&);
   void update(const std::string& key, const model::Value&);
   void update(const uint64_t, const model::Value&);
+  void update(const model::Value&);
   void upsert(const std::string& key, const model::Value&);
   void upsert(const uint64_t, const model::Value&);
+  void upsert(const model::Value&);
   std::unique_ptr<model::Value> get() const;
   void remove();
 
@@ -38,6 +41,8 @@ private:
 };
 
 class CheeseBase {
+  friend Query;
+
 public:
   explicit CheeseBase(const std::string& db_name);
   ~CheeseBase();
