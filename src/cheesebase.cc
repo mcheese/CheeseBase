@@ -86,7 +86,7 @@ void insertValue(Database& db, Location::const_iterator loc,
   if (obj->insert(key, val, ow))
     ta.commit(obj->getWrites());
   else
-    throw InsertError();
+    throw CRUDError();
 }
 
 void insertValue(Database& db, Location::const_iterator loc,
@@ -101,7 +101,7 @@ void insertValue(Database& db, Location::const_iterator loc,
   if (obj->insert(index, val, ow))
     ta.commit(obj->getWrites());
   else
-    throw InsertError();
+    throw CRUDError();
 }
 
 } // anonymous namespace
@@ -248,16 +248,21 @@ void CheeseBase::upsert(uint64_t index, const model::Value& val,
 std::unique_ptr<model::Value> CheeseBase::get(const Location& location) const {
   std::unique_ptr<model::Value> ret;
 
-  auto coll = openReadonly(*db_, location.begin(), location.end() - 1);
+  if (location.empty()) {
+     ret = disk::ObjectR(*db_, k_root).getValue();
 
-  if (location.back().which() == 0) {
-    auto obj = dynamic_cast<disk::ObjectR*>(coll.get());
-    if (obj == nullptr) throw NotFoundError();
-    ret = obj->getChildValue(boost::get<std::string>(location.back()));
   } else {
-    auto arr = dynamic_cast<disk::ArrayR*>(coll.get());
-    if (arr == nullptr) throw NotFoundError();
-    ret = arr->getChildValue(boost::get<uint64_t>(location.back()));
+    auto coll = openReadonly(*db_, location.begin(), location.end() - 1);
+
+    if (location.back().which() == 0) {
+      auto obj = dynamic_cast<disk::ObjectR*>(coll.get());
+      if (obj == nullptr) throw NotFoundError();
+      ret = obj->getChildValue(boost::get<std::string>(location.back()));
+    } else {
+      auto arr = dynamic_cast<disk::ArrayR*>(coll.get());
+      if (arr == nullptr) throw NotFoundError();
+      ret = arr->getChildValue(boost::get<uint64_t>(location.back()));
+    }
   }
 
   if (!ret) throw NotFoundError();
@@ -265,6 +270,7 @@ std::unique_ptr<model::Value> CheeseBase::get(const Location& location) const {
 }
 
 void CheeseBase::remove(const Location& location) {
+  if (location.empty()) throw CRUDError();
   auto ta = db_->startTransaction();
   auto parent = openWritable(ta, location.begin(), location.end() - 1);
 

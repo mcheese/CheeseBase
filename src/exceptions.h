@@ -22,7 +22,7 @@ struct CheeseBaseError : public std::exception {
 
 DEF_EXCEPTION(ConsistencyError);
 DEF_EXCEPTION(NotFoundError);
-DEF_EXCEPTION(InsertError);
+DEF_EXCEPTION(CRUDError);
 DEF_EXCEPTION(UnknownKeyError);
 DEF_EXCEPTION(IndexOutOfRangeError);
 DEF_EXCEPTION(DatabaseError);
