@@ -65,7 +65,7 @@ StringW::StringW(Transaction& ta, model::String str)
       blocks_.emplace_back(ta_.allocExtension(
           blocks_.back().addr,
           std::min(kBlockMaxSize, static_cast<size_t>(size))));
-      size -= blocks_.back().size;
+      size -= gsl::narrow_cast<int>(blocks_.back().size);
     }
   }
 }

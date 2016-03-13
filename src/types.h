@@ -6,6 +6,7 @@
 
 #include <gsl.h>
 #include <boost/cstdint.hpp>
+#include <vector>
 
 namespace cheesebase {
 
