@@ -36,7 +36,7 @@ public:
 
 private:
   KeyTransaction(gsl::not_null<KeyCache*> cache,
-                 gsl::not_null<AllocTransaction*> alloc, ShLock<UgMutex> lck)
+                 gsl::not_null<AllocTransaction*> alloc)
       : cache_(cache), alloc_(alloc) {}
 
   KeyCache* cache_;

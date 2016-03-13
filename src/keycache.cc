@@ -181,6 +181,6 @@ boost::optional<Key> KeyCache::getKey(const std::string& str) {
 }
 
 KeyTransaction KeyCache::startTransaction(AllocTransaction& alloc) {
-  return KeyTransaction(this, &alloc, ShLock<UgMutex>(mtx_));
+  return KeyTransaction(this, &alloc);
 }
 }
