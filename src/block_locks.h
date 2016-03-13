@@ -3,60 +3,49 @@
 #pragma once
 
 #include "common.h"
+#include "macros.h"
 #include "sync.h"
-#include <atomic>
-#include <set>
 #include <unordered_map>
 
 namespace cheesebase {
 
-struct BlockLock {
-  enum class Writer { None, Waiting, Locked };
-  size_t reader{ 0 };
-  Writer writer{ Writer::None };
-};
+class BlockLockPool;
 
-class BlockLocker;
-
-class BlockLockSession {
-  friend class BlockLocker;
+template <class M, class L>
+class BlockLock {
+  friend BlockLockPool;
 
 public:
-  BlockLockSession() = delete;
-  ~BlockLockSession();
-
-  void readLock(Addr block);
-  void writeLock(Addr block);
-  void unlock(Addr block);
-  void unlockAll();
+  BlockLock() = default;
+  MOVE_ONLY(BlockLock);
 
 private:
-  BlockLockSession(BlockLocker& locker) : locker_(locker) {}
+  BlockLock(std::shared_ptr<M>&& mtx)
+      : mtx_{ std::move(mtx) }, lck_{ *mtx_ } {}
 
-  BlockLocker& locker_;
-  std::set<Addr> read_locks_;
-  std::set<Addr> write_locks_;
+  // Order is important here!
+  // In destruction lck_ unlocks before mtx_ gets freed.
+  std::shared_ptr<M> mtx_;
+  L lck_;
 };
 
-class BlockLocker {
-  friend class BlockLockSession;
 
+using BlockLockR = BlockLock<RwMutex, ShLock<RwMutex>>;
+using BlockLockW = BlockLock<RwMutex, ExLock<RwMutex>>;
+
+class BlockLockPool {
 public:
-  BlockLocker() = default;
+  BlockLockPool() = default;
 
-  BlockLockSession startSession();
+  BlockLockR getLockR(Addr);
+  BlockLockW getLockW(Addr);
 
 private:
-  void readLock(Addr);
-  void writeLock(Addr);
-  void readUnlock(Addr);
-  void writeUnlock(Addr);
+  std::shared_ptr<RwMutex> getMutex(Addr block);
 
-  std::shared_ptr<BlockLock> getLock(Addr);
-
+  std::unordered_map<Addr, std::weak_ptr<RwMutex>> map_;
   Mutex mtx_;
-  Cond cnd_;
-  std::unordered_map<Addr, std::shared_ptr<BlockLock>> locks_;
 };
 
 } // namespace cheesebase
+
