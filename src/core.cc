@@ -11,7 +11,8 @@
 
 namespace cheesebase {
 
-Database::Database(const std::string& file) {
+Database::Database(const std::string& file)
+    : lock_pool_{ std::make_unique<BlockLockPool>() } {
   DskDatabaseHdr hdr;
 
   if (boost::filesystem::exists(file)) {
@@ -73,6 +74,11 @@ std::string Database::resolveKey(Key k) const {
 boost::optional<Key> Database::getKey(const std::string& k) const {
   return keycache_->getKey(k);
 }
+
+BlockLockW Database::getLockW(Addr addr) { return lock_pool_->getLockW(addr); }
+BlockLockR Database::getLockR(Addr addr) { return lock_pool_->getLockR(addr); }
+BlockLockW Transaction::getLockW(Addr addr) { return db.getLockW(addr); }
+BlockLockR Transaction::getLockR(Addr addr) { return db.getLockR(addr); }
 
 ReadRef Transaction::load(PageNr p) { return storage_.loadPage(p); };
 

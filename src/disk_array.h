@@ -12,7 +12,7 @@ namespace disk {
 
 class ArrayW : public ValueW {
 public:
-  ArrayW(Transaction& ta) : ValueW(ta, 0), tree_{ ta } { addr_ = tree_.addr(); }
+  ArrayW(Transaction& ta) : ValueW(ta), tree_{ ta } { addr_ = tree_.addr(); }
 
   ArrayW(Transaction& ta, Addr addr) : ValueW(ta, addr), tree_{ ta, addr } {}
 
@@ -65,3 +65,4 @@ private:
 
 } // namespace disk
 } // namespace cheesebase
+

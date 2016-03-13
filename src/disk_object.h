@@ -13,7 +13,7 @@ namespace disk {
 
 class ObjectW : public ValueW {
 public:
-  ObjectW(Transaction& ta) : ValueW(ta, 0), tree_{ ta } {
+  ObjectW(Transaction& ta) : ValueW(ta), tree_{ ta } {
     addr_ = tree_.addr();
   }
 

@@ -49,7 +49,7 @@ StringW::StringW(Transaction& ta, Addr addr) : ValueW(ta, addr) {
 }
 
 StringW::StringW(Transaction& ta, model::String str)
-    : ValueW(ta, 0), str_{ std::move(str) } {
+    : ValueW(ta), str_{ std::move(str) } {
   hdr_ = DskStringHdr(str_.size()).data_;
   if (str_.size() + sizeof(DskStringHdr) < kBlockMaxSize) {
     blocks_.emplace_back(ta_.alloc(str_.size() + sizeof(DskStringHdr)));

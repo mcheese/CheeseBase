@@ -3,6 +3,8 @@
 #pragma once
 
 #include "common.h"
+#include "block_locks.h"
+#include "core.h"
 
 namespace cheesebase {
 
@@ -25,9 +27,14 @@ public:
   virtual void destroy() = 0;
 
 protected:
-  ValueW(Transaction& ta, Addr addr) : ta_{ ta }, addr_{ addr } {}
+  ValueW(Transaction& ta) : addr_{ 0 }, ta_{ ta } {}
+  ValueW(Transaction& ta, Addr addr)
+      : addr_{ addr }, ta_{ ta }, lck_{ ta.getLockW(addr) } {
+    Expects(addr != 0);
+  }
   Addr addr_;
   Transaction& ta_;
+  BlockLockW lck_;
 };
 
 // Base class representing a read only value on disk
@@ -38,11 +45,16 @@ public:
   virtual std::unique_ptr<model::Value> getValue() = 0;
 
 protected:
-  ValueR(Database& db, Addr addr) : db_{ db }, addr_{ addr } {}
+  ValueR(Database& db, Addr addr)
+      : addr_{ addr }, db_{ db }, lck_{ db.getLockR(addr) } {
+    Expects(addr != 0);
+  }
   Addr addr_;
   Database& db_;
+  BlockLockR lck_;
 };
 
 } // namespace disk
 
 } // namespace cheesebase
+
