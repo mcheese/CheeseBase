@@ -12,12 +12,14 @@
 
 #pragma once
 
+#include "common.h"
+#include "macros.h"
+
 #include <map>
 #include <boost/variant.hpp>
 #include <boost/optional.hpp>
 #include <memory>
 #include <string>
-#include "common.h"
 
 namespace cheesebase {
 

@@ -10,12 +10,6 @@
 #include <gsl.h>
 #include <vector>
 
-#define MOVE_ONLY(T)                                                           \
-  T(T const&) = delete;                                                        \
-  T& operator=(T const&) = delete;                                             \
-  T(T&&) = default;                                                            \
-  T& operator=(T&&) = default;
-
 namespace cheesebase {
 
 using Byte = gsl::byte;

@@ -6,6 +6,7 @@
 #pragma once
 
 #include "common.h"
+#include "macros.h"
 #include "sync.h"
 
 #include <unordered_map>

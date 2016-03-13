@@ -3,7 +3,7 @@
 #pragma once
 
 #include "common.h"
-#include "compiler.h"
+#include "macros.h"
 #include <gsl.h>
 
 namespace cheesebase {

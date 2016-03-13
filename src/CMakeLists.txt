@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.1)
 set(SRC
   common.h
   sync.h
-  compiler.h
+  macros.h
   structs.h
   storage.h storage.cc
   cache.h cache.cc
