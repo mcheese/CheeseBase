@@ -6,6 +6,7 @@
 #include "disk_btree.h"
 #include "exceptions.h"
 #include "model.h"
+#include "core.h"
 
 namespace cheesebase {
 namespace disk {

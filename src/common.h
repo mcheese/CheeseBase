@@ -1,21 +1,12 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
 
-// Common types, constants and functions.
+// Constants and functions.
 
 #pragma once
 
-#include "exceptions.h"
-
-#include <boost/cstdint.hpp>
-#include <gsl.h>
-#include <vector>
+#include "types.h"
 
 namespace cheesebase {
-
-using Byte = gsl::byte;
-
-template <class T>
-using Span = gsl::span<T, gsl::dynamic_range>;
 
 const uint64_t k_magic = *(uint64_t const*)"CHSBSE01";
 
@@ -28,10 +19,6 @@ const size_t k_default_cache_size{ k_page_size * 1024 * 10 }; // 40 MB - test
 using PageReadView = gsl::span<const Byte, k_page_size>;
 using PageWriteView = gsl::span<Byte, k_page_size>;
 
-using PageNr = uint64_t;
-using Addr = uint64_t;
-using Offset = uint64_t;
-
 constexpr PageNr toPageNr(Addr addr) noexcept {
   return addr >> k_page_size_power;
 }
@@ -41,14 +28,6 @@ constexpr Offset toPageOffset(Addr addr) noexcept {
 }
 
 constexpr Addr toAddr(PageNr nr) noexcept { return nr * k_page_size; }
-
-// Represents a write to disk.
-struct Write {
-  Addr addr;
-  Span<const Byte> data;
-};
-
-using Writes = std::vector<Write>;
 
 template <typename T>
 void copySpan(Span<const T> from, Span<T> to) {
@@ -64,3 +43,4 @@ void copySpan(Span<const T> from, Span<T> to) {
 }
 
 } // namespace cheesebase
+

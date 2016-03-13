@@ -1,6 +1,7 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
 
 #include "cache.h"
+#include "exceptions.h"
 #include <boost/filesystem.hpp>
 #include <fstream>
 

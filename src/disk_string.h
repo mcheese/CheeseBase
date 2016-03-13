@@ -4,6 +4,7 @@
 
 #include "disk_value.h"
 #include "model.h"
+#include "types.h"
 
 namespace cheesebase {
 namespace disk {

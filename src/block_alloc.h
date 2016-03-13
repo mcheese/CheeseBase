@@ -4,16 +4,12 @@
 
 #include "sync.h"
 #include "structs.h"
+#include "types.h"
 #include <gsl.h>
 
 #include <map>
 
 namespace cheesebase {
-
-struct Block {
-  Addr addr;
-  size_t size;
-};
 
 class Storage;
 

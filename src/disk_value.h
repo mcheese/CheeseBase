@@ -3,43 +3,43 @@
 #pragma once
 
 #include "common.h"
-#include "core.h"
-#include "model.h"
 
 namespace cheesebase {
 
+// Forward declarations
 class Transaction;
+class Database;
+
+namespace model {
+class Value;
+}
 
 namespace disk {
 
-// Base class representing a value on disk
-class Value {
+// Base class representing a write only value on disk
+class ValueW {
 public:
   Addr addr() const { return addr_; }
 
-protected:
-  Value(Addr a) : addr_{ a } {}
-  Addr addr_;
-};
-
-// Base class representing a write only value on disk
-class ValueW : public Value {
-public:
   virtual Writes getWrites() const = 0;
   virtual void destroy() = 0;
 
 protected:
-  ValueW(Transaction& ta, Addr addr) : ta_{ ta }, Value(addr) {}
+  ValueW(Transaction& ta, Addr addr) : ta_{ ta }, addr_{ addr } {}
+  Addr addr_;
   Transaction& ta_;
 };
 
 // Base class representing a read only value on disk
-class ValueR : public Value {
+class ValueR {
 public:
-  virtual model::PValue getValue() = 0;
+  Addr addr() const { return addr_; }
+
+  virtual std::unique_ptr<model::Value> getValue() = 0;
 
 protected:
-  ValueR(Database& db, Addr addr) : db_{ db }, Value(addr) {}
+  ValueR(Database& db, Addr addr) : db_{ db }, addr_{ addr } {}
+  Addr addr_;
   Database& db_;
 };
 

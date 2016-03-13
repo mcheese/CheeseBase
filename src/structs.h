@@ -4,7 +4,8 @@
 
 #include "common.h"
 #include "macros.h"
-#include <gsl.h>
+#include "exceptions.h"
+#include <gsl_util.h> // narrow_cast
 
 namespace cheesebase {
 

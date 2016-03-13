@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.1)
 
 set(SRC
   common.h
+  types.h
   sync.h
   macros.h
   structs.h
