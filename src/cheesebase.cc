@@ -109,12 +109,12 @@ void insertValue(Database& db, Location::const_iterator loc,
 ////////////////////////////////////////////////////////////////////////////////
 // Query
 
-Query::Query(CheeseBase& cb, Location loc, std::string key) : cb_{ cb } {
+Query::Query(CheeseBase* cb, Location loc, std::string key) : cb_{ cb } {
   loc.push_back(std::move(key));
   location_ = std::move(loc);
 }
 
-Query::Query(CheeseBase& cb, Location loc, uint64_t index) : cb_{ cb } {
+Query::Query(CheeseBase* cb, Location loc, uint64_t index) : cb_{ cb } {
   loc.push_back(index);
   location_ = std::move(loc);
 }
@@ -126,74 +126,76 @@ Query Query::operator[](std::string key) {
 Query Query::operator[](uint64_t index) { return Query(cb_, location_, index); }
 
 void Query::insert(const std::string& key, const model::Value& val) {
-  cb_.insert(key, val, location_);
+  cb_->insert(key, val, location_);
 }
 
 void Query::insert(uint64_t index, const model::Value& val) {
-  cb_.insert(index, val, location_);
+  cb_->insert(index, val, location_);
 }
 
 void Query::insert(const model::Value& val) {
   Expects(location_.size() > 0);
 
   if (location_.back().which() == 0) {
-    insertValue(*cb_.db_, location_.cbegin(), location_.cend() - 1,
+    insertValue(*cb_->db_, location_.cbegin(), location_.cend() - 1,
                 boost::get<std::string>(location_.back()), val,
                 disk::Overwrite::Insert);
   } else {
-    insertValue(*cb_.db_, location_.begin(), location_.end() - 1,
+    insertValue(*cb_->db_, location_.begin(), location_.end() - 1,
                 boost::get<uint64_t>(location_.back()), val,
                 disk::Overwrite::Insert);
   }
 }
 
 void Query::update(const std::string& key, const model::Value& val) {
-  cb_.update(key, val, location_);
+  cb_->update(key, val, location_);
 }
 
 void Query::update(uint64_t index, const model::Value& val) {
-  cb_.update(index, val, location_);
+  cb_->update(index, val, location_);
 }
 
 void Query::update(const model::Value& val) {
   Expects(location_.size() > 0);
 
   if (location_.back().which() == 0) {
-    insertValue(*cb_.db_, location_.cbegin(), location_.cend() - 1,
+    insertValue(*cb_->db_, location_.cbegin(), location_.cend() - 1,
                 boost::get<std::string>(location_.back()), val,
                 disk::Overwrite::Update);
   } else {
-    insertValue(*cb_.db_, location_.begin(), location_.end() - 1,
+    insertValue(*cb_->db_, location_.begin(), location_.end() - 1,
                 boost::get<uint64_t>(location_.back()), val,
                 disk::Overwrite::Update);
   }
 }
 
 void Query::upsert(const std::string& key, const model::Value& val) {
-  cb_.upsert(key, val, location_);
+  cb_->upsert(key, val, location_);
 }
 
 void Query::upsert(uint64_t index, const model::Value& val) {
-  cb_.upsert(index, val, location_);
+  cb_->upsert(index, val, location_);
 }
 
 void Query::upsert(const model::Value& val) {
   Expects(location_.size() > 0);
 
   if (location_.back().which() == 0) {
-    insertValue(*cb_.db_, location_.cbegin(), location_.cend() - 1,
+    insertValue(*cb_->db_, location_.cbegin(), location_.cend() - 1,
                 boost::get<std::string>(location_.back()), val,
                 disk::Overwrite::Upsert);
   } else {
-    insertValue(*cb_.db_, location_.begin(), location_.end() - 1,
+    insertValue(*cb_->db_, location_.begin(), location_.end() - 1,
                 boost::get<uint64_t>(location_.back()), val,
                 disk::Overwrite::Upsert);
   }
 }
 
-std::unique_ptr<model::Value> Query::get() const { return cb_.get(location_); }
+uint64_t Query::append(const model::Value& val) { return cb_->append(val, location_); }
 
-void Query::remove() { cb_.remove(location_); }
+std::unique_ptr<model::Value> Query::get() const { return cb_->get(location_); }
+
+void Query::remove() { cb_->remove(location_); }
 
 ////////////////////////////////////////////////////////////////////////////////
 // CheeseBase
@@ -204,10 +206,10 @@ CheeseBase::CheeseBase(const std::string& db_name)
 CheeseBase::~CheeseBase() {}
 
 Query CheeseBase::operator[](std::string key) {
-  return Query(*this, {}, std::move(key));
+  return Query(this, {}, std::move(key));
 }
 
-Query CheeseBase::operator[](uint64_t index) { return Query(*this, {}, index); }
+Query CheeseBase::operator[](uint64_t index) { return Query(this, {}, index); }
 
 void CheeseBase::insert(const std::string& key, const model::Value& val,
                         const Location& location) {
@@ -243,6 +245,21 @@ void CheeseBase::upsert(uint64_t index, const model::Value& val,
                         const Location& location) {
   insertValue(*db_, location.begin(), location.end(), index, val,
               disk::Overwrite::Upsert);
+}
+
+uint64_t CheeseBase::append(const model::Value& val, const Location& loc) {
+  if (loc.empty()) throw NotFoundError();
+  auto ta = db_->startTransaction();
+
+  auto coll = openWritable(ta, loc.begin(), loc.end());
+  auto arr = dynamic_cast<disk::ArrayW*>(coll.get());
+  if (arr == nullptr) throw NotFoundError();
+
+  auto ret = arr->append(val);
+
+  ta.commit(coll->getWrites());
+
+  return ret;
 }
 
 std::unique_ptr<model::Value> CheeseBase::get(const Location& location) const {

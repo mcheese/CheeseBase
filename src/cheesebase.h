@@ -29,14 +29,15 @@ public:
   void upsert(const std::string& key, const model::Value&);
   void upsert(const uint64_t, const model::Value&);
   void upsert(const model::Value&);
+  uint64_t append(const model::Value&);
   std::unique_ptr<model::Value> get() const;
   void remove();
 
 private:
-  Query(CheeseBase&, Location, std::string key);
-  Query(CheeseBase&, Location, uint64_t index);
+  Query(CheeseBase*, Location, std::string key);
+  Query(CheeseBase*, Location, uint64_t index);
 
-  CheeseBase& cb_;
+  CheeseBase* cb_;
   Location location_;
 };
 
@@ -61,6 +62,7 @@ public:
   void upsert(const std::string& key, const model::Value&,
               const Location& = {});
   void upsert(uint64_t index, const model::Value&, const Location& = {});
+  uint64_t append(const model::Value&, const Location&);
 
   std::unique_ptr<model::Value> get(const Location&) const;
 
