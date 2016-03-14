@@ -12,20 +12,18 @@ namespace cheesebase {
 template <class InputIt>
 class JsonParser {
 public:
-  static model::PValue parse(InputIt begin, InputIt end) {
+  static model::PValue parse(InputIt& begin, InputIt end) {
     return JsonParser(begin, end).parseDoc();
   };
 
 private:
-  JsonParser(InputIt begin, InputIt end) : it(begin), end(end) {}
-  InputIt it;
+  JsonParser(InputIt& begin, InputIt end) : it(begin), end(end) {}
+  InputIt& it;
   InputIt end;
 
   model::PValue parseDoc() {
     skipWs();
     auto doc = parseValue();
-    skipWs();
-    if (it != end) throw ParserError("more data than expected");
     return doc;
   }
 
@@ -227,6 +225,11 @@ private:
     throw ParserError("expected value");
   }
 };
+
+template <class InputIt>
+inline model::PValue parseJson(InputIt* begin, InputIt end) {
+  return JsonParser<InputIt>::parse(*begin, end);
+}
 
 template <class InputIt>
 inline model::PValue parseJson(InputIt begin, InputIt end) {
