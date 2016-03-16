@@ -20,15 +20,13 @@ public:
   MOVE_ONLY(BlockLock);
 
 private:
-  BlockLock(std::shared_ptr<M>&& mtx)
-      : mtx_{ std::move(mtx) }, lck_{ *mtx_ } {}
+  BlockLock(std::shared_ptr<M>&& mtx) : mtx_{ std::move(mtx) }, lck_{ *mtx_ } {}
 
   // Order is important here!
   // In destruction lck_ unlocks before mtx_ gets freed.
   std::shared_ptr<M> mtx_;
   L lck_;
 };
-
 
 using BlockLockR = BlockLock<RwMutex, ShLock<RwMutex>>;
 using BlockLockW = BlockLock<RwMutex, ExLock<RwMutex>>;
@@ -48,4 +46,3 @@ private:
 };
 
 } // namespace cheesebase
-

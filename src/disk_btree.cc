@@ -308,13 +308,17 @@ void AbsLeafW::destroy() {
   auto& buf = bufv.first;
 
   auto it = buf.begin() + 1;
-  while (it < buf.end() && *it != 0) { it += destroyValue(it); }
+  while (it < buf.end() && *it != 0) {
+    it += destroyValue(it);
+  }
   ta_.free(addr_);
 }
 
 size_t AbsLeafW::findSize() {
   size_t i = 1; // first element always is a Addr, skip to value
-  while (i < buf_->size() && buf_->at(i) != 0) { i += entrySize(buf_->at(i)); }
+  while (i < buf_->size() && buf_->at(i) != 0) {
+    i += entrySize(buf_->at(i));
+  }
   return i;
 }
 
@@ -392,7 +396,9 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
         break;
       }
       shiftBuffer(pos + old_extra, extra_words - old_extra);
-    } else { shiftBuffer(pos, 1 + extra_words); }
+    } else {
+      shiftBuffer(pos, 1 + extra_words);
+    }
 
     // put the first word
     auto t = valueType(val);
@@ -436,7 +442,9 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
       }
     }
 
-  } else { split(key, val, pos); }
+  } else {
+    split(key, val, pos);
+  }
 
   return true;
 }
@@ -445,7 +453,9 @@ void AbsLeafW::insert(Span<const uint64_t> raw) {
   Expects(buf_);
   Expects(k_node_max_words >= top_ + raw.size());
 
-  for (auto word : raw) { buf_->at(top_++) = word; }
+  for (auto word : raw) {
+    buf_->at(top_++) = word;
+  }
 }
 
 bool AbsLeafW::remove(Key key, AbsInternalW* parent) {
@@ -485,9 +495,13 @@ void LeafW::split(Key key, const model::Value& val, size_t pos) {
     if ((new_here && new_mid + new_val_len > top_ / 2 + 1) ||
         (!new_here && new_mid > top_ / 2 + new_val_len + 1)) {
       break;
-    } else { mid = new_mid; }
+    } else {
+      mid = new_mid;
+    }
     auto entry = DskEntry(buf_->at(new_mid));
-    if (entry.key.key() >= key) { new_here = true; }
+    if (entry.key.key() >= key) {
+      new_here = true;
+    }
     new_mid += entry.extraWords();
   }
 
@@ -538,7 +552,9 @@ void LeafW::merge() {
 
       insert(Span<uint64_t>(sibl_buf).subspan(1, sibl.size() - 1));
       buf[0] = sibl_buf[0]; // copy next ptr
-      for (auto& c : sibl.linked_) { linked_.insert(std::move(c)); }
+      for (auto& c : sibl.linked_) {
+        linked_.insert(std::move(c));
+      }
       sibl.linked_.clear();
       ta_.free(sibl.addr());
 
@@ -550,7 +566,9 @@ void LeafW::merge() {
 
       sibl.insert(Span<uint64_t>(buf).subspan(1, top_ - 1));
       sibl_buf[0] = buf[0]; // copy next ptr
-      for (auto& c : linked_) { sibl.linked_.insert(std::move(c)); }
+      for (auto& c : linked_) {
+        sibl.linked_.insert(std::move(c));
+      }
       linked_.clear();
       ta_.free(addr_);
 
@@ -695,7 +713,9 @@ void RootLeafW::split(Key key, const model::Value& val, size_t pos) {
     // new key is the very last
 
     // this should not really happen unless we have leafs with 2 elements
-    if (mid == 0) { mid = key; }
+    if (mid == 0) {
+      mid = key;
+    }
     right_leaf->insert(key, val, Overwrite::Upsert, new_me.get());
   }
   Ensures(left_leaf->size() >= k_leaf_min_words);
@@ -812,7 +832,9 @@ NodeW& AbsInternalW::searchChild(Key k) {
   Addr addr = buf[pos];
 
   auto lookup = childs_.find(addr);
-  if (lookup != childs_.end()) { return *lookup->second; } else {
+  if (lookup != childs_.end()) {
+    return *lookup->second;
+  } else {
     auto emplace = childs_.emplace_hint(lookup, addr, openNodeW(ta_, addr));
     return *emplace->second;
   }
@@ -845,7 +867,9 @@ NodeW& AbsInternalW::getSilbling(Key key, Addr addr) {
   Addr sibl = buf[(pos == 1 ? pos + 2 : pos - 2)];
 
   auto lookup = childs_.find(sibl);
-  if (lookup != childs_.end()) { return *lookup->second; } else {
+  if (lookup != childs_.end()) {
+    return *lookup->second;
+  } else {
     return *childs_.emplace_hint(lookup, sibl, openNodeW(ta_, sibl))->second;
   }
 }
@@ -897,7 +921,9 @@ size_t AbsInternalW::findSize() {
 
 void InternalW::append(Span<const uint64_t> raw) {
   Expects(raw.size() + top_ <= k_node_max_words);
-  for (auto& c : raw) { buf_->at(top_++) = c; }
+  for (auto& c : raw) {
+    buf_->at(top_++) = c;
+  }
 }
 
 void InternalW::split(Key key, std::unique_ptr<NodeW> c) {
@@ -913,7 +939,9 @@ void InternalW::split(Key key, std::unique_ptr<NodeW> c) {
   if (mid_pos % 2 != 0) {
     if (DskInternalEntry(buf_->at(mid_pos + 1)).key.key() < key) {
       ++mid_pos;
-    } else { --mid_pos; }
+    } else {
+      --mid_pos;
+    }
   }
 
   auto mid_key = DskInternalEntry(buf_->at(mid_pos)).key.key();
@@ -1092,7 +1120,9 @@ void RootInternalW::split(Key key, std::unique_ptr<NodeW> c) {
     if (DskInternalEntry(buf_->at(mid_pos + 1)).key.key() < key) {
       new_left = false;
       ++mid_pos;
-    } else { --mid_pos; }
+    } else {
+      --mid_pos;
+    }
   } else {
     if (DskInternalEntry(buf_->at(mid_pos)).key.key() < key) {
       new_left = false;
@@ -1228,7 +1258,9 @@ LeafR::LeafR(Database& db, Addr addr)
 
 void LeafR::getAll(model::Object& obj) {
   auto next = getAllInLeaf(obj);
-  while (next != 0) { next = LeafR(db_, next).getAllInLeaf(obj); }
+  while (next != 0) {
+    next = LeafR(db_, next).getAllInLeaf(obj);
+  }
 }
 
 Addr LeafR::getAllInLeaf(model::Object& obj) {
@@ -1247,7 +1279,9 @@ Addr LeafR::getAllInLeaf(model::Object& obj) {
 
 void LeafR::getAll(model::Array& obj) {
   auto next = getAllInLeaf(obj);
-  while (next != 0) { next = LeafR(db_, next).getAllInLeaf(obj); }
+  while (next != 0) {
+    next = LeafR(db_, next).getAllInLeaf(obj);
+  }
 }
 
 Addr LeafR::getAllInLeaf(model::Array& obj) {
@@ -1256,7 +1290,9 @@ Addr LeafR::getAllInLeaf(model::Array& obj) {
   auto end = data.end();
   auto next = DskLeafHdr().fromDsk(*it++).next();
 
-  while (it != end && *it != 0) { obj.append(readValue(it)); }
+  while (it != end && *it != 0) {
+    obj.append(readValue(it));
+  }
 
   return next;
 }
@@ -1286,7 +1322,9 @@ std::unique_ptr<ValueW> LeafR::getChildCollectionW(Transaction& ta, Key key) {
     return std::make_unique<ObjectW>(ta, view[pos + 1]);
   } else if (t == ValueType::array) {
     return std::make_unique<ArrayW>(ta, view[pos + 1]);
-  } else { return nullptr; }
+  } else {
+    return nullptr;
+  }
 }
 
 std::unique_ptr<ValueR> LeafR::getChildCollectionR(Key key) {
@@ -1303,7 +1341,9 @@ std::unique_ptr<ValueR> LeafR::getChildCollectionR(Key key) {
     return std::make_unique<ObjectR>(db_, view[pos + 1]);
   } else if (t == ValueType::array) {
     return std::make_unique<ArrayR>(db_, view[pos + 1]);
-  } else { return nullptr; }
+  } else {
+    return nullptr;
+  }
 }
 
 std::pair<Key, model::PValue>

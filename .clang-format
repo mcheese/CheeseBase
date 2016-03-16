@@ -2,7 +2,7 @@ BasedOnStyle: LLVM
 IndentWidth: 2
 PointerAlignment: Left
 AlwaysBreakTemplateDeclarations: true
-AllowShortBlocksOnASingleLine: true
+AllowShortBlocksOnASingleLine: false
 AllowShortFunctionsOnASingleLine: All
 AllowShortIfStatementsOnASingleLine: true
 AllowShortLoopsOnASingleLine: true

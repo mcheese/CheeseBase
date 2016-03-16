@@ -191,7 +191,9 @@ void Query::upsert(const model::Value& val) {
   }
 }
 
-uint64_t Query::append(const model::Value& val) { return cb_->append(val, location_); }
+uint64_t Query::append(const model::Value& val) {
+  return cb_->append(val, location_);
+}
 
 std::unique_ptr<model::Value> Query::get() const { return cb_->get(location_); }
 
@@ -266,7 +268,7 @@ std::unique_ptr<model::Value> CheeseBase::get(const Location& location) const {
   std::unique_ptr<model::Value> ret;
 
   if (location.empty()) {
-     ret = disk::ObjectR(*db_, k_root).getValue();
+    ret = disk::ObjectR(*db_, k_root).getValue();
 
   } else {
     auto coll = openReadonly(*db_, location.begin(), location.end() - 1);

@@ -27,6 +27,4 @@ using Cond = boost::condition_variable;
 
 template <class M>
 using Guard = boost::lock_guard<M>;
-
 }
-

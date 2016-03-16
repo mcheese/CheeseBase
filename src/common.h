@@ -43,4 +43,3 @@ void copySpan(Span<const T> from, Span<T> to) {
 }
 
 } // namespace cheesebase
-

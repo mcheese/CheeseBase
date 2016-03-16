@@ -36,7 +36,9 @@ ValueType valueType(const model::Value& val) {
                 : ValueType::boolean_false);
   case model::Type::String:
     auto len = dynamic_cast<const model::Scalar&>(val).getString().size();
-    if (len > kShortStringMaxLen) { return ValueType::string; } else {
+    if (len > kShortStringMaxLen) {
+      return ValueType::string;
+    } else {
       return ValueType(gsl::narrow_cast<uint8_t>(0b10000000 + len));
     }
   }
@@ -76,7 +78,9 @@ std::vector<uint64_t> extraWords(const model::Scalar& val) {
     ret.push_back(*((uint64_t*)&n));
   } else if (val.type() == model::Type::String) {
     auto& str = val.getString();
-    if (str.size() > kShortStringMaxLen) { ret.push_back(0); } else {
+    if (str.size() > kShortStringMaxLen) {
+      ret.push_back(0);
+    } else {
       uint64_t word = 0;
       size_t i = 0;
       for (uint64_t c : str) {
@@ -85,7 +89,9 @@ std::vector<uint64_t> extraWords(const model::Scalar& val) {
           ret.push_back(word);
           word = 0;
           i = 0;
-        } else { word >>= 8; }
+        } else {
+          word >>= 8;
+        }
       }
       if (i > 0) {
         word >>= 8 * (7 - i);

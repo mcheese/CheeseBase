@@ -15,7 +15,9 @@ using namespace cheesebase;
 
 std::string stringGen(size_t s) {
   std::string ret;
-  for (size_t i = 0; i < s; i++) { ret.push_back('a' + (i % 26)); }
+  for (size_t i = 0; i < s; i++) {
+    ret.push_back('a' + (i % 26));
+  }
   return ret;
 }
 

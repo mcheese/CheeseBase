@@ -13,7 +13,9 @@ using namespace cheesebase;
 CheeseBase* cheesebase_open(const char* file) {
   try {
     return new CheeseBase(file);
-  } catch (std::exception) { return nullptr; }
+  } catch (std::exception) {
+    return nullptr;
+  }
 }
 
 void cheesebase_close(CheeseBase* self) { delete self; }

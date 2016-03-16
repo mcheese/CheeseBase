@@ -18,7 +18,9 @@ std::string Value::toString() const {
 }
 
 void Object::append(Map<Key, PValue> a) {
-  if (childs_.empty()) { childs_ = std::move(a); } else {
+  if (childs_.empty()) {
+    childs_ = std::move(a);
+  } else {
     for (auto& e : a) childs_.insert(std::move(e));
   }
 }
@@ -117,7 +119,9 @@ std::string escapeJson(const std::string& s) {
     default:
       if ('\x00' <= *c && *c <= '\x1f') {
         o << "\\u" << std::hex << std::setw(4) << std::setfill('0') << (int)*c;
-      } else { o << *c; }
+      } else {
+        o << *c;
+      }
     }
   }
   return o.str();
@@ -145,8 +149,12 @@ Type Scalar::type() const {
   if (data_.type() == boost::typeindex::type_id<String>()) {
     return Type::String;
   }
-  if (data_.type() == boost::typeindex::type_id<Bool>()) { return Type::Bool; }
-  if (data_.type() == boost::typeindex::type_id<Null>()) { return Type::Null; }
+  if (data_.type() == boost::typeindex::type_id<Bool>()) {
+    return Type::Bool;
+  }
+  if (data_.type() == boost::typeindex::type_id<Null>()) {
+    return Type::Null;
+  }
   throw ModelError("Invalid scalar type");
 }
 
@@ -162,11 +170,15 @@ bool Scalar::operator==(const Value& o) const {
 
 Array::Array(std::vector<PValue>&& childs) {
   Index i = 0;
-  for (auto& c : childs) { childs_.emplace(i++, std::move(c)); }
+  for (auto& c : childs) {
+    childs_.emplace(i++, std::move(c));
+  }
 }
 
 void Array::append(PValue v) {
-  if (childs_.empty()) { childs_.emplace(0, std::move(v)); } else {
+  if (childs_.empty()) {
+    childs_.emplace(0, std::move(v));
+  } else {
     auto max_key = childs_.rbegin()->first;
     childs_.emplace(max_key + 1, std::move(v));
   }
@@ -238,12 +250,16 @@ bool Array::operator==(const Value& o) const {
 
   while (l != childs_.end() && r != other->childs_.end()) {
     if (l->first == r->first) {
-      if (*l->second != *r->second) { return false; }
+      if (*l->second != *r->second) {
+        return false;
+      }
       l++;
       r++;
     } else if (*l->second == Scalar(Null())) {
       l++;
-    } else if (*r->second == Scalar(Null())) { r++; } else {
+    } else if (*r->second == Scalar(Null())) {
+      r++;
+    } else {
       return false;
     }
   }

@@ -24,13 +24,8 @@ std::shared_ptr<RwMutex> BlockLockPool::getMutex(Addr block) {
   return mutex;
 }
 
-BlockLockR BlockLockPool::getLockR(Addr block) {
-  return { getMutex(block) };
-}
+BlockLockR BlockLockPool::getLockR(Addr block) { return { getMutex(block) }; }
 
-BlockLockW BlockLockPool::getLockW(Addr block) {
-  return { getMutex(block) };
-}
+BlockLockW BlockLockPool::getLockW(Addr block) { return { getMutex(block) }; }
 
 } // namespace cheesebase
-

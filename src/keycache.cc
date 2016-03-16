@@ -57,7 +57,9 @@ Key KeyTransaction::getKey(const std::string& str) {
 
 void KeyTransaction::upgrade() {
   Expects(cache_ != nullptr);
-  if (!ug_lck_.owns_lock()) { ug_lck_ = UgLock<UgMutex>(cache_->mtx_); }
+  if (!ug_lck_.owns_lock()) {
+    ug_lck_ = UgLock<UgMutex>(cache_->mtx_);
+  }
 }
 
 Writes KeyTransaction::commit() {

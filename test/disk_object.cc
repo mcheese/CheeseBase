@@ -95,7 +95,9 @@ TEST_CASE("B+Tree insert") {
       {
         auto read = disk::ObjectR(db, root).getObject();
         REQUIRE(read != doc);
-        for (auto& c : doc) { REQUIRE(*c.second == *read.getChild(c.first)); }
+        for (auto& c : doc) {
+          REQUIRE(*c.second == *read.getChild(c.first));
+        }
         for (auto& c : doc) {
           if (c.first < "A")
             REQUIRE(*c.second == *read.getChild(c.first + "#2"));
@@ -192,7 +194,9 @@ TEST_CASE("B+Tree insert") {
             for (size_t i = 0; i < times / 2; ++i) {
               auto read = disk::ObjectR(db, root)
                               .getChildValue(c.first + "#" + std::to_string(i));
-              if (i < times) { REQUIRE_FALSE(read); } else {
+              if (i < times) {
+                REQUIRE_FALSE(read);
+              } else {
                 REQUIRE(read);
                 REQUIRE(*read == *c.second);
               }
@@ -220,7 +224,9 @@ TEST_CASE("B+Tree insert") {
         {
           auto ta = db.startTransaction();
           auto tree = disk::ObjectW(ta, root);
-          for (auto& c : doc) { tree.remove(c.first); }
+          for (auto& c : doc) {
+            tree.remove(c.first);
+          }
           for (size_t i = 0; i < times; ++i) {
             for (auto& c : doc) {
               tree.remove(c.first + "#" + std::to_string(i));
