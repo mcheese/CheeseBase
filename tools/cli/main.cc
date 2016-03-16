@@ -4,6 +4,8 @@
 #include <parser.h>
 #include <iostream>
 #include <algorithm>
+#include <cwctype>
+#include <cctype>
 
 template <class It>
 uint64_t parseIndex(It& it, It& end) {
