@@ -7,7 +7,9 @@ namespace cheesebase {
 Storage::Storage(const std::string& filename, OpenMode mode)
     : cache_(filename, mode, k_default_cache_size / k_page_size) {}
 
-ReadRef Storage::loadPage(PageNr page_nr) { return cache_.readPage(page_nr); }
+PageRef<PageReadView> Storage::loadPage(PageNr page_nr) {
+  return cache_.readPage(page_nr);
+}
 
 void Storage::storeWrite(Write write) {
   auto p = cache_.writePage(toPageNr(write.addr));
@@ -33,3 +35,4 @@ void Storage::storeWrite(std::vector<Write> transaction) {
 }
 
 } // namespace cheesebase
+

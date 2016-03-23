@@ -18,10 +18,17 @@
 namespace cheesebase {
 
 struct CachePage {
+  static constexpr PageNr sUnusedPageNr = static_cast<PageNr>(-1);
+
   RwMutex mutex;
-  Span<Byte> data;
   boost::interprocess::mapped_region region;
-  PageNr page_nr{ static_cast<PageNr>(-1) };
+  PageNr page_nr{ sUnusedPageNr };
+
+  template <typename View>
+  View getView() const {
+    return View(static_cast<Byte*>(region.get_address()),
+                         region.get_size());
+  }
 };
 
 enum class OpenMode {
@@ -32,11 +39,14 @@ enum class OpenMode {
 };
 
 // Locked reference of a page.
-template <class View, class Lock>
+template <class View>
 class PageRef {
 public:
   PageRef() = default;
-  PageRef(View page, Lock lock) : page_(page), lock_(std::move(lock)){};
+
+  template<class L>
+  PageRef(View page, L&& lock)
+      : page_(page), lock_(std::forward<L>(lock)){};
 
   MOVE_ONLY(PageRef);
 
@@ -46,45 +56,60 @@ public:
 
 private:
   View page_;
-  Lock lock_;
+  ShLock<RwMutex> lock_;
 };
 
-using ReadRef = PageRef<PageReadView, ShLock<RwMutex>>;
-using WriteRef = PageRef<PageWriteView, ExLock<RwMutex>>;
+using ReadRef = PageRef<PageReadView>;
+using WriteRef = PageRef<PageWriteView>;
+
+class PageList {
+public:
+  using iterator = std::list<CachePage>::iterator;
+  using const_iterator = std::list<CachePage>::iterator;
+
+  PageList(size_t max_pages) : max_pages_{ max_pages } {};
+
+  // mark p as most recently used (move to front of list)
+  void bumpPage(iterator p);
+
+  // return new or old+bumped page and a fitting exclusive lock
+  std::pair<iterator, ExLock<RwMutex>> getPage();
+
+  void flush();
+
+private:
+  Mutex mtx_;
+  std::list<CachePage> pages_;
+  size_t max_pages_;
+};
 
 class Cache {
 public:
   Cache(const std::string& filename, OpenMode mode, size_t nr_pages);
   ~Cache();
 
-  ReadRef readPage(PageNr page_nr);
-  WriteRef writePage(PageNr page_nr);
+  PageRef<PageReadView> readPage(PageNr page_nr);
+  PageRef<PageWriteView> writePage(PageNr page_nr);
   void flush();
 
 private:
   // return specific page, creates it if not found
-  template <class Lock>
-  std::pair<CachePage&, Lock> getPage(PageNr page_nr);
+  template <typename View>
+  PageRef<View> getPage(PageNr page_nr);
 
   // return an unused page, may free the least recently used page
-  std::pair<std::list<CachePage>::iterator, ExLock<RwMutex>>
-  GetFreePage(const ExLock<RwMutex>& map_lck);
+  std::pair<PageList::iterator, ExLock<RwMutex>> getFreePage();
 
-  // mark p as most recently used (move to front of list)
-  void bumpPage(std::list<CachePage>::const_iterator p, const ExLock<Mutex>& lck);
-
-  // ensure write to disk and remove from map
-  void freePage(CachePage& p, const ExLock<RwMutex>& page_lck,
-                const ExLock<RwMutex>& map_lck);
+  // ensure write to disk
+  void freePage(CachePage& p);
 
   uint64_t extendFile(uint64_t size);
 
   boost::interprocess::file_mapping file_;
   std::ofstream fstream_;
   uint64_t size_{ 0 };
-  Mutex pages_mtx_;
-  std::list<CachePage> pages_;
-  size_t max_pages_;
+
+  PageList pages_;
 
   RwMutex map_mtx_;
   std::unordered_map<PageNr, std::list<CachePage>::iterator> map_;

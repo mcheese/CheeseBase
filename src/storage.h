@@ -24,7 +24,7 @@ public:
   // returns a PageReadRef object holding a read-locked reference of the page.
   // The referenced page is guaranteed to be valid and unchanged for the
   // lifetime of the object.
-  ReadRef loadPage(PageNr page_nr);
+  PageRef<PageReadView> loadPage(PageNr page_nr);
 
   // Write data to the DB. Old data is overwritten and the file extended if
   // needed. The caller has to handle consistency of the database.

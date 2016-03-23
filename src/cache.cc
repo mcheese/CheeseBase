@@ -19,7 +19,8 @@ uint64_t Cache::extendFile(uint64_t size) {
   return size;
 }
 
-Cache::Cache(const std::string& fn, OpenMode m, size_t nr_pages) : max_pages_{ nr_pages } {
+Cache::Cache(const std::string& fn, OpenMode m, size_t nr_pages)
+    : pages_{ nr_pages } {
   auto exists = fs::exists(fn);
   if (m == OpenMode::create_new && exists)
     throw FileError("file already exists");
@@ -34,7 +35,6 @@ Cache::Cache(const std::string& fn, OpenMode m, size_t nr_pages) : max_pages_{ n
   if (m == OpenMode::create_new || m == OpenMode::create_always || !exists)
     extendFile(k_page_size * 8);
 
-  // fstream_.seekp(0, std::ios_base::end);
   size_ = fstream_.tellp();
 
   file_ = bi::file_mapping(fn.c_str(), bi::read_write);
@@ -42,63 +42,59 @@ Cache::Cache(const std::string& fn, OpenMode m, size_t nr_pages) : max_pages_{ n
 
 Cache::~Cache() { flush(); }
 
-ReadRef Cache::readPage(PageNr page_nr) {
-  auto p = getPage<ShLock<RwMutex>>(page_nr);
-  return { p.first.data, std::move(p.second) };
+PageRef<PageReadView> Cache::readPage(PageNr page_nr) {
+  return getPage<PageReadView>(page_nr);
 }
 
-WriteRef Cache::writePage(PageNr page_nr) {
-  auto p = getPage<ExLock<RwMutex>>(page_nr);
-  return { p.first.data, std::move(p.second) };
+PageRef<PageWriteView> Cache::writePage(PageNr page_nr) {
+  return getPage<PageWriteView>(page_nr);
 }
 
-std::pair<std::list<CachePage>::iterator, ExLock<RwMutex>>
-Cache::GetFreePage(const ExLock<RwMutex>& map_lck) {
-  ExLock<Mutex> lck{ pages_mtx_ };
-  if (pages_.size() < max_pages_) {
-    pages_.emplace_front();
-    return {pages_.begin(), ExLock<RwMutex>(pages_.front().mutex) };
-  }
-
-  auto p = --(pages_.end());
-  ExLock<RwMutex> p_lck{ p->mutex };
-  freePage(*p, p_lck, map_lck);
-  bumpPage(p, lck);
-
-  return { p, std::move(p_lck) };
-}
-
-void Cache::bumpPage(std::list<CachePage>::const_iterator p, const ExLock<Mutex>& lck) {
-  Expects(lck.mutex() == &pages_mtx_);
-  Expects(lck.owns_lock());
-
+void PageList::bumpPage(const_iterator p) {
+  Guard<Mutex> _ { mtx_ };
   pages_.splice(pages_.begin(), pages_, p);
 }
 
-void Cache::freePage(CachePage& p, const ExLock<RwMutex>& page_lck,
-                     const ExLock<RwMutex>& map_lck) {
-  Expects(page_lck.mutex() == &p.mutex);
-  Expects(page_lck.owns_lock());
-  Expects(map_lck.mutex() == &map_mtx_);
-  Expects(map_lck.owns_lock());
+std::pair<PageList::iterator, ExLock<RwMutex>> PageList::getPage() {
+  Guard<Mutex> _ { mtx_ };
 
-  p.region.flush(0, k_page_size, false);
+  if (pages_.size() < max_pages_) {
+    pages_.emplace_front();
+  } else {
+    // move last to front
+    pages_.splice(pages_.begin(), pages_, --(pages_.end()));
+  }
 
-  map_.erase(p.page_nr);
-  p.region = {};
-  p.page_nr = static_cast<PageNr>(-1);
+  auto it = pages_.begin();
+  return { it, ExLock<RwMutex>(it->mutex) };
 }
 
-template <class Lock>
-std::pair<CachePage&, Lock> Cache::getPage(PageNr page_nr) {
+std::pair<PageList::iterator, ExLock<RwMutex>> Cache::getFreePage() {
+  auto pair = pages_.getPage();
+  if(pair.first->page_nr != CachePage::sUnusedPageNr) {
+    freePage(*pair.first);
+  }
+  return pair;
+}
+
+void Cache::freePage(CachePage& p) {
+  p.region.flush(0, k_page_size, false);
+  map_.erase(p.page_nr);
+  p.region = {};
+  p.page_nr = CachePage::sUnusedPageNr;
+}
+
+template <class View>
+PageRef<View> Cache::getPage(PageNr page_nr) {
   // acquire read access for map
   ShLock<RwMutex> cache_s_lck{ map_mtx_ };
 
   auto p = map_.find(page_nr);
   if (p != map_.end()) {
     // page found, lock and return it
-    bumpPage(p->second, ExLock<Mutex>(pages_mtx_));
-    return { *p->second, Lock{ p->second->mutex } };
+    pages_.bumpPage(p->second);
+    return { p->second->getView<View>(), p->second->mutex };
+
   } else {
     // page not found, create it
 
@@ -109,16 +105,18 @@ std::pair<CachePage&, Lock> Cache::getPage(PageNr page_nr) {
     // there might be a saved page now
     p = map_.find(page_nr);
     if (p != map_.end()) {
-      bumpPage(p->second, ExLock<Mutex>(pages_mtx_));
-      return { *p->second, Lock{ p->second->mutex } };
+      pages_.bumpPage(p->second);
+      return { p->second->getView<View>(), p->second->mutex };
     }
 
     // get a free page
-    auto new_page = GetFreePage(cache_x_lck);
-    auto& page_x_lck = new_page.second;
-    auto& page = new_page.first;
-    auto inserted = map_.insert({ page_nr, page });
-    Expects(inserted.second == true);
+    PageList::iterator page;
+    ExLock<RwMutex> page_lock;
+    std::tie(page, page_lock) = getFreePage();
+
+    bool success;
+    std::tie(std::ignore, success) = map_.emplace(page_nr, page);
+    Expects(success);
 
     // just need exclusive page lock for writing content, unlock the cache
     cache_x_lck.unlock();
@@ -128,16 +126,19 @@ std::pair<CachePage&, Lock> Cache::getPage(PageNr page_nr) {
       size_ = extendFile((page_nr + 8) * k_page_size);
     }
     page->region = bi::mapped_region(file_, bi::read_write,
-                                    page_nr * k_page_size, k_page_size);
-    page->data = Span<Byte>(static_cast<Byte*>(page->region.get_address()),
-                                k_page_size);
+                                     page_nr * k_page_size, k_page_size);
+
     // downgrade the exclusive page lock to shared ATOMICALLY
-    return { *page, Lock{ std::move(page_x_lck) } };
+    return { page->getView<View>(), std::move(page_lock) };
   }
 }
 
 void Cache::flush() {
-  boost::lock_guard<Mutex> lck{ pages_mtx_ };
+  pages_.flush();
+}
+
+void PageList::flush() {
+  Guard<Mutex> _ { mtx_ };
   for (auto& p : pages_) {
     if (!p.region.flush(0, k_page_size, false))
       throw FileError("failed to flush page");
