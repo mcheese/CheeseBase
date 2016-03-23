@@ -13,17 +13,15 @@
 #include <boost/interprocess/file_mapping.hpp>
 #include <boost/interprocess/mapped_region.hpp>
 #include <fstream>
+#include <list>
 
 namespace cheesebase {
 
 struct CachePage {
   RwMutex mutex;
-  gsl::span<Byte> data;
+  Span<Byte> data;
   boost::interprocess::mapped_region region;
   PageNr page_nr{ static_cast<PageNr>(-1) };
-  bool changed{ false };
-  CachePage* less_recent;
-  CachePage* more_recent;
 };
 
 enum class OpenMode {
@@ -69,11 +67,11 @@ private:
   std::pair<CachePage&, Lock> getPage(PageNr page_nr);
 
   // return an unused page, may free the least recently used page
-  std::pair<CachePage&, ExLock<RwMutex>>
+  std::pair<std::list<CachePage>::iterator, ExLock<RwMutex>>
   GetFreePage(const ExLock<RwMutex>& map_lck);
 
   // mark p as most recently used (move to front of list)
-  void bumpPage(CachePage& p, const ExLock<Mutex>& lck);
+  void bumpPage(std::list<CachePage>::const_iterator p, const ExLock<Mutex>& lck);
 
   // ensure write to disk and remove from map
   void freePage(CachePage& p, const ExLock<RwMutex>& page_lck,
@@ -85,12 +83,11 @@ private:
   std::ofstream fstream_;
   uint64_t size_{ 0 };
   Mutex pages_mtx_;
-  std::unique_ptr<CachePage[]> pages_;
-  CachePage* least_recent_;
-  CachePage* most_recent_;
+  std::list<CachePage> pages_;
+  size_t max_pages_;
 
   RwMutex map_mtx_;
-  std::unordered_map<PageNr, CachePage&> map_;
+  std::unordered_map<PageNr, std::list<CachePage>::iterator> map_;
 };
 
 } // namespace cheesebase

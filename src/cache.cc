@@ -19,7 +19,7 @@ uint64_t Cache::extendFile(uint64_t size) {
   return size;
 }
 
-Cache::Cache(const std::string& fn, OpenMode m, size_t nr_pages) {
+Cache::Cache(const std::string& fn, OpenMode m, size_t nr_pages) : max_pages_{ nr_pages } {
   auto exists = fs::exists(fn);
   if (m == OpenMode::create_new && exists)
     throw FileError("file already exists");
@@ -38,13 +38,6 @@ Cache::Cache(const std::string& fn, OpenMode m, size_t nr_pages) {
   size_ = fstream_.tellp();
 
   file_ = bi::file_mapping(fn.c_str(), bi::read_write);
-  pages_ = std::make_unique<CachePage[]>(nr_pages);
-  for (size_t i = 0; i < nr_pages; ++i) {
-    pages_[i].less_recent = (i > 0 ? &pages_[i - 1] : nullptr);
-    pages_[i].more_recent = (i < nr_pages - 1 ? &pages_[i + 1] : nullptr);
-  }
-  least_recent_ = &pages_[0];
-  most_recent_ = &pages_[nr_pages - 1];
 }
 
 Cache::~Cache() { flush(); }
@@ -59,41 +52,27 @@ WriteRef Cache::writePage(PageNr page_nr) {
   return { p.first.data, std::move(p.second) };
 }
 
-std::pair<CachePage&, ExLock<RwMutex>>
+std::pair<std::list<CachePage>::iterator, ExLock<RwMutex>>
 Cache::GetFreePage(const ExLock<RwMutex>& map_lck) {
   ExLock<Mutex> lck{ pages_mtx_ };
-  auto& p = *least_recent_;
-  std::pair<CachePage&, ExLock<RwMutex>> ret{ p, ExLock<RwMutex>(p.mutex) };
-  freePage(p, ret.second, map_lck);
+  if (pages_.size() < max_pages_) {
+    pages_.emplace_front();
+    return {pages_.begin(), ExLock<RwMutex>(pages_.front().mutex) };
+  }
+
+  auto p = --(pages_.end());
+  ExLock<RwMutex> p_lck{ p->mutex };
+  freePage(*p, p_lck, map_lck);
   bumpPage(p, lck);
 
-  return ret;
+  return { p, std::move(p_lck) };
 }
 
-void Cache::bumpPage(CachePage& p, const ExLock<Mutex>& lck) {
+void Cache::bumpPage(std::list<CachePage>::const_iterator p, const ExLock<Mutex>& lck) {
   Expects(lck.mutex() == &pages_mtx_);
   Expects(lck.owns_lock());
 
-  // check if already most recent
-  if (!p.more_recent) return;
-
-  // remove from list
-  if (p.less_recent) {
-    Expects(p.less_recent->more_recent == &p);
-    p.less_recent->more_recent = p.more_recent;
-  } else {
-    Expects(least_recent_ == &p);
-    least_recent_ = p.more_recent;
-  }
-  Expects(p.more_recent->less_recent == &p);
-  p.more_recent->less_recent = p.less_recent;
-
-  // insert at start
-  Expects(most_recent_ != &p);
-  p.less_recent = most_recent_;
-  most_recent_->more_recent = &p;
-  p.more_recent = nullptr;
-  most_recent_ = &p;
+  pages_.splice(pages_.begin(), pages_, p);
 }
 
 void Cache::freePage(CachePage& p, const ExLock<RwMutex>& page_lck,
@@ -103,10 +82,8 @@ void Cache::freePage(CachePage& p, const ExLock<RwMutex>& page_lck,
   Expects(map_lck.mutex() == &map_mtx_);
   Expects(map_lck.owns_lock());
 
-  if (p.changed == true) {
-    p.region.flush(0, k_page_size, false);
-    p.changed = false;
-  }
+  p.region.flush(0, k_page_size, false);
+
   map_.erase(p.page_nr);
   p.region = {};
   p.page_nr = static_cast<PageNr>(-1);
@@ -121,7 +98,7 @@ std::pair<CachePage&, Lock> Cache::getPage(PageNr page_nr) {
   if (p != map_.end()) {
     // page found, lock and return it
     bumpPage(p->second, ExLock<Mutex>(pages_mtx_));
-    return { p->second, Lock{ p->second.mutex } };
+    return { *p->second, Lock{ p->second->mutex } };
   } else {
     // page not found, create it
 
@@ -133,7 +110,7 @@ std::pair<CachePage&, Lock> Cache::getPage(PageNr page_nr) {
     p = map_.find(page_nr);
     if (p != map_.end()) {
       bumpPage(p->second, ExLock<Mutex>(pages_mtx_));
-      return { p->second, Lock{ p->second.mutex } };
+      return { *p->second, Lock{ p->second->mutex } };
     }
 
     // get a free page
@@ -146,26 +123,24 @@ std::pair<CachePage&, Lock> Cache::getPage(PageNr page_nr) {
     // just need exclusive page lock for writing content, unlock the cache
     cache_x_lck.unlock();
 
-    page.page_nr = page_nr;
+    page->page_nr = page_nr;
     if ((page_nr + 1) * k_page_size > size_) {
       size_ = extendFile((page_nr + 8) * k_page_size);
     }
-    page.region = bi::mapped_region(file_, bi::read_write,
+    page->region = bi::mapped_region(file_, bi::read_write,
                                     page_nr * k_page_size, k_page_size);
-    page.data = gsl::span<Byte>(static_cast<Byte*>(page.region.get_address()),
+    page->data = Span<Byte>(static_cast<Byte*>(page->region.get_address()),
                                 k_page_size);
     // downgrade the exclusive page lock to shared ATOMICALLY
-    return { page, Lock{ std::move(page_x_lck) } };
+    return { *page, Lock{ std::move(page_x_lck) } };
   }
 }
 
 void Cache::flush() {
   boost::lock_guard<Mutex> lck{ pages_mtx_ };
-  for (auto p = least_recent_; p != nullptr; p = p->more_recent) {
-    if (p->changed) {
-      if (!p->region.flush(0, k_page_size, false))
-        throw FileError("failed to flush page");
-    }
+  for (auto& p : pages_) {
+    if (!p.region.flush(0, k_page_size, false))
+      throw FileError("failed to flush page");
   }
 }
 
