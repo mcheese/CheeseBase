@@ -3,60 +3,56 @@
 #include "cache.h"
 #include "exceptions.h"
 #include <boost/filesystem.hpp>
-#include <fstream>
 
 namespace cheesebase {
 
-namespace bi = boost::interprocess;
-namespace fs = boost::filesystem;
+namespace cache_detail {
 
-uint64_t Cache::extendFile(uint64_t size) {
-  Expects(size > size_);
-  for (uint64_t i = 0; i < size - size_; ++i) fstream_.put('\xAA');
-  if (fstream_.bad()) throw FileError("failed extending file");
-  fstream_.flush();
-  if (fstream_.bad()) throw FileError("failed extending file");
-  return size;
-}
+File::File(const std::string& filename, OpenMode m) {
+  namespace fs = boost::filesystem;
 
-Cache::Cache(const std::string& fn, OpenMode m, size_t nr_pages)
-    : pages_{ nr_pages } {
-  auto exists = fs::exists(fn);
+  auto exists = fs::exists(filename);
   if (m == OpenMode::create_new && exists)
     throw FileError("file already exists");
   if (m == OpenMode::open_existing && !exists)
     throw FileError("file not found");
-  if (m == OpenMode::create_always && exists) fs::remove(fn);
+  if (m == OpenMode::create_always && exists) fs::remove(filename);
 
-  fstream_.open(fn, std::ios_base::out | std::ios_base::binary |
-                        std::ios_base::app);
+  fstream_.open(filename, std::ios_base::out | std::ios_base::binary |
+                              std::ios_base::app);
   if (!fstream_.is_open()) throw FileError("could not open file");
 
   if (m == OpenMode::create_new || m == OpenMode::create_always || !exists)
     extendFile(k_page_size * 8);
 
   size_ = fstream_.tellp();
-
-  file_ = bi::file_mapping(fn.c_str(), bi::read_write);
+  file_ = bi::file_mapping(filename.c_str(), bi::read_write);
 }
 
-Cache::~Cache() { flush(); }
-
-PageRef<PageReadView> Cache::readPage(PageNr page_nr) {
-  return getPage<PageReadView>(page_nr);
+uint64_t File::extendFile(uint64_t size) {
+  Expects(size > size_);
+  for (uint64_t i = 0; i < size - size_; ++i) fstream_.put('\xAA');
+  fstream_.flush();
+  if (fstream_.bad()) throw FileError("failed extending file");
+  return size;
 }
 
-PageRef<PageWriteView> Cache::writePage(PageNr page_nr) {
-  return getPage<PageWriteView>(page_nr);
+bi::mapped_region File::getRegion(PageNr page_nr) {
+  if ((page_nr + 1) * k_page_size > size_) {
+    size_ = extendFile((page_nr + 8) * k_page_size);
+  }
+
+  return bi::mapped_region(file_, bi::read_write, page_nr * k_page_size,
+                           k_page_size);
 }
 
 void PageList::bumpPage(const_iterator p) {
-  Guard<Mutex> _ { mtx_ };
+  Guard<Mutex> _{ mtx_ };
   pages_.splice(pages_.begin(), pages_, p);
 }
 
 std::pair<PageList::iterator, ExLock<RwMutex>> PageList::getPage() {
-  Guard<Mutex> _ { mtx_ };
+  Guard<Mutex> _{ mtx_ };
 
   if (pages_.size() < max_pages_) {
     pages_.emplace_front();
@@ -69,9 +65,36 @@ std::pair<PageList::iterator, ExLock<RwMutex>> PageList::getPage() {
   return { it, ExLock<RwMutex>(it->mutex) };
 }
 
+void PageList::flush() {
+  Guard<Mutex> _{ mtx_ };
+  for (auto& p : pages_) {
+    if (!p.region.flush(0, k_page_size, false))
+      throw FileError("failed to flush page");
+  }
+}
+
+} // namespace cache_detail
+
+////////////////////////////////////////////////////////////////////////////////
+
+using namespace cache_detail;
+
+Cache::Cache(const std::string& fn, OpenMode m, size_t nr_pages)
+    : file_{ fn, m }, pages_{ nr_pages } {}
+
+Cache::~Cache() { flush(); }
+
+PageRef<PageReadView> Cache::readPage(PageNr page_nr) {
+  return getPage<PageReadView>(page_nr);
+}
+
+PageRef<PageWriteView> Cache::writePage(PageNr page_nr) {
+  return getPage<PageWriteView>(page_nr);
+}
+
 std::pair<PageList::iterator, ExLock<RwMutex>> Cache::getFreePage() {
   auto pair = pages_.getPage();
-  if(pair.first->page_nr != CachePage::sUnusedPageNr) {
+  if (pair.first->page_nr != CachePage::sUnusedPageNr) {
     freePage(*pair.first);
   }
   return pair;
@@ -122,27 +145,13 @@ PageRef<View> Cache::getPage(PageNr page_nr) {
     cache_x_lck.unlock();
 
     page->page_nr = page_nr;
-    if ((page_nr + 1) * k_page_size > size_) {
-      size_ = extendFile((page_nr + 8) * k_page_size);
-    }
-    page->region = bi::mapped_region(file_, bi::read_write,
-                                     page_nr * k_page_size, k_page_size);
+    page->region = file_.getRegion(page_nr);
 
     // downgrade the exclusive page lock to shared ATOMICALLY
     return { page->getView<View>(), std::move(page_lock) };
   }
 }
 
-void Cache::flush() {
-  pages_.flush();
-}
-
-void PageList::flush() {
-  Guard<Mutex> _ { mtx_ };
-  for (auto& p : pages_) {
-    if (!p.region.flush(0, k_page_size, false))
-      throw FileError("failed to flush page");
-  }
-}
+void Cache::flush() { pages_.flush(); }
 
 } // namespace cheesebase

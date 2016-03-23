@@ -17,6 +17,17 @@
 
 namespace cheesebase {
 
+enum class OpenMode {
+  create_new,    // Creates new DB if it does not exist.
+  create_always, // Creates new DB, always. Overwrite existing DB.
+  open_existing, // Opens DB if it exists.
+  open_always    // Opens DB, always. Creates new DB if it does not exist.
+};
+
+namespace cache_detail {
+
+namespace bi = boost::interprocess;
+
 struct CachePage {
   static constexpr PageNr sUnusedPageNr = static_cast<PageNr>(-1);
 
@@ -26,41 +37,9 @@ struct CachePage {
 
   template <typename View>
   View getView() const {
-    return View(static_cast<Byte*>(region.get_address()),
-                         region.get_size());
+    return View(static_cast<Byte*>(region.get_address()), region.get_size());
   }
 };
-
-enum class OpenMode {
-  create_new,    // Creates new DB if it does not exist.
-  create_always, // Creates new DB, always. Overwrite existing DB.
-  open_existing, // Opens DB if it exists.
-  open_always    // Opens DB, always. Creates new DB if it does not exist.
-};
-
-// Locked reference of a page.
-template <class View>
-class PageRef {
-public:
-  PageRef() = default;
-
-  template<class L>
-  PageRef(View page, L&& lock)
-      : page_(page), lock_(std::forward<L>(lock)){};
-
-  MOVE_ONLY(PageRef);
-
-  View get() const { return page_; };
-  View operator*() const { return page_; };
-  const View* operator->() const { return &page_; };
-
-private:
-  View page_;
-  ShLock<RwMutex> lock_;
-};
-
-using ReadRef = PageRef<PageReadView>;
-using WriteRef = PageRef<PageWriteView>;
 
 class PageList {
 public:
@@ -83,6 +62,48 @@ private:
   size_t max_pages_;
 };
 
+class File {
+public:
+  File(const std::string& filename, OpenMode m);
+
+  bi::mapped_region getRegion(PageNr page_nr);
+
+private:
+  uint64_t extendFile(uint64_t size);
+
+  bi::file_mapping file_;
+  std::ofstream fstream_;
+  uint64_t size_{ 0 };
+};
+
+} // namespace cache_detail
+
+////////////////////////////////////////////////////////////////////////////////
+
+// Locked reference of a page.
+template <class View>
+class PageRef {
+public:
+  PageRef() = default;
+
+  template <class L>
+  PageRef(View page, L&& lock)
+      : page_(page), lock_(std::forward<L>(lock)){};
+
+  MOVE_ONLY(PageRef);
+
+  View get() const { return page_; };
+  View operator*() const { return page_; };
+  const View* operator->() const { return &page_; };
+
+private:
+  View page_;
+  ShLock<RwMutex> lock_;
+};
+
+using ReadRef = PageRef<PageReadView>;
+using WriteRef = PageRef<PageWriteView>;
+
 class Cache {
 public:
   Cache(const std::string& filename, OpenMode mode, size_t nr_pages);
@@ -98,21 +119,16 @@ private:
   PageRef<View> getPage(PageNr page_nr);
 
   // return an unused page, may free the least recently used page
-  std::pair<PageList::iterator, ExLock<RwMutex>> getFreePage();
+  std::pair<cache_detail::PageList::iterator, ExLock<RwMutex>> getFreePage();
 
-  // ensure write to disk
-  void freePage(CachePage& p);
+  // flushed page to disk
+  void freePage(cache_detail::CachePage& p);
 
-  uint64_t extendFile(uint64_t size);
-
-  boost::interprocess::file_mapping file_;
-  std::ofstream fstream_;
-  uint64_t size_{ 0 };
-
-  PageList pages_;
+  cache_detail::File file_;
+  cache_detail::PageList pages_;
 
   RwMutex map_mtx_;
-  std::unordered_map<PageNr, std::list<CachePage>::iterator> map_;
+  std::unordered_map<PageNr, cache_detail::PageList::iterator> map_;
 };
 
 } // namespace cheesebase
