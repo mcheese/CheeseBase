@@ -1,4 +1,5 @@
-<img src="https://github.com/mcheese/cheesebase/blob/master/cheesebase.png" width=480>
+CheeseBase
+==========
 
 [![Build status](https://ci.appveyor.com/api/projects/status/me386u09otk6xmjc?svg=true)](https://ci.appveyor.com/project/mcheese/cheesebase)
 [![Build status](https://travis-ci.org/mcheese/cheesebase.svg)](https://travis-ci.org/mcheese/cheesebase)
