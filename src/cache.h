@@ -6,8 +6,8 @@
 #pragma once
 
 #include "common.h"
-#include "macros.h"
 #include "sync.h"
+#include <vector>
 
 #include <unordered_map>
 #include <boost/interprocess/file_mapping.hpp>
@@ -65,7 +65,6 @@ private:
 class File {
 public:
   File(const std::string& filename, OpenMode m);
-
   bi::mapped_region getRegion(PageNr page_nr);
 
 private:
@@ -120,6 +119,8 @@ private:
 
   // return an unused page, may free the least recently used page
   std::pair<cache_detail::PageList::iterator, ExLock<RwMutex>> getFreePage();
+
+
 
   // flushed page to disk
   void freePage(cache_detail::CachePage& p);

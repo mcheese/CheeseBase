@@ -52,7 +52,7 @@ void PageList::bumpPage(const_iterator p) {
 }
 
 std::pair<PageList::iterator, ExLock<RwMutex>> PageList::getPage() {
-  Guard<Mutex> _{ mtx_ };
+  Guard<Mutex> guard{ mtx_ };
 
   if (pages_.size() < max_pages_) {
     pages_.emplace_front();
@@ -66,7 +66,8 @@ std::pair<PageList::iterator, ExLock<RwMutex>> PageList::getPage() {
 }
 
 void PageList::flush() {
-  Guard<Mutex> _{ mtx_ };
+  Guard<Mutex> guard{ mtx_ };
+
   for (auto& p : pages_) {
     if (!p.region.flush(0, k_page_size, false))
       throw FileError("failed to flush page");
@@ -109,47 +110,46 @@ void Cache::freePage(CachePage& p) {
 
 template <class View>
 PageRef<View> Cache::getPage(PageNr page_nr) {
-  // acquire read access for map
-  ShLock<RwMutex> cache_s_lck{ map_mtx_ };
+  {
+    // acquire read access for map
+    ShGuard<RwMutex> guard{ map_mtx_ };
 
-  auto p = map_.find(page_nr);
-  if (p != map_.end()) {
-    // page found, lock and return it
-    pages_.bumpPage(p->second);
-    return { p->second->getView<View>(), p->second->mutex };
+    auto p = map_.find(page_nr);
+    if (p != map_.end()) {
+      // page found, lock and return it
+      pages_.bumpPage(p->second);
+      return { p->second->getView<View>(), p->second->mutex };
+    }
+  }
+  // page not found, create it
 
-  } else {
-    // page not found, create it
-
+  PageList::iterator page;
+  ExLock<RwMutex> page_lock;
+  {
     // switch to write lock on map
-    cache_s_lck.unlock();
-    ExLock<RwMutex> cache_x_lck{ map_mtx_ };
+    Guard<RwMutex> guard{ map_mtx_ };
 
     // there might be a saved page now
-    p = map_.find(page_nr);
+    auto p = map_.find(page_nr);
     if (p != map_.end()) {
       pages_.bumpPage(p->second);
       return { p->second->getView<View>(), p->second->mutex };
     }
 
     // get a free page
-    PageList::iterator page;
-    ExLock<RwMutex> page_lock;
     std::tie(page, page_lock) = getFreePage();
 
-    bool success;
-    std::tie(std::ignore, success) = map_.emplace(page_nr, page);
-    Expects(success);
+    auto emplace = map_.emplace(page_nr, page);
+    Expects(emplace.second);
 
     // just need exclusive page lock for writing content, unlock the cache
-    cache_x_lck.unlock();
-
-    page->page_nr = page_nr;
-    page->region = file_.getRegion(page_nr);
-
-    // downgrade the exclusive page lock to shared ATOMICALLY
-    return { page->getView<View>(), std::move(page_lock) };
   }
+
+  page->page_nr = page_nr;
+  page->region = file_.getRegion(page_nr);
+
+  // downgrade the exclusive page lock to shared ATOMICALLY
+  return { page->getView<View>(), std::move(page_lock) };
 }
 
 void Cache::flush() { pages_.flush(); }

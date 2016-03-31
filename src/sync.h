@@ -8,6 +8,7 @@
 #include <boost/thread/shared_mutex.hpp>
 #include <boost/thread/locks.hpp>
 #include <boost/thread/condition_variable.hpp>
+#include <boost/thread/shared_lock_guard.hpp>
 
 namespace cheesebase {
 
@@ -27,4 +28,7 @@ using Cond = boost::condition_variable;
 
 template <class M>
 using Guard = boost::lock_guard<M>;
+template <class M>
+using ShGuard = boost::shared_lock_guard<M>;
 }
+
