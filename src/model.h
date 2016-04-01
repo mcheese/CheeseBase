@@ -36,6 +36,9 @@ struct Null {
   bool operator!=(const Null&) const { return false; }
 };
 
+std::ostream& operator<<(std::ostream&, Null);
+std::ostream& operator<<(std::ostream&, Bool);
+
 using Key = String;
 using Index = uint64_t;
 
@@ -47,10 +50,12 @@ using Map = std::map<K, V>;
 class Value {
 public:
   virtual ~Value() = default;
+  Value() = default;
+
   virtual std::ostream& print(std::ostream& os) const = 0;
   virtual std::ostream& prettyPrint(std::ostream& os,
                                     size_t depth = 0) const = 0;
-  std::ostream& operator<<(std::ostream& os) { return print(os); };
+  std::ostream& operator<<(std::ostream& os) { return print(os); }
   std::string toString() const;
   virtual Type type() const = 0;
   virtual bool operator==(const Value& o) const = 0;
@@ -66,7 +71,7 @@ public:
   Object() = default;
   Object(Map<Key, PValue> childs) : childs_(std::move(childs)) {}
   ~Object() override = default;
-  MOVE_ONLY(Object);
+  MOVE_ONLY(Object)
 
   void append(Map<Key, PValue> a);
   void append(std::pair<Key, PValue> p);
@@ -94,7 +99,7 @@ public:
   Array(Map<Index, PValue> childs) : childs_(std::move(childs)) {}
   Array(std::vector<PValue>&& childs);
   ~Array() override = default;
-  MOVE_ONLY(Array);
+  MOVE_ONLY(Array)
 
   void append(PValue v);
   void append(std::pair<Index, PValue> p);
@@ -121,7 +126,7 @@ public:
   using value_type = boost::variant<String, Number, Bool, Null>;
   template <typename T>
   Scalar(T a)
-      : data_{ a } {};
+      : data_{ a } {}
 
   Scalar(const char* s) : data_{ std::string(s) } {}
 

@@ -31,4 +31,3 @@ using Guard = boost::lock_guard<M>;
 template <class M>
 using ShGuard = boost::shared_lock_guard<M>;
 }
-

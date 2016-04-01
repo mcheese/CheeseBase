@@ -11,6 +11,8 @@ namespace disk {
 
 class StringW : public ValueW {
 public:
+  virtual ~StringW() = default;
+
   StringW(Transaction& ta, model::String str);
   StringW(Transaction& ta, Addr addr);
   Writes getWrites() const override;
@@ -24,6 +26,8 @@ private:
 
 class StringR : public ValueR {
 public:
+  virtual ~StringR() = default;
+
   StringR(Database& db, Addr addr);
   model::PValue getValue() override;
 };

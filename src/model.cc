@@ -91,6 +91,8 @@ std::ostream& operator<<(std::ostream& os, Bool b) {
   return os << (b ? "true" : "false");
 }
 
+namespace {
+
 std::string escapeJson(const std::string& s) {
   std::ostringstream o;
   for (auto c = s.cbegin(); c != s.cend(); c++) {
@@ -118,7 +120,8 @@ std::string escapeJson(const std::string& s) {
       break;
     default:
       if ('\x00' <= *c && *c <= '\x1f') {
-        o << "\\u" << std::hex << std::setw(4) << std::setfill('0') << (int)*c;
+        o << "\\u" << std::hex << std::setw(4) << std::setfill('0')
+          << static_cast<int>(*c);
       } else {
         o << *c;
       }
@@ -127,11 +130,13 @@ std::string escapeJson(const std::string& s) {
   return o.str();
 }
 
+} // anonymous namespace
+
 std::ostream& Scalar::print(std::ostream& os) const {
   return prettyPrint(os, 0);
 }
 
-std::ostream& Scalar::prettyPrint(std::ostream& os, size_t depth) const {
+std::ostream& Scalar::prettyPrint(std::ostream& os, size_t) const {
   if (data_.type() == boost::typeindex::type_id<Bool>())
     return os << (boost::get<Bool>(data_) ? "true" : "false");
 

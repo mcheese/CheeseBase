@@ -17,13 +17,12 @@ namespace disk {
 namespace {
 
 CB_PACKED(struct DskEntry {
-  DskEntry() = default;
   DskEntry(uint64_t w) {
     *reinterpret_cast<uint64_t*>(this) = w;
     if (value.magic_byte != '!')
       throw ConsistencyError("No magic byte in value");
   }
-  DskEntry(Key k, ValueType t) : key{ k }, value{ '!', t } {}
+  DskEntry(Key k, ValueType t) : value{ '!', t }, key{ k } {}
 
   size_t extraWords() const { return nrExtraWords(value.type); }
   uint64_t word() { return *reinterpret_cast<uint64_t*>(this); }
@@ -41,12 +40,14 @@ CB_PACKED(struct DskInternalEntry {
       throw ConsistencyError("No magic byte in key");
   }
 
-  uint64_t fromKey(Key k) {
+  uint64_t fromKey(Key k) noexcept {
     key = k;
     return *reinterpret_cast<uint64_t*>(this);
   }
 
-  uint64_t word() { return *reinterpret_cast<uint64_t*>(this); }
+  uint64_t word() const noexcept {
+    return *reinterpret_cast<const uint64_t*>(this);
+  }
 
   char magic[2]{ '-', '>' };
   DskKey key;
@@ -74,14 +75,13 @@ CB_PACKED(struct DskLeafHdr {
   }
 
   bool hasMagic() const { return (data >> 56) == 'L'; }
-  Addr next() const { return data & (((uint64_t)1 << 56) - 1); }
+  Addr next() const { return data & lowerBitmask(56); }
 
   uint64_t data;
 });
 static_assert(sizeof(DskLeafHdr) == 8, "Invalid DskLeafHdr size");
 
 CB_PACKED(struct DskInternalHdr {
-  DskInternalHdr() = default;
   DskInternalHdr& fromSize(uint64_t d) {
     Expects((d & (static_cast<uint64_t>(0xff) << 56)) == 0);
     constexpr uint64_t magic = static_cast<uint64_t>('I') << 56;
@@ -96,7 +96,7 @@ CB_PACKED(struct DskInternalHdr {
 
   bool hasMagic() const { return (data >> 56) == 'I'; }
   size_t size() const {
-    return gsl::narrow_cast<size_t>(data & (((uint64_t)1 << 56) - 1));
+    return gsl::narrow_cast<size_t>(data & lowerBitmask(56));
   }
 
   uint64_t data;
@@ -220,7 +220,7 @@ Writes BtreeWritable::getWrites() const { return root_->getWrites(); }
 ////////////////////////////////////////////////////////////////////////////////
 // NodeW
 
-NodeW::NodeW(Transaction& ta, Addr addr) : ta_(ta), Node(addr) {}
+NodeW::NodeW(Transaction& ta, Addr addr) : Node(addr), ta_(ta) {}
 
 size_t NodeW::size() const { return top_; }
 
@@ -443,7 +443,7 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
     }
 
   } else {
-    split(key, val, pos);
+    split(key, val);
   }
 
   return true;
@@ -480,7 +480,7 @@ bool AbsLeafW::remove(Key key, AbsInternalW* parent) {
 ////////////////////////////////////////////////////////////////////////////////
 // LeafW
 
-void LeafW::split(Key key, const model::Value& val, size_t pos) {
+void LeafW::split(Key key, const model::Value& val) {
   Expects(buf_);
   Expects(top_ <= buf_->size());
   Expects(parent_ != nullptr);
@@ -666,8 +666,7 @@ RootLeafW::RootLeafW(LeafW&& o, Addr a, BtreeWritable& parent)
   ta_.free(o.addr_);
 }
 
-void RootLeafW::split(Key key, const model::Value& val, size_t pos) {
-  bool overwrite{ false };
+void RootLeafW::split(Key key, const model::Value& val) {
   Expects(buf_);
   auto& buf = *buf_;
   auto new_me = std::unique_ptr<RootInternalW>(
@@ -687,7 +686,7 @@ void RootLeafW::split(Key key, const model::Value& val, size_t pos) {
     auto extra = entry.extraWords();
 
     // check if new key needs to be put now
-    if (new_val_size > 0 && i >= pos /*&& entry.key.key() > key*/) {
+    if (entry.key.key() > key) {
       // check if new key even is the middle key
       if (ins == left_leaf.get() &&
           left_leaf->size() >= top_ - i + new_val_size) {
@@ -801,8 +800,6 @@ bool AbsInternalW::remove(Key key, AbsInternalW* parent) {
   parent_ = parent;
   return searchChild(key).remove(key, this);
 }
-
-bool remove(Key key) { return false; }
 
 Writes AbsInternalW::getWrites() const {
   Writes w;
@@ -919,7 +916,7 @@ size_t AbsInternalW::findSize() {
 ////////////////////////////////////////////////////////////////////////////////
 // InternalW
 
-void InternalW::append(Span<const uint64_t> raw) {
+void InternalW::appendRaw(Span<const uint64_t> raw) {
   Expects(raw.size() + top_ <= k_node_max_words);
   for (auto& c : raw) {
     buf_->at(top_++) = c;
@@ -955,7 +952,7 @@ void InternalW::split(Key key, std::unique_ptr<NodeW> c) {
     }
   }
 
-  right->append(
+  right->appendRaw(
       { &buf_->at(mid_pos + 1), gsl::narrow_cast<int>(top_ - mid_pos - 1) });
   std::fill(buf_->begin() + mid_pos, buf_->end(), 0);
   top_ = mid_pos;
@@ -997,7 +994,7 @@ void InternalW::merge() {
       // if we pull parent key now sibl would be deleted
       auto parent_key_insert_pos = top_++;
 
-      append(Span<uint64_t>(sibl_buf).subspan(1, sibl.size() - 1));
+      appendRaw(Span<uint64_t>(sibl_buf).subspan(1, sibl.size() - 1));
       for (auto& c : sibl.childs_) appendChild(std::move(c));
 
       ta_.free(sibl.addr());
@@ -1009,7 +1006,7 @@ void InternalW::merge() {
 
       auto parent_key_insert_pos = sibl.top_++;
 
-      sibl.append(Span<uint64_t>(buf).subspan(1, size() - 1));
+      sibl.appendRaw(Span<uint64_t>(buf).subspan(1, size() - 1));
       for (auto& c : childs_) sibl.appendChild(std::move(c));
 
       ta_.free(addr());
@@ -1105,7 +1102,7 @@ RootInternalW::RootInternalW(
     BtreeWritable& parent)
     : AbsInternalW(ta, addr, top, std::move(buf)), parent_(parent) {}
 
-void RootInternalW::split(Key key, std::unique_ptr<NodeW> c) {
+void RootInternalW::split(Key key, std::unique_ptr<NodeW> child) {
   Expects(buf_);
   Expects(top_ <= k_node_max_words);
   Expects(top_ + 2 > k_node_max_words);
@@ -1131,14 +1128,14 @@ void RootInternalW::split(Key key, std::unique_ptr<NodeW> c) {
 
   auto mid_key = DskInternalEntry(buf_->at(mid_pos)).key.key();
 
-  left->append({ &buf_->at(1), gsl::narrow_cast<int>(mid_pos - 1) });
-  right->append(
+  left->appendRaw({ &buf_->at(1), gsl::narrow_cast<int>(mid_pos - 1) });
+  right->appendRaw(
       { &buf_->at(mid_pos + 1), gsl::narrow_cast<int>(top_ - mid_pos - 1) });
 
   if (new_left)
-    left->insert(key, std::move(c));
+    left->insert(key, std::move(child));
   else
-    right->insert(key, std::move(c));
+    right->insert(key, std::move(child));
 
   Ensures(left->size() >= k_internal_min_words);
   Ensures(right->size() >= k_internal_min_words);
@@ -1357,7 +1354,7 @@ LeafR::readValue(Span<const uint64_t>::const_iterator& it) {
     auto size = (entry.value.type & 0b00111111);
     std::string str;
     str.reserve(size);
-    uint64_t word;
+    uint64_t word = 0;
     for (size_t i = 0; i < size; ++i) {
       if (i % 8 == 0) word = *it++;
       str.push_back(static_cast<char>(word));
@@ -1373,8 +1370,12 @@ LeafR::readValue(Span<const uint64_t>::const_iterator& it) {
       ret.second = ArrayR(db_, *it++).getValue();
       break;
     case ValueType::number:
-      ret.second = std::make_unique<model::Scalar>(
-          *reinterpret_cast<const model::Number*>(&(*it++)));
+      union {
+        uint64_t word;
+        model::Number number;
+      } num;
+      num.word = *it++;
+      ret.second = std::make_unique<model::Scalar>(num.number);
       break;
     case ValueType::string:
       ret.second = StringR(db_, *it++).getValue();

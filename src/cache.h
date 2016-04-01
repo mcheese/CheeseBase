@@ -37,7 +37,8 @@ struct CachePage {
 
   template <typename View>
   View getView() const {
-    return View(static_cast<Byte*>(region.get_address()), region.get_size());
+    return View(static_cast<Byte*>(region.get_address()),
+                static_cast<typename View::size_type>(region.get_size()));
   }
 };
 
@@ -46,7 +47,7 @@ public:
   using iterator = std::list<CachePage>::iterator;
   using const_iterator = std::list<CachePage>::iterator;
 
-  PageList(size_t max_pages) : max_pages_{ max_pages } {};
+  PageList(size_t max_pages) : max_pages_{ max_pages } {}
 
   // mark p as most recently used (move to front of list)
   void bumpPage(iterator p);
@@ -87,13 +88,13 @@ public:
 
   template <class L>
   PageRef(View page, L&& lock)
-      : page_(page), lock_(std::forward<L>(lock)){};
+      : page_(page), lock_(std::forward<L>(lock)) {}
 
-  MOVE_ONLY(PageRef);
+  MOVE_ONLY(PageRef)
 
-  View get() const { return page_; };
-  View operator*() const { return page_; };
-  const View* operator->() const { return &page_; };
+  View get() const { return page_; }
+  View operator*() const { return page_; }
+  const View* operator->() const { return &page_; }
 
 private:
   View page_;
@@ -119,8 +120,6 @@ private:
 
   // return an unused page, may free the least recently used page
   std::pair<cache_detail::PageList::iterator, ExLock<RwMutex>> getFreePage();
-
-
 
   // flushed page to disk
   void freePage(cache_detail::CachePage& p);

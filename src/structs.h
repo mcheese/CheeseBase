@@ -31,27 +31,28 @@ constexpr size_t toBlockSize(BlockType t) {
                                                           "Invalid block type");
 }
 
+constexpr uint64_t lowerBitmask(size_t n) {
+  return (static_cast<uint64_t>(1) << n) - 1;
+}
+
 CB_PACKED(struct DskBlockHdr {
   DskBlockHdr() = default;
-  DskBlockHdr(BlockType type, Addr next) {
-    auto type_value = static_cast<uint64_t>(type);
-    Expects(type_value <= 0xff);
-    Expects(next < ((uint64_t)1 << 56));
-    data_ = (type_value << 56) + (next & (((uint64_t)1 << 56) - 1));
-  };
+  DskBlockHdr(BlockType type, Addr next)
+      : data_{ (static_cast<uint64_t>(type) << 56) + next } {
+    Expects(static_cast<uint64_t>(type) <= 0xff);
+    Expects(next <= lowerBitmask(56));
+  }
 
-  PageNr next() const noexcept { return (data_ & (((uint64_t)1 << 56) - 1)); }
+  PageNr next() const noexcept { return data_ & lowerBitmask(56); }
 
   BlockType type() const noexcept {
     return gsl::narrow_cast<BlockType>(data_ >> 56);
   }
 
-  uint64_t data() const { return data_; }
+  uint64_t data() const noexcept { return data_; }
 
   uint64_t data_;
 });
-
-const uint64_t magic = *((uint64_t const*)"CHSBSE01");
 
 CB_PACKED(struct DskDatabaseHdr {
   uint64_t magic;

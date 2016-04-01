@@ -26,7 +26,7 @@ void insertTest(Database& db, const std::string& str) {
   Addr root;
   {
     auto ta = db.startTransaction();
-    auto tree = disk::ObjectW(ta);
+    disk::ObjectW tree{ ta };
     root = tree.addr();
     tree.insert(ta.key("X"), input, disk::Overwrite::Upsert);
     ta.commit(tree.getWrites());
@@ -62,7 +62,7 @@ TEST_CASE("update string") {
   Addr root;
   {
     auto ta = db.startTransaction();
-    auto tree = disk::ObjectW(ta);
+    disk::ObjectW tree{ ta };
     root = tree.addr();
     tree.insert(ta.key("LL"), longinput, disk::Overwrite::Upsert);
     tree.insert(ta.key("LS"), longinput, disk::Overwrite::Upsert);
@@ -72,7 +72,7 @@ TEST_CASE("update string") {
   }
   {
     auto ta = db.startTransaction();
-    auto tree = disk::ObjectW(ta, root);
+    disk::ObjectW tree{ta, root};
     tree.insert(ta.key("LL"), longinput, disk::Overwrite::Upsert);
     tree.insert(ta.key("LS"), shortinput, disk::Overwrite::Upsert);
     tree.insert(ta.key("SL"), longinput, disk::Overwrite::Upsert);
@@ -80,7 +80,7 @@ TEST_CASE("update string") {
     ta.commit(tree.getWrites());
   }
   {
-    auto tree = disk::ObjectR(db, root);
+    disk::ObjectR tree{ db, root };
     REQUIRE(*tree.getChildValue("LL") == longinput);
     REQUIRE(*tree.getChildValue("LS") == shortinput);
     REQUIRE(*tree.getChildValue("SL") == longinput);

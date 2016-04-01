@@ -26,7 +26,7 @@ class KeyTransaction {
 
 public:
   KeyTransaction() : cache_(nullptr), alloc_(nullptr) {}
-  MOVE_ONLY(KeyTransaction);
+  MOVE_ONLY(KeyTransaction)
 
   Key getKey(const std::string& str);
   void upgrade();
@@ -73,7 +73,7 @@ private:
   std::unordered_map<KeyHash, std::vector<std::string>> cache_;
   UgMutex mtx_;
   Block cur_block_;
-  Offset offset_{ sizeof(DskBlockHdr) };
+  uint64_t offset_{ sizeof(DskBlockHdr) };
 };
 
 } // namespace cheesebase

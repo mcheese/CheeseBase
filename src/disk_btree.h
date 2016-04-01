@@ -91,6 +91,7 @@ class AbsLeafW;
 
 class Node {
 public:
+  virtual ~Node() = default;
   Addr addr() const;
 
 protected:
@@ -103,6 +104,7 @@ class NodeW : public Node {
 
 public:
   NodeW(Transaction& ta, Addr addr);
+  virtual ~NodeW() = default;
 
   virtual Writes getWrites() const = 0;
 
@@ -161,7 +163,7 @@ public:
 
 protected:
   size_t findSize() override;
-  virtual void split(Key, const model::Value&, size_t insert_pos) = 0;
+  virtual void split(Key, const model::Value&) = 0;
   virtual void merge() = 0;
   // Destroy value at pos (if remote). Return size of the entry.
   template <typename ConstIt>
@@ -176,7 +178,7 @@ public:
   using AbsLeafW::AbsLeafW;
 
 private:
-  void split(Key, const model::Value&, size_t insert_pos) override;
+  void split(Key, const model::Value&) override;
   void merge() override;
 };
 
@@ -191,7 +193,7 @@ public:
 private:
   RootLeafW(LeafW&&, Addr addr, BtreeWritable& parent);
   BtreeWritable& tree_;
-  void split(Key, const model::Value&, size_t insert_pos) override;
+  void split(Key, const model::Value&) override;
   void merge() override;
 };
 
@@ -242,7 +244,7 @@ public:
   using AbsInternalW::AbsInternalW;
 
   // append words without further checking, increases top position
-  void append(Span<const uint64_t> raw);
+  void appendRaw(Span<const uint64_t> raw);
 
 private:
   void split(Key, std::unique_ptr<NodeW>) override;

@@ -35,4 +35,3 @@ void Storage::storeWrite(std::vector<Write> transaction) {
 }
 
 } // namespace cheesebase
-

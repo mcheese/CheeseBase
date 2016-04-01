@@ -21,6 +21,8 @@ namespace disk {
 // Base class representing a write only value on disk
 class ValueW {
 public:
+  virtual ~ValueW() = default;
+
   Addr addr() const { return addr_; }
 
   virtual Writes getWrites() const = 0;
@@ -40,6 +42,8 @@ protected:
 // Base class representing a read only value on disk
 class ValueR {
 public:
+  virtual ~ValueR() = default;
+
   Addr addr() const { return addr_; }
 
   virtual std::unique_ptr<model::Value> getValue() = 0;

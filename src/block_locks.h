@@ -17,7 +17,7 @@ class BlockLock {
 
 public:
   BlockLock() = default;
-  MOVE_ONLY(BlockLock);
+  MOVE_ONLY(BlockLock)
 
 private:
   BlockLock(std::shared_ptr<M>&& mtx) : mtx_{ std::move(mtx) }, lck_{ *mtx_ } {}

@@ -25,7 +25,7 @@ File::File(const std::string& filename, OpenMode m) {
   if (m == OpenMode::create_new || m == OpenMode::create_always || !exists)
     extendFile(k_page_size * 8);
 
-  size_ = fstream_.tellp();
+  size_ = static_cast<uint64_t>(fstream_.tellp());
   file_ = bi::file_mapping(filename.c_str(), bi::read_write);
 }
 
@@ -42,7 +42,8 @@ bi::mapped_region File::getRegion(PageNr page_nr) {
     size_ = extendFile((page_nr + 8) * k_page_size);
   }
 
-  return bi::mapped_region(file_, bi::read_write, page_nr * k_page_size,
+  return bi::mapped_region(file_, bi::read_write,
+                           gsl::narrow<bi::offset_t>(page_nr * k_page_size),
                            k_page_size);
 }
 

@@ -27,7 +27,7 @@ std::unique_ptr<disk::ValueW> openWritable(Transaction& ta,
 
   } else {
     std::unique_ptr<disk::ValueR> container =
-        std::make_unique<disk::ObjectR>(ta.db, k_root);
+        std::make_unique<disk::ObjectR>(ta.db(), k_root);
 
     // loc is random-access-iterator, so end - 1 is OK
     for (; loc != loc_end; loc++) {

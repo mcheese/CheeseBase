@@ -50,7 +50,7 @@ TEST_CASE("B+Tree insert") {
     auto& doc = dynamic_cast<model::Object&>(*parsed);
     {
       auto ta = db.startTransaction();
-      auto tree = disk::ObjectW(ta);
+      disk::ObjectW tree{ ta };
       root = tree.addr();
       for (auto& c : doc)
         tree.insert(ta.key(c.first), *c.second, disk::Overwrite::Upsert);
@@ -68,7 +68,7 @@ TEST_CASE("B+Tree insert") {
     auto& doc = dynamic_cast<model::Object&>(*parsed);
     {
       auto ta = db.startTransaction();
-      auto node = disk::ObjectW(ta);
+      disk::ObjectW node{ ta };
       root = node.addr();
       for (auto& c : doc) {
         node.insert(ta.key(c.first), *c.second, disk::Overwrite::Upsert);
@@ -84,7 +84,7 @@ TEST_CASE("B+Tree insert") {
     SECTION("extend without split") {
       {
         auto ta = db.startTransaction();
-        auto node = disk::ObjectW(ta, root);
+        disk::ObjectW node{ ta, root };
         for (auto& c : doc) {
           if (c.first < "A")
             node.insert(ta.key(c.first + "#2"), *c.second,
@@ -107,7 +107,7 @@ TEST_CASE("B+Tree insert") {
     SECTION("extend with split to 3 leafs") {
       {
         auto ta = db.startTransaction();
-        auto node = disk::ObjectW(ta, root);
+        disk::ObjectW node{ta, root};
         for (auto& c : doc) {
           node.insert(ta.key(c.first + "#2"), *c.second,
                       disk::Overwrite::Upsert);
@@ -128,7 +128,7 @@ TEST_CASE("B+Tree insert") {
     SECTION("extend with split to many leafs") {
       for (size_t i = 0; i < times; ++i) {
         auto ta = db.startTransaction();
-        auto node = disk::ObjectW(ta, root);
+        disk::ObjectW node{ ta, root };
         for (auto& c : doc) {
           node.insert(ta.key(c.first + "#" + std::to_string(i)), *c.second,
                       disk::Overwrite::Upsert);
@@ -163,7 +163,7 @@ TEST_CASE("B+Tree insert") {
     SECTION("extend and merge") {
       {
         auto ta = db.startTransaction();
-        auto tree = disk::ObjectW(ta, root);
+        disk::ObjectW tree{ ta, root };
         for (size_t i = 0; i < times; ++i) {
           for (auto& c : doc) {
             tree.insert(ta.key(c.first + "#" + std::to_string(i)), *c.second,
@@ -177,7 +177,7 @@ TEST_CASE("B+Tree insert") {
         // delete half
         {
           auto ta = db.startTransaction();
-          auto tree = disk::ObjectW(ta, root);
+          disk::ObjectW tree{ ta, root };
           for (size_t i = 0; i < times / 2; ++i) {
             for (auto& c : doc) {
               tree.remove(c.first + "#" + std::to_string(i));
@@ -223,7 +223,7 @@ TEST_CASE("B+Tree insert") {
       SECTION("delete all") {
         {
           auto ta = db.startTransaction();
-          auto tree = disk::ObjectW(ta, root);
+          disk::ObjectW tree{ ta, root };
           for (auto& c : doc) {
             tree.remove(c.first);
           }

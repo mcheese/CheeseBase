@@ -42,15 +42,13 @@ inline uint64_t rotl64(uint64_t x, int8_t r) {
 
 namespace cheesebase {
 
-namespace hash {
+namespace {
 
 //-----------------------------------------------------------------------------
 // Block read - if your platform needs to do endian-swapping or can only
 // handle aligned reads, do the conversion here
 
 uint32_t getblock(const uint32_t* p, int i) { return p[i]; }
-
-uint64_t getblock(const uint64_t* p, int i) { return p[i]; }
 
 //-----------------------------------------------------------------------------
 // Finalization mix - force all bits of a hash block to avalanche
@@ -65,23 +63,11 @@ uint32_t fmix(uint32_t h) {
   return h;
 }
 
-//----------
-
-uint64_t fmix(uint64_t k) {
-  k ^= k >> 33;
-  k *= BIG_CONSTANT(0xff51afd7ed558ccd);
-  k ^= k >> 33;
-  k *= BIG_CONSTANT(0xc4ceb9fe1a85ec53);
-  k ^= k >> 33;
-
-  return k;
-}
-
 //-----------------------------------------------------------------------------
 
 uint32_t MurmurHash3_x86_32(const void* key, size_t len, uint32_t seed) {
-  const uint8_t* data = (const uint8_t*)key;
-  const int nblocks = (int)(len / 4);
+  const uint8_t* data = reinterpret_cast<const uint8_t*>(key);
+  const int nblocks = static_cast<int>(len / 4);
 
   uint32_t h1 = seed;
 
@@ -91,7 +77,8 @@ uint32_t MurmurHash3_x86_32(const void* key, size_t len, uint32_t seed) {
   //----------
   // body
 
-  const uint32_t* blocks = (const uint32_t*)(data + nblocks * 4);
+  const uint32_t* blocks =
+      reinterpret_cast<const uint32_t*>(data + nblocks * 4);
 
   for (int i = -nblocks; i; i++) {
     uint32_t k1 = getblock(blocks, i);
@@ -108,7 +95,7 @@ uint32_t MurmurHash3_x86_32(const void* key, size_t len, uint32_t seed) {
   //----------
   // tail
 
-  const uint8_t* tail = (const uint8_t*)(data + nblocks * 4);
+  const uint8_t* tail = reinterpret_cast<const uint8_t*>(data + nblocks * 4);
 
   uint32_t k1 = 0;
 
@@ -135,10 +122,10 @@ uint32_t MurmurHash3_x86_32(const void* key, size_t len, uint32_t seed) {
   return h1;
 }
 
-} // namespace hash
+} // anonymous namespace
 
 uint32_t hashString(std::string str) {
-  return hash::MurmurHash3_x86_32(str.data(), str.size(), 0);
+  return MurmurHash3_x86_32(str.data(), str.size(), 0);
 }
 
 } // namespace cheesebase

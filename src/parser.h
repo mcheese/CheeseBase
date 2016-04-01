@@ -14,12 +14,12 @@ class JsonParser {
 public:
   static model::PValue parse(InputIt& begin, InputIt end) {
     return JsonParser(begin, end).parseDoc();
-  };
+  }
 
 private:
-  JsonParser(InputIt& begin, InputIt end) : it(begin), end(end) {}
-  InputIt& it;
-  InputIt end;
+  JsonParser(InputIt& begin, InputIt end) : it_(begin), end_(end) {}
+  InputIt& it_;
+  InputIt end_;
 
   model::PValue parseDoc() {
     skipWs();
@@ -30,28 +30,28 @@ private:
   using C = const char;
 
   void skipWs() noexcept {
-    while (it != end && isspace(*it)) ++it;
+    while (it_ != end_ && isspace(*it_)) ++it_;
   }
 
   void expect(C c) {
-    if (it == end || *it != c)
+    if (it_ == end_ || *it_ != c)
       throw ParserError(std::string("expected '") + c + "'");
-    ++it;
+    ++it_;
   }
 
-  bool check(C c) const { return (it != end && *it == c); }
+  bool check(C c) const { return (it_ != end_ && *it_ == c); }
 
   model::String parseString() {
     expect('"');
     model::String str;
 
-    for (; it != end && *it != '\"'; ++it) {
-      unsigned char c = *it;
+    for (; it_ != end_ && *it_ != '\"'; ++it_) {
+      unsigned char c = *it_;
 
       if (c == '\\') {
-        if (++it == end)
+        if (++it_ == end_)
           throw ParserError("unexpected end while reading string");
-        c = *it;
+        c = *it_;
 
         switch (c) {
         case '\"':
@@ -78,11 +78,11 @@ private:
 
         case 'u': {
           wchar_t wc = 0;
-          for (int i = 3; i >= 0 && it != end; i--) {
-            if (++it == end)
+          for (int i = 3; i >= 0 && it_ != end_; i--) {
+            if (++it_ == end_)
               throw ParserError("unexpected end while reading string");
 
-            char d = *it;
+            char d = *it_;
 
             if (d >= '0' && d <= '9') {
               wc += static_cast<wchar_t>(d - '0') << (4 * i);
@@ -117,9 +117,10 @@ private:
 
   model::PValue parseNumber() {
     std::string tmp;
-    while (it != end && ((*it >= '0' && *it <= '9') || *it == '.' ||
-                         *it == '-' || *it == '+' || *it == 'e' || *it == 'E'))
-      tmp.push_back(*(it++));
+    while (it_ != end_ &&
+           ((*it_ >= '0' && *it_ <= '9') || *it_ == '.' || *it_ == '-' ||
+            *it_ == '+' || *it_ == 'e' || *it_ == 'E'))
+      tmp.push_back(*(it_++));
     char* last;
     auto num = strtod(tmp.c_str(), &last);
     if (errno == ERANGE) {
@@ -134,13 +135,13 @@ private:
 
   model::PValue parseBool() {
     if (check('t')) {
-      ++it;
+      ++it_;
       expect('r');
       expect('u');
       expect('e');
       return model::PValue(new model::Scalar(true));
-    } else if (*it == 'f') {
-      ++it;
+    } else if (*it_ == 'f') {
+      ++it_;
       expect('a');
       expect('l');
       expect('s');
@@ -172,13 +173,13 @@ private:
       obj.append(std::move(key), std::move(val));
       skipWs();
       while (check(',')) {
-        ++it;
+        ++it_;
         skipWs();
-        auto key = parseString();
+        key = parseString();
         skipWs();
         expect(':');
         skipWs();
-        auto val = parseValue();
+        val = parseValue();
         obj.append(std::move(key), std::move(val));
         skipWs();
       }
@@ -196,7 +197,7 @@ private:
       arr.append(parseValue());
       skipWs();
       while (check(',')) {
-        ++it;
+        ++it_;
         skipWs();
         arr.append(parseValue());
         skipWs();
@@ -207,9 +208,9 @@ private:
   }
 
   model::PValue parseValue() {
-    if (it == end) throw ParserError("expected value");
+    if (it_ == end_) throw ParserError("expected value");
 
-    switch (*it) {
+    switch (*it_) {
     case '{':
       return model::PValue(new model::Object(parseObject()));
     case '"':
@@ -222,7 +223,7 @@ private:
     case 'f':
       return parseBool();
     default:
-      if ((*it >= '0' && *it <= '9') || *it == '-') return parseNumber();
+      if ((*it_ >= '0' && *it_ <= '9') || *it_ == '-') return parseNumber();
     }
     throw ParserError("expected value");
   }

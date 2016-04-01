@@ -16,7 +16,6 @@ using Span = gsl::span<T, gsl::dynamic_range>;
 
 using PageNr = uint64_t;
 using Addr = uint64_t;
-using Offset = uint64_t;
 
 // Represents a write to disk.
 struct Write {

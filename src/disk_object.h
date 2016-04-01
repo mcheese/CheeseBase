@@ -32,7 +32,7 @@ public:
   bool remove(Key key) { return tree_.remove(key); }
 
   bool remove(const std::string& key) {
-    auto k = ta_.db.getKey(key);
+    auto k = ta_.db().getKey(key);
     if (!k) return false;
     return tree_.remove(*k);
   }
@@ -47,7 +47,7 @@ public:
 
   model::PValue getValue() override {
     return std::make_unique<model::Object>(tree_.getObject());
-  };
+  }
 
   model::PValue getChildValue(const std::string& key) {
     auto k = db_.getKey(key);

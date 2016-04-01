@@ -125,7 +125,7 @@ void KeyTransaction::end() {
 }
 
 KeyCache::KeyCache(Block first_block, Storage& store)
-    : cur_block_(first_block), store_(store) {
+    : store_(store), cur_block_(first_block) {
   // empty string is always known
   cache_[hashString("")].emplace_back("");
 

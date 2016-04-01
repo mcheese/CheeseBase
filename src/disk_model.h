@@ -3,6 +3,7 @@
 #pragma once
 
 #include "model.h"
+#include "exceptions.h"
 
 namespace cheesebase {
 namespace disk {
@@ -19,7 +20,7 @@ enum ValueType : uint8_t {
   null = '0'
 };
 
-ValueType valueType(const model::Value& val) {
+inline ValueType valueType(const model::Value& val) {
   auto t = val.type();
   switch (t) {
   case model::Type::Object:
@@ -46,7 +47,7 @@ ValueType valueType(const model::Value& val) {
   throw ConsistencyError("Unknown type");
 }
 
-size_t nrExtraWords(uint8_t t) {
+inline size_t nrExtraWords(uint8_t t) {
   if (t & 0b10000000) {
     size_t l = (t & 0b00111111);
     return (l == 0 ? 0 : (l - 1) / 8 + 1);
@@ -66,16 +67,16 @@ size_t nrExtraWords(uint8_t t) {
   }
 }
 
-size_t nrExtraWords(const model::Value& val) {
+inline size_t nrExtraWords(const model::Value& val) {
   return nrExtraWords(valueType(val));
 }
 
-std::vector<uint64_t> extraWords(const model::Scalar& val) {
+inline std::vector<uint64_t> extraWords(const model::Scalar& val) {
   std::vector<uint64_t> ret;
 
   if (val.type() == model::Type::Number) {
     double n = val.getNumber();
-    ret.push_back(*((uint64_t*)&n));
+    ret.push_back(*(reinterpret_cast<uint64_t*>(&n)));
   } else if (val.type() == model::Type::String) {
     auto& str = val.getString();
     if (str.size() > kShortStringMaxLen) {

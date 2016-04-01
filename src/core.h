@@ -27,13 +27,14 @@ public:
   Key key(const std::string& s);
   BlockLockW getLockW(Addr);
   BlockLockR getLockR(Addr);
+  Database& db() const noexcept { return db_; }
 
   void commit(Writes w);
-  Database& db;
 
 private:
   Transaction(Database& db);
 
+  Database& db_;
   Storage& storage_;
   AllocTransaction alloc_;
   KeyTransaction kcache_;

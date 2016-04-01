@@ -15,13 +15,13 @@ TEST_CASE("array") {
     Addr root;
     {
       auto ta = db.startTransaction();
-      auto tree = disk::ObjectW(ta);
+      disk::ObjectW tree(ta);
       root = tree.addr();
       tree.insert(ta.key("arr"), *val, disk::Overwrite::Upsert);
       ta.commit(tree.getWrites());
     }
     {
-      auto tree = disk::ObjectR(db, root);
+      disk::ObjectR tree(db, root);
       auto read = tree.getChildValue("arr");
       REQUIRE(*val == *read);
     }
@@ -31,13 +31,13 @@ TEST_CASE("array") {
     Addr root;
     {
       auto ta = db.startTransaction();
-      auto arr = disk::ArrayW(ta);
+      disk::ArrayW arr(ta);
       root = arr.addr();
       ta.commit(arr.getWrites());
     }
     {
       auto ta = db.startTransaction();
-      auto arr = disk::ArrayW(ta, root);
+      disk::ArrayW arr(ta, root);
       auto i1 = arr.append(model::Scalar(std::string("a")));
       auto i2 = arr.append(model::Scalar(std::string("b")));
       auto i3 = arr.append(model::Scalar(std::string("c")));
@@ -47,21 +47,21 @@ TEST_CASE("array") {
       ta.commit(arr.getWrites());
     }
     {
-      auto arr = disk::ArrayR(db, root);
+      disk::ArrayR arr(db, root);
       auto read = arr.getValue();
       auto val = parseJson(R"( [ "a", "b", "c" ] )");
       REQUIRE(*val == *read);
     }
     {
       auto ta = db.startTransaction();
-      auto arr = disk::ArrayW(ta, root);
+      disk::ArrayW arr(ta, root);
       arr.remove(1);
       arr.insert(4, model::Scalar(true), disk::Overwrite::Insert);
       arr.append(model::Scalar(false));
       ta.commit(arr.getWrites());
     }
     {
-      auto arr = disk::ArrayR(db, root);
+      disk::ArrayR arr(db, root);
       auto read = arr.getValue();
       auto val = parseJson(R"( [ "a", null, "c", null, true, false ] )");
       REQUIRE(*val == *read);

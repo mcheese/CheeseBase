@@ -12,7 +12,7 @@ class AllocTransaction {
   friend class Allocator;
 
 public:
-  MOVE_ONLY(AllocTransaction);
+  MOVE_ONLY(AllocTransaction)
   ~AllocTransaction();
 
   // Allocates one block of at least size bytes. The first 8 byte of the block

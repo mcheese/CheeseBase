@@ -8,7 +8,9 @@
 
 namespace cheesebase {
 
-const uint64_t k_magic = *(uint64_t const*)"CHSBSE01";
+constexpr uint16_t kVersion{ 0x0001 };
+constexpr uint64_t k_magic{ 0x0000455342534843 + // CHSBSExx
+                            (static_cast<uint64_t>(kVersion) << 48) };
 
 // size of a memory page
 const size_t k_page_size_power{ 12 };
@@ -23,8 +25,8 @@ constexpr PageNr toPageNr(Addr addr) noexcept {
   return addr >> k_page_size_power;
 }
 
-constexpr Offset toPageOffset(Addr addr) noexcept {
-  return addr & static_cast<uint64_t>(k_page_size - 1);
+constexpr auto toPageOffset(Addr addr) noexcept {
+  return static_cast<Span<Byte>::size_type>(addr & (k_page_size - 1));
 }
 
 constexpr Addr toAddr(PageNr nr) noexcept { return nr * k_page_size; }

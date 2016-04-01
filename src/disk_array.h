@@ -39,7 +39,7 @@ public:
 
   model::PValue getValue() override {
     return std::make_unique<model::Array>(tree_.getArray());
-  };
+  }
 
   model::PValue getChildValue(model::Index index) {
     if (index > kMaxKey) throw IndexOutOfRangeError();

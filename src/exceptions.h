@@ -7,17 +7,19 @@
 
 namespace cheesebase {
 
-struct CheeseBaseError : public std::exception {
+class CheeseBaseError : public std::exception {
+public:
   CheeseBaseError() : text_{ "CheeseBaseError" } {}
-  CheeseBaseError(std::string text) : text_{ std::move(text) } {}
-  const char* what() const noexcept { return text_.c_str(); }
+  explicit CheeseBaseError(std::string text) : text_{ std::move(text) } {}
+  virtual const char* what() const noexcept override { return text_.c_str(); }
+
+private:
   std::string text_;
 };
 
 #define DEF_EXCEPTION(NAME)                                                    \
-  struct NAME : public CheeseBaseError {                                       \
-    NAME() : CheeseBaseError(#NAME) {}                                         \
-    NAME(std::string text) : CheeseBaseError(text) {}                          \
+  class NAME : public CheeseBaseError {                                        \
+    using CheeseBaseError::CheeseBaseError;                                    \
   };
 
 DEF_EXCEPTION(ConsistencyError);

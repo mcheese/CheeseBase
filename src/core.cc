@@ -77,8 +77,8 @@ boost::optional<Key> Database::getKey(const std::string& k) const {
 
 BlockLockW Database::getLockW(Addr addr) { return lock_pool_->getLockW(addr); }
 BlockLockR Database::getLockR(Addr addr) { return lock_pool_->getLockR(addr); }
-BlockLockW Transaction::getLockW(Addr addr) { return db.getLockW(addr); }
-BlockLockR Transaction::getLockR(Addr addr) { return db.getLockR(addr); }
+BlockLockW Transaction::getLockW(Addr addr) { return db_.getLockW(addr); }
+BlockLockR Transaction::getLockR(Addr addr) { return db_.getLockR(addr); }
 
 ReadRef Transaction::load(PageNr p) { return storage_.loadPage(p); };
 
@@ -93,7 +93,7 @@ void Transaction::free(Addr a) { return alloc_.free(a); }
 Key Transaction::key(const std::string& s) { return kcache_.getKey(s); }
 
 Transaction::Transaction(Database& db)
-    : db(db)
+    : db_(db)
     , storage_(*db.store_)
     , alloc_(db.alloc_->startTransaction())
     , kcache_(db.keycache_->startTransaction(alloc_)) {}
