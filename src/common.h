@@ -75,9 +75,9 @@ struct Addr {
 //! Signed wrapper for sizeof().
 template <typename T>
 constexpr auto ssizeof() {
-  static_assert(sizeof(T) == gsl::narrow_cast<std::ptrdiff_t>(sizeof(T)),
-                "Signed cast changes value!");
-  return gsl::narrow_cast<std::ptrdiff_t>(sizeof(T));
+  static_assert(sizeof(T) == static_cast<std::ptrdiff_t>(sizeof(T)),
+                "Signed sizeof changes value!");
+  return static_cast<std::ptrdiff_t>(sizeof(T));
 }
 
 //! Signed wrapper for sizeof().
