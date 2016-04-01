@@ -17,19 +17,19 @@ using namespace cheesebase;
 TEST_CASE("KeyCache single") {
   DskDatabaseHdr hdr;
   memset(&hdr, 0, sizeof(hdr));
-  hdr.end_of_file = k_page_size;
+  hdr.end_of_file = Addr(k_page_size);
   Storage store{ "test.db", OpenMode::create_always };
 
   // build first keycache block
   constexpr auto kc_pos = k_page_size / 2;
-  DskBlockHdr cache_hdr{ BlockType::t1, 0 };
+  DskBlockHdr cache_hdr{ BlockType::t1, Addr(0) };
   uint64_t term{ 0 };
-  store.storeWrite(
-      Writes{ { kc_pos, gsl::as_bytes(gsl::span<DskBlockHdr>(cache_hdr)) },
-              { kc_pos + sizeof(DskBlockHdr),
-                gsl::as_bytes(gsl::span<uint64_t>(term)) } });
+  store.storeWrite(Writes{
+      { Addr(kc_pos), gsl::as_bytes(gsl::span<DskBlockHdr>(cache_hdr)) },
+      { Addr(kc_pos + sizeof(DskBlockHdr)),
+        gsl::as_bytes(gsl::span<uint64_t>(term)) } });
 
-  KeyCache keys{ Block{ kc_pos, kc_pos }, store };
+  KeyCache keys{ Block{ Addr(kc_pos), kc_pos }, store };
   Allocator alloc{ hdr, store };
 
   auto ta = alloc.startTransaction();

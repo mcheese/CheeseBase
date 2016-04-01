@@ -8,12 +8,12 @@
 
 using namespace cheesebase;
 
-const Addr eof_addr = offsetof(DskDatabaseHdr, end_of_file);
-const Addr pg_addr = offsetof(DskDatabaseHdr, free_alloc_pg);
-const Addr t1_addr = offsetof(DskDatabaseHdr, free_alloc_t1);
-const Addr t2_addr = offsetof(DskDatabaseHdr, free_alloc_t2);
-const Addr t3_addr = offsetof(DskDatabaseHdr, free_alloc_t3);
-const Addr t4_addr = offsetof(DskDatabaseHdr, free_alloc_t4);
+const Addr eof_addr = Addr(offsetof(DskDatabaseHdr, end_of_file));
+const Addr pg_addr = Addr(offsetof(DskDatabaseHdr, free_alloc_pg));
+const Addr t1_addr = Addr(offsetof(DskDatabaseHdr, free_alloc_t1));
+const Addr t2_addr = Addr(offsetof(DskDatabaseHdr, free_alloc_t2));
+const Addr t3_addr = Addr(offsetof(DskDatabaseHdr, free_alloc_t3));
+const Addr t4_addr = Addr(offsetof(DskDatabaseHdr, free_alloc_t4));
 
 const size_t pg_block = k_page_size - 50;
 const size_t t1_block = k_page_size / 2 - 50;
@@ -32,9 +32,10 @@ bool contains(const std::vector<Write>& ws, Addr addr, uint64_t word) {
 TEST_CASE("allocate and free blocks") {
   DskDatabaseHdr hdr;
   memset(&hdr, 0, sizeof(hdr));
-  hdr.end_of_file = k_page_size;
+  hdr.end_of_file.value = k_page_size;
   Storage store{ "test.db", OpenMode::create_always };
-  store.storeWrite(Write({ 0, gsl::as_bytes(gsl::span<DskDatabaseHdr>(hdr)) }));
+  store.storeWrite(
+      Write({ Addr(0), gsl::as_bytes(gsl::span<DskDatabaseHdr>(hdr)) }));
 
   Allocator alloc{ hdr, store };
 
@@ -52,11 +53,11 @@ TEST_CASE("allocate and free blocks") {
   //   [::::::::::::::::::::::::::::: b2 :::::::::::::::::::::::::::::]
   //
   REQUIRE(b1.size >= t4_block);
-  REQUIRE(b1.addr == k_page_size);
+  REQUIRE(b1.addr.value == k_page_size);
   REQUIRE(b2.size >= pg_block);
-  REQUIRE(b2.addr == k_page_size * 2);
+  REQUIRE(b2.addr.value == k_page_size * 2);
   REQUIRE(b3.size >= t1_block);
-  REQUIRE(b3.addr == k_page_size * 1.5);
+  REQUIRE(b3.addr.value == k_page_size * 1.5);
 
   REQUIRE(contains(writes, t4_addr, k_page_size + k_page_size / 16));
   REQUIRE(contains(writes, t3_addr, k_page_size + k_page_size / 8));
@@ -84,9 +85,9 @@ TEST_CASE("allocate and free blocks") {
   // [::::::::::::: b7 :::::::::::::][                              ]
   //
 
-  REQUIRE(b5.addr == k_page_size + k_page_size / 4);
-  REQUIRE(b6.addr == k_page_size + k_page_size / 2);
-  REQUIRE(b7.addr == k_page_size * 3);
+  REQUIRE(b5.addr.value == k_page_size + k_page_size / 4);
+  REQUIRE(b6.addr.value == k_page_size + k_page_size / 2);
+  REQUIRE(b7.addr.value == k_page_size * 3);
 
   REQUIRE(contains(writes, t4_addr, k_page_size));
   REQUIRE(contains(writes, t2_addr,
@@ -110,8 +111,8 @@ TEST_CASE("allocate and free blocks") {
   // [::::::::::::::::::::::::::::: b2 :::::::::::::::::::::::::::::]
   // [::::::::::::: b7 :::::::::::::][::::::::::::: b8 :::::::::::b9]
   //
-  REQUIRE(b8.addr == k_page_size * 3.5);
-  REQUIRE(b9.addr == k_page_size * 1.75);
+  REQUIRE(b8.addr.value == k_page_size * 3.5);
+  REQUIRE(b9.addr.value == k_page_size * 1.75);
   REQUIRE(contains(writes, t2_addr, 0));
   REQUIRE(contains(writes, t1_addr, 0));
   REQUIRE(
@@ -134,8 +135,8 @@ TEST_CASE("allocate and free blocks") {
   // [::::::::::::::::::::::::::::: b2 :::::::::::::::::::::::::::::]
   // [::::::::::::: b7 :::::::::::::][                              ]
   //
-  REQUIRE(contains(writes, t2_addr, b9.addr));
-  REQUIRE(contains(writes, t1_addr, b8.addr));
+  REQUIRE(contains(writes, t2_addr, b9.addr.value));
+  REQUIRE(contains(writes, t1_addr, b8.addr.value));
   REQUIRE(
       contains(writes, b9.addr, DskBlockHdr(BlockType::t2, b5.addr).data()));
 

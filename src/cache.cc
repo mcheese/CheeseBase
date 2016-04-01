@@ -38,12 +38,12 @@ uint64_t File::extendFile(uint64_t size) {
 }
 
 bi::mapped_region File::getRegion(PageNr page_nr) {
-  if ((page_nr + 1) * k_page_size > size_) {
-    size_ = extendFile((page_nr + 8) * k_page_size);
+  if (page_nr.addr() + k_page_size > size_) {
+    size_ = extendFile(page_nr.addr() + k_page_size);
   }
 
   return bi::mapped_region(file_, bi::read_write,
-                           gsl::narrow<bi::offset_t>(page_nr * k_page_size),
+                           gsl::narrow_cast<bi::offset_t>(page_nr.addr()),
                            k_page_size);
 }
 
@@ -96,7 +96,7 @@ PageRef<PageWriteView> Cache::writePage(PageNr page_nr) {
 
 std::pair<PageList::iterator, ExLock<RwMutex>> Cache::getFreePage() {
   auto pair = pages_.getPage();
-  if (pair.first->page_nr != CachePage::sUnusedPageNr) {
+  if (pair.first->inUse()) {
     freePage(*pair.first);
   }
   return pair;
@@ -106,7 +106,7 @@ void Cache::freePage(CachePage& p) {
   p.region.flush(0, k_page_size, false);
   map_.erase(p.page_nr);
   p.region = {};
-  p.page_nr = CachePage::sUnusedPageNr;
+  p.page_nr = PageNr(CachePage::sUnused);
 }
 
 template <class View>

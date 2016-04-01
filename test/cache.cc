@@ -27,7 +27,7 @@ SCENARIO("CACHE") {
       }
 
       AND_WHEN("many other pages are read") {
-        for (PageNr i = 0; i < 20; ++i) cache.readPage(i);
+        for (size_t i = 0; i < 20; ++i) cache.readPage(PageNr(i));
 
         THEN("same data can sill be read") {
           auto p = cache.readPage(page);

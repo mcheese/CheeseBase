@@ -18,7 +18,7 @@ class Value;
 
 namespace disk {
 
-// Base class representing a write only value on disk
+//! Base class representing a write only value on disk.
 class ValueW {
 public:
   virtual ~ValueW() = default;
@@ -29,17 +29,17 @@ public:
   virtual void destroy() = 0;
 
 protected:
-  ValueW(Transaction& ta) : addr_{ 0 }, ta_{ ta } {}
+  ValueW(Transaction& ta) : addr_{ Addr(0) }, ta_{ ta } {}
   ValueW(Transaction& ta, Addr addr)
       : addr_{ addr }, ta_{ ta }, lck_{ ta.getLockW(addr) } {
-    Expects(addr != 0);
+    Expects(addr.value != 0);
   }
   Addr addr_;
   Transaction& ta_;
   BlockLockW lck_;
 };
 
-// Base class representing a read only value on disk
+//! Base class representing a read only value on disk.
 class ValueR {
 public:
   virtual ~ValueR() = default;
@@ -51,7 +51,7 @@ public:
 protected:
   ValueR(Database& db, Addr addr)
       : addr_{ addr }, db_{ db }, lck_{ db.getLockR(addr) } {
-    Expects(addr != 0);
+    Expects(addr.value != 0);
   }
   Addr addr_;
   Database& db_;

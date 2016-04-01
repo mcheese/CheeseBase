@@ -62,9 +62,9 @@ CB_PACKED(struct DskLeafHdr {
   DskLeafHdr() = default;
 
   DskLeafHdr& fromAddr(Addr d) {
-    Expects((d & (static_cast<uint64_t>(0xff) << 56)) == 0);
+    Expects((d.value & (static_cast<uint64_t>(0xff) << 56)) == 0);
     constexpr uint64_t magic = static_cast<uint64_t>('L') << 56;
-    data = d + magic;
+    data = d.value + magic;
     return *this;
   }
 
@@ -75,7 +75,7 @@ CB_PACKED(struct DskLeafHdr {
   }
 
   bool hasMagic() const { return (data >> 56) == 'L'; }
-  Addr next() const { return data & lowerBitmask(56); }
+  Addr next() const { return Addr(data & lowerBitmask(56)); }
 
   uint64_t data;
 });
@@ -113,20 +113,20 @@ namespace {
 
 bool isNodeLeaf(const ReadRef& page, Addr addr) {
   auto hdr = gsl::as_span<DskBlockHdr>(
-      page->subspan(toPageOffset(addr), sizeof(DskBlockHdr)))[0];
+      page->subspan(addr.pageOffset(), sizeof(DskBlockHdr)))[0];
 
   if (hdr.type() != k_block_type)
     throw ConsistencyError("Unexpected block size");
 
   // first byte of Addr is always 0
   // next-ptr of leafs put a flag in the first byte, marking the node as leaf
-  return gsl::as_span<const DskLeafHdr>(
-             page->subspan(toPageOffset(addr) + sizeof(DskBlockHdr),
-                           sizeof(DskLeafHdr)))[0].hasMagic();
+  return gsl::as_span<const DskLeafHdr>(page->subspan(
+      addr.pageOffset() + ssizeof<DskBlockHdr>(), sizeof(DskLeafHdr)))[0]
+      .hasMagic();
 }
 
 std::unique_ptr<NodeW> openNodeW(Transaction& ta, Addr addr) {
-  auto page = ta.load(toPageNr(addr));
+  auto page = ta.load(addr.pageNr());
 
   if (isNodeLeaf(page, addr))
     return std::make_unique<LeafW>(ta, addr);
@@ -135,7 +135,7 @@ std::unique_ptr<NodeW> openNodeW(Transaction& ta, Addr addr) {
 }
 
 std::unique_ptr<NodeR> openNodeR(Database& db, Addr addr) {
-  auto page = db.loadPage(toPageNr(addr));
+  auto page = db.loadPage(addr.pageNr());
 
   if (isNodeLeaf(page, addr))
     return std::make_unique<LeafR>(db, addr, std::move(page));
@@ -190,7 +190,7 @@ Addr Node::addr() const { return addr_; }
 // BtreeWriteable
 
 BtreeWritable::BtreeWritable(Transaction& ta, Addr root) {
-  auto page = ta.load(toPageNr(root));
+  auto page = ta.load(root.pageNr());
   if (isNodeLeaf(page, root))
     root_ = std::make_unique<RootLeafW>(ta, root, *this);
   else
@@ -198,7 +198,7 @@ BtreeWritable::BtreeWritable(Transaction& ta, Addr root) {
 }
 
 BtreeWritable::BtreeWritable(Transaction& ta) {
-  root_ = std::make_unique<RootLeafW>(AllocateNew(), ta, 0, *this);
+  root_ = std::make_unique<RootLeafW>(AllocateNew(), ta, Addr(0), *this);
 }
 
 Addr BtreeWritable::addr() const { return root_->addr(); }
@@ -256,8 +256,8 @@ void NodeW::shiftBuffer(size_t pos, int amount) {
 void NodeW::initFromDisk() {
   if (!buf_) {
     buf_ = std::make_unique<std::array<uint64_t, k_node_max_words>>();
-    copySpan(ta_.load(toPageNr(addr_))
-                 ->subspan(toPageOffset(addr_) + sizeof(DskBlockHdr),
+    copySpan(ta_.load(addr_.pageNr())
+                 ->subspan(addr_.pageOffset() + ssizeof<DskBlockHdr>(),
                            k_node_max_bytes),
              gsl::as_writeable_bytes(Span<uint64_t>(*buf_)));
     top_ = findSize();
@@ -268,9 +268,9 @@ std::pair<Span<const uint64_t>, std::unique_ptr<ReadRef>>
 NodeW::getDataView() const {
   if (buf_) return { Span<const uint64_t>(*buf_), nullptr };
 
-  auto p = std::make_unique<ReadRef>(ta_.load(toPageNr(addr_)));
+  auto p = std::make_unique<ReadRef>(ta_.load(addr_.pageNr()));
   return { gsl::as_span<const uint64_t>((*p)->subspan(
-               toPageOffset(addr_) + sizeof(DskBlockHdr), k_node_max_bytes)),
+               addr_.pageOffset() + ssizeof<DskBlockHdr>(), k_node_max_bytes)),
            std::move(p) };
 }
 
@@ -292,8 +292,8 @@ Writes AbsLeafW::getWrites() const {
   w.reserve(1 + linked_.size()); // may be more, but a good guess
 
   if (buf_)
-    w.push_back(
-        { addr_ + sizeof(DskBlockHdr), gsl::as_bytes(Span<uint64_t>(*buf_)) });
+    w.push_back({ Addr(addr_.value + sizeof(DskBlockHdr)),
+                  gsl::as_bytes(Span<uint64_t>(*buf_)) });
 
   for (auto& c : linked_) {
     auto cw = c.second->getWrites();
@@ -328,13 +328,13 @@ size_t AbsLeafW::destroyValue(ConstIt it) {
 
   switch (entry.value.type) {
   case ValueType::object:
-    ObjectW(ta_, *(it + 1)).destroy();
+    ObjectW(ta_, Addr(*(it + 1))).destroy();
     break;
   case ValueType::string:
-    StringW(ta_, *(it + 1)).destroy();
+    StringW(ta_, Addr(*(it + 1))).destroy();
     break;
   case ValueType::array:
-    ArrayW(ta_, *(it + 1)).destroy();
+    ArrayW(ta_, Addr(*(it + 1))).destroy();
     break;
   }
   return entry.extraWords() + 1;
@@ -383,15 +383,15 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
       auto old_type = old_entry.value.type;
       switch (old_type) {
       case ValueType::object:
-        ObjectW(ta_, buf_->at(pos + 1)).destroy();
+        ObjectW(ta_, Addr(buf_->at(pos + 1))).destroy();
         linked_.erase(buf_->at(pos + 1));
         break;
       case ValueType::string:
-        StringW(ta_, buf_->at(pos + 1)).destroy();
+        StringW(ta_, Addr(buf_->at(pos + 1))).destroy();
         linked_.erase(buf_->at(pos + 1));
         break;
       case ValueType::array:
-        ArrayW(ta_, buf_->at(pos + 1)).destroy();
+        ArrayW(ta_, Addr(buf_->at(pos + 1))).destroy();
         linked_.erase(buf_->at(pos + 1));
         break;
       }
@@ -412,7 +412,7 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
       for (auto& c : obj) {
         el->insert(ta_.key(c.first), *c.second, Overwrite::Insert);
       }
-      buf_->at(pos + 1) = el->addr();
+      buf_->at(pos + 1) = el->addr().value;
       auto emp = linked_.emplace(key, std::move(el));
       Expects(emp.second);
 
@@ -423,7 +423,7 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
         Expects(DskKey(c.first).key() == c.first);
         el->insert(c.first, *c.second, Overwrite::Insert);
       }
-      buf_->at(pos + 1) = el->addr();
+      buf_->at(pos + 1) = el->addr().value;
       auto emp = linked_.emplace(key, std::move(el));
       Expects(emp.second);
 
@@ -431,7 +431,7 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
       auto& str = dynamic_cast<const model::Scalar&>(val);
       auto el =
           std::make_unique<StringW>(ta_, boost::get<model::String>(str.data()));
-      buf_->at(pos + 1) = el->addr();
+      buf_->at(pos + 1) = el->addr().value;
       auto emp = linked_.emplace(key, std::move(el));
       Expects(emp.second);
 
@@ -672,7 +672,7 @@ void RootLeafW::split(Key key, const model::Value& val) {
   auto new_me = std::unique_ptr<RootInternalW>(
       new RootInternalW(ta_, addr_, 4, std::move(buf_), tree_));
 
-  auto right_leaf = std::make_unique<LeafW>(AllocateNew(), ta_, 0);
+  auto right_leaf = std::make_unique<LeafW>(AllocateNew(), ta_, Addr(0));
   auto left_leaf =
       std::make_unique<LeafW>(AllocateNew(), ta_, right_leaf->addr());
   auto ins = left_leaf.get();
@@ -721,9 +721,9 @@ void RootLeafW::split(Key key, const model::Value& val) {
   Ensures(right_leaf->size() >= k_leaf_min_words);
 
   buf[0] = DskInternalHdr().fromSize(4).data;
-  buf[1] = left_leaf->addr();
+  buf[1] = left_leaf->addr().value;
   buf[2] = DskInternalEntry().fromKey(mid);
-  buf[3] = right_leaf->addr();
+  buf[3] = right_leaf->addr().value;
   std::fill(buf.begin() + 4, buf.end(), 0);
 
   new_me->childs_.emplace(right_leaf->addr(), std::move(right_leaf));
@@ -742,8 +742,8 @@ void RootLeafW::merge() {
 
 AbsInternalW::AbsInternalW(Transaction& ta, Addr addr) : NodeW(ta, addr) {
   auto hdr = gsl::as_span<DskInternalHdr>(
-      (ta.load(toPageNr(addr)))
-          ->subspan(toPageOffset(addr) + sizeof(DskBlockHdr),
+      (ta.load(addr.pageNr()))
+          ->subspan(addr.pageOffset() + ssizeof<DskBlockHdr>(),
                     sizeof(DskInternalHdr)))[0];
   if (!hdr.hasMagic()) throw ConsistencyError("Expected internal node");
   if (hdr.size() > k_node_max_words)
@@ -782,7 +782,7 @@ void AbsInternalW::insert(Key key, std::unique_ptr<NodeW> c) {
     auto addr = c->addr();
     shiftBuffer(pos + 1, 2);
     buf_->at(pos + 1) = DskInternalEntry().fromKey(key);
-    buf_->at(pos + 2) = addr;
+    buf_->at(pos + 2) = addr.value;
     childs_.emplace(addr, std::move(c));
   } else {
     // no space
@@ -807,8 +807,8 @@ Writes AbsInternalW::getWrites() const {
 
   if (buf_) {
     buf_->at(0) = DskInternalHdr().fromSize(top_).data;
-    w.push_back(
-        { addr_ + sizeof(DskBlockHdr), gsl::as_bytes(Span<uint64_t>(*buf_)) });
+    w.push_back({ Addr(addr_.value + sizeof(DskBlockHdr)),
+                  gsl::as_bytes(Span<uint64_t>(*buf_)) });
   }
 
   for (auto& c : childs_) {
@@ -826,7 +826,7 @@ NodeW& AbsInternalW::searchChild(Key k) {
   auto buf = bufview.first.subspan(0, top_);
   auto pos = searchInternalPosition(k, buf);
 
-  Addr addr = buf[pos];
+  Addr addr = Addr(buf[pos]);
 
   auto lookup = childs_.find(addr);
   if (lookup != childs_.end()) {
@@ -842,7 +842,7 @@ void AbsInternalW::destroy() {
   auto buf = bufr.first.subspan(0, top_);
 
   for (auto it = buf.begin() + 1; it < buf.end(); it += 2) {
-    openNodeW(ta_, *it)->destroy();
+    openNodeW(ta_, Addr(*it))->destroy();
   }
 
   ta_.free(addr_);
@@ -860,8 +860,8 @@ NodeW& AbsInternalW::getSilbling(Key key, Addr addr) {
 
   auto pos = searchInternalPosition(key, buf.subspan(0, top_));
   Ensures(pos > 0 && pos < top_);
-  Ensures(buf[pos] == addr);
-  Addr sibl = buf[(pos == 1 ? pos + 2 : pos - 2)];
+  Ensures(buf[pos] == addr.value);
+  Addr sibl = Addr(buf[(pos == 1 ? pos + 2 : pos - 2)]);
 
   auto lookup = childs_.find(sibl);
   if (lookup != childs_.end()) {
@@ -877,7 +877,7 @@ Key AbsInternalW::removeMerged(Key key, Addr addr) {
   auto pos =
       searchInternalPosition(key, Span<uint64_t>(*buf_).subspan(0, top_));
 
-  if (buf_->at(pos) == addr && pos > 1) {
+  if (buf_->at(pos) == addr.value && pos > 1) {
     Key removed = DskInternalEntry(buf_->at(pos - 1)).key.key();
     shiftBuffer(pos + 1, -2);
 
@@ -896,11 +896,11 @@ Key AbsInternalW::updateMerged(Key key, Addr addr) {
   auto pos =
       searchInternalPosition(key, Span<uint64_t>(*buf_).subspan(0, top_));
 
-  if (pos > 1 && buf_->at(pos) == addr) {
+  if (pos > 1 && Addr(buf_->at(pos)) == addr) {
     Key old = DskInternalEntry(buf_->at(pos - 1)).key.key();
     buf_->at(pos - 1) = DskInternalEntry().fromKey(key);
     return old;
-  } else if (pos + 2 < top_ && buf_->at(pos + 2) == addr) {
+  } else if (pos + 2 < top_ && Addr(buf_->at(pos + 2)) == addr) {
     Key old = DskInternalEntry(buf_->at(pos + 1)).key.key();
     buf_->at(pos + 1) = DskInternalEntry().fromKey(key);
     return old;
@@ -945,7 +945,7 @@ void InternalW::split(Key key, std::unique_ptr<NodeW> c) {
   bool new_here = mid_key > key;
 
   for (size_t i = mid_pos + 1; i < top_; i += 2) {
-    auto lookup = childs_.find(buf_->at(i));
+    auto lookup = childs_.find(Addr(buf_->at(i)));
     if (lookup != childs_.end()) {
       right->appendChild(std::move(*lookup));
       childs_.erase(lookup);
@@ -1052,7 +1052,7 @@ void InternalW::merge() {
 
       auto insert = buf.begin() + 1;
       while (it < end) {
-        auto lookup = sibl.childs_.find(*it);
+        auto lookup = sibl.childs_.find(Addr(*it));
         if (lookup != sibl.childs_.end()) {
           childs_.insert(std::move(*lookup));
           sibl.childs_.erase(lookup);
@@ -1076,7 +1076,7 @@ void InternalW::merge() {
           parent_->updateMerged(split_key, sibl.addr()));
 
       while (it <= last) {
-        auto lookup = sibl.childs_.find(*it);
+        auto lookup = sibl.childs_.find(Addr(*it));
         if (lookup != sibl.childs_.end()) {
           childs_.insert(std::move(*lookup));
           sibl.childs_.erase(lookup);
@@ -1143,7 +1143,7 @@ void RootInternalW::split(Key key, std::unique_ptr<NodeW> child) {
   for (auto& c : childs_) {
     bool found = false;
     for (size_t i = 1; i < mid_pos; i += 2) {
-      if (c.first == buf_->at(i)) {
+      if (c.first == Addr(buf_->at(i))) {
         left->appendChild(std::move(c));
         found = true;
         break;
@@ -1153,9 +1153,9 @@ void RootInternalW::split(Key key, std::unique_ptr<NodeW> child) {
   }
   childs_.clear();
 
-  buf_->at(1) = left->addr();
+  buf_->at(1) = left->addr().value;
   buf_->at(2) = DskInternalEntry().fromKey(mid_key);
-  buf_->at(3) = right->addr();
+  buf_->at(3) = right->addr().value;
   std::fill(buf_->begin() + 4, buf_->end(), 0);
   top_ = 4;
 
@@ -1241,7 +1241,7 @@ NodeR::NodeR(Database& db, Addr addr, ReadRef page)
 
 Span<const uint64_t> NodeR::getData() const {
   return gsl::as_span<const uint64_t>(page_->subspan(
-      toPageOffset(addr_) + sizeof(DskBlockHdr), k_node_max_bytes));
+      addr_.pageOffset() + ssizeof<DskBlockHdr>(), k_node_max_bytes));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1251,11 +1251,11 @@ LeafR::LeafR(Database& db, Addr addr, ReadRef page)
     : NodeR(db, addr, std::move(page)) {}
 
 LeafR::LeafR(Database& db, Addr addr)
-    : NodeR(db, addr, db.loadPage(toPageNr(addr))) {}
+    : NodeR(db, addr, db.loadPage(addr.pageNr())) {}
 
 void LeafR::getAll(model::Object& obj) {
   auto next = getAllInLeaf(obj);
-  while (next != 0) {
+  while (!next.isNull()) {
     next = LeafR(db_, next).getAllInLeaf(obj);
   }
 }
@@ -1276,7 +1276,7 @@ Addr LeafR::getAllInLeaf(model::Object& obj) {
 
 void LeafR::getAll(model::Array& obj) {
   auto next = getAllInLeaf(obj);
-  while (next != 0) {
+  while (!next.isNull()) {
     next = LeafR(db_, next).getAllInLeaf(obj);
   }
 }
@@ -1316,9 +1316,9 @@ std::unique_ptr<ValueW> LeafR::getChildCollectionW(Transaction& ta, Key key) {
 
   auto t = entry.value.type;
   if (t == ValueType::object) {
-    return std::make_unique<ObjectW>(ta, view[pos + 1]);
+    return std::make_unique<ObjectW>(ta, Addr(view[pos + 1]));
   } else if (t == ValueType::array) {
-    return std::make_unique<ArrayW>(ta, view[pos + 1]);
+    return std::make_unique<ArrayW>(ta, Addr(view[pos + 1]));
   } else {
     return nullptr;
   }
@@ -1335,9 +1335,9 @@ std::unique_ptr<ValueR> LeafR::getChildCollectionR(Key key) {
 
   auto t = entry.value.type;
   if (t == ValueType::object) {
-    return std::make_unique<ObjectR>(db_, view[pos + 1]);
+    return std::make_unique<ObjectR>(db_, Addr(view[pos + 1]));
   } else if (t == ValueType::array) {
-    return std::make_unique<ArrayR>(db_, view[pos + 1]);
+    return std::make_unique<ArrayR>(db_, Addr(view[pos + 1]));
   } else {
     return nullptr;
   }
@@ -1364,10 +1364,10 @@ LeafR::readValue(Span<const uint64_t>::const_iterator& it) {
   } else {
     switch (entry.value.type) {
     case ValueType::object:
-      ret.second = ObjectR(db_, *it++).getValue();
+      ret.second = ObjectR(db_, Addr(*it++)).getValue();
       break;
     case ValueType::array:
-      ret.second = ArrayR(db_, *it++).getValue();
+      ret.second = ArrayR(db_, Addr(*it++)).getValue();
       break;
     case ValueType::number:
       union {
@@ -1378,7 +1378,7 @@ LeafR::readValue(Span<const uint64_t>::const_iterator& it) {
       ret.second = std::make_unique<model::Scalar>(num.number);
       break;
     case ValueType::string:
-      ret.second = StringR(db_, *it++).getValue();
+      ret.second = StringR(db_, Addr(*it++)).getValue();
       break;
     case ValueType::boolean_true:
       ret.second = std::make_unique<model::Scalar>(true);
@@ -1431,8 +1431,7 @@ std::unique_ptr<ValueR> InternalR::getChildCollectionR(Key key) {
 
 std::unique_ptr<NodeR> InternalR::searchChildNode(Key k) {
   auto pos = searchInternalPosition(k, data_);
-  auto addr = data_[pos];
-  return openNodeR(db_, addr);
+  return openNodeR(db_, Addr(data_[pos]));
 }
 
 ////////////////////////////////////////////////////////////////////////////////

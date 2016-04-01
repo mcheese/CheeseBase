@@ -38,12 +38,12 @@ constexpr uint64_t lowerBitmask(size_t n) {
 CB_PACKED(struct DskBlockHdr {
   DskBlockHdr() = default;
   DskBlockHdr(BlockType type, Addr next)
-      : data_{ (static_cast<uint64_t>(type) << 56) + next } {
+      : data_{ (static_cast<uint64_t>(type) << 56) + next.value } {
     Expects(static_cast<uint64_t>(type) <= 0xff);
-    Expects(next <= lowerBitmask(56));
+    Expects(next.value <= lowerBitmask(56));
   }
 
-  PageNr next() const noexcept { return data_ & lowerBitmask(56); }
+  Addr next() const noexcept { return Addr(data_ & lowerBitmask(56)); }
 
   BlockType type() const noexcept {
     return gsl::narrow_cast<BlockType>(data_ >> 56);
@@ -56,12 +56,12 @@ CB_PACKED(struct DskBlockHdr {
 
 CB_PACKED(struct DskDatabaseHdr {
   uint64_t magic;
-  uint64_t end_of_file;
-  uint64_t free_alloc_pg;
-  uint64_t free_alloc_t1;
-  uint64_t free_alloc_t2;
-  uint64_t free_alloc_t3;
-  uint64_t free_alloc_t4;
+  Addr end_of_file;
+  Addr free_alloc_pg;
+  Addr free_alloc_t1;
+  Addr free_alloc_t2;
+  Addr free_alloc_t3;
+  Addr free_alloc_t4;
 });
 static_assert(sizeof(DskDatabaseHdr) <= k_page_size / 2,
               "Database header should be smaller than half of the page size");

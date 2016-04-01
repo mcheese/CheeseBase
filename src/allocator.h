@@ -39,7 +39,7 @@ private:
 
   Allocator* alloc_;
   ExLock<Mutex> lock_;
-  std::map<Addr, Addr> writes_;
+  std::map<Addr, uint64_t> writes_;
 };
 
 class Allocator {

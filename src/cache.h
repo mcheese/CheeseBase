@@ -29,11 +29,13 @@ namespace cache_detail {
 namespace bi = boost::interprocess;
 
 struct CachePage {
-  static constexpr PageNr sUnusedPageNr = static_cast<PageNr>(-1);
+  static const uint64_t sUnused = static_cast<uint64_t>(-1);
 
   RwMutex mutex;
   boost::interprocess::mapped_region region;
-  PageNr page_nr{ sUnusedPageNr };
+  PageNr page_nr{ sUnused };
+
+  bool inUse() const noexcept { return page_nr.value != sUnused; }
 
   template <typename View>
   View getView() const {
@@ -128,7 +130,8 @@ private:
   cache_detail::PageList pages_;
 
   RwMutex map_mtx_;
-  std::unordered_map<PageNr, cache_detail::PageList::iterator> map_;
+  std::unordered_map<PageNr, cache_detail::PageList::iterator, PageNr::Hash>
+      map_;
 };
 
 } // namespace cheesebase

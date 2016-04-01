@@ -87,7 +87,7 @@ Writes KeyTransaction::commit() {
       if (block.size < off + sizeof(DskKeyCacheSize) + len) {
         if (block.size >= off + sizeof(DskKeyCacheSize)) {
           writes.push_back(
-              { block.addr + off,
+              { Addr(block.addr.value + off),
                 gsl::as_bytes<const DskKeyCacheSize>({ s_terminator }) });
         }
 
@@ -97,18 +97,19 @@ Writes KeyTransaction::commit() {
       }
       Ensures(block.size >= off + sizeof(DskKeyCacheSize) + len);
 
-      writes.push_back(
-          { block.addr + off, gsl::as_bytes<const DskKeyCacheSize>({ len }) });
+      writes.push_back({ Addr(block.addr.value + off),
+                         gsl::as_bytes<const DskKeyCacheSize>({ len }) });
       off += sizeof(DskKeyCacheSize);
-      writes.push_back(
-          { block.addr + off, gsl::as_bytes<const char>({ str.data(), len }) });
+      writes.push_back({ Addr(block.addr.value + off),
+                         gsl::as_bytes<const char>({ str.data(), len }) });
       off += len;
     }
   }
 
   if (block.size >= off + sizeof(DskKeyCacheSize)) {
-    writes.push_back({ block.addr + off, gsl::as_bytes<const DskKeyCacheSize>(
-                                             { s_terminator }) });
+    writes.push_back(
+        { Addr(block.addr.value + off),
+          gsl::as_bytes<const DskKeyCacheSize>({ s_terminator }) });
   }
 
   cache_->cur_block_ = block;
@@ -131,10 +132,10 @@ KeyCache::KeyCache(Block first_block, Storage& store)
 
   // go through all linked blocks adding every string
   auto next = first_block.addr;
-  while (next != 0) {
+  while (!next.isNull()) {
     cur_block_.addr = next;
-    auto page = store_.loadPage(toPageNr(cur_block_.addr));
-    auto block = page->subspan(toPageOffset(cur_block_.addr));
+    auto page = store_.loadPage(cur_block_.addr.pageNr());
+    auto block = page->subspan(cur_block_.addr.pageOffset());
     auto hdr = gsl::as_span<DskBlockHdr>(block)[0];
     cur_block_.size = toBlockSize(hdr.type());
     block = block.subspan(0, cur_block_.size);

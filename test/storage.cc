@@ -18,7 +18,7 @@ SCENARIO("stored data can be read") {
     for (size_t i = 0; i < size; ++i) data.push_back(static_cast<Byte>(i));
 
     WHEN("data is stored") {
-      store.storeWrite({ offset, data });
+      store.storeWrite({ Addr(offset), data });
 
       AND_WHEN("same data is loaded") {
         array<Byte, size> loaded;
@@ -26,11 +26,11 @@ SCENARIO("stored data can be read") {
         size_t pos{ 0 };
         while (to_read > 0) {
 
-          auto page = store.loadPage(toPageNr(offset + pos));
+          auto page = store.loadPage(Addr(offset + pos).pageNr());
           auto curr_read = std::min<size_t>(
-              to_read, k_page_size - toPageOffset(offset + pos));
+              to_read, k_page_size - Addr(offset + pos).pageNr().value);
 
-          copy_n(page->begin() + toPageOffset(offset + pos), curr_read,
+          copy_n(page->begin() + Addr(offset + pos).pageOffset(), curr_read,
                  loaded.begin() + pos);
 
           pos += curr_read;

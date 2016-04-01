@@ -12,8 +12,8 @@ PageRef<PageReadView> Storage::loadPage(PageNr page_nr) {
 }
 
 void Storage::storeWrite(Write write) {
-  auto p = cache_.writePage(toPageNr(write.addr));
-  copySpan(write.data, p->subspan(toPageOffset(write.addr)));
+  auto p = cache_.writePage(write.addr.pageNr());
+  copySpan(write.data, p->subspan(write.addr.pageOffset()));
 }
 
 void Storage::storeWrite(std::vector<Write> transaction) {
@@ -21,16 +21,18 @@ void Storage::storeWrite(std::vector<Write> transaction) {
 
   // sort the writes to minimize cache requests
   std::sort(transaction.begin(), transaction.end(),
-            [](const Write& l, const Write& r) { return l.addr < r.addr; });
+            [](const Write& l, const Write& r) {
+              return l.addr.value < r.addr.value;
+            });
 
   auto it = transaction.begin();
   while (it != transaction.end()) {
-    auto nr = toPageNr(it->addr);
+    auto nr = it->addr.pageNr();
     auto ref = cache_.writePage(nr);
     do {
-      copySpan(it->data, ref->subspan(toPageOffset(it->addr)));
+      copySpan(it->data, ref->subspan(it->addr.pageOffset()));
       ++it;
-    } while (it != transaction.end() && nr == toPageNr(it->addr));
+    } while (it != transaction.end() && nr.value == it->addr.pageNr().value);
   }
 }
 

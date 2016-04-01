@@ -41,7 +41,7 @@ public:
 private:
   std::shared_ptr<RwMutex> getMutex(Addr block);
 
-  std::unordered_map<Addr, std::weak_ptr<RwMutex>> map_;
+  std::unordered_map<Addr, std::weak_ptr<RwMutex>, Addr::Hash> map_{};
   Mutex mtx_;
 };
 

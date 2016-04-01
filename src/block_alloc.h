@@ -13,7 +13,7 @@ namespace cheesebase {
 
 class Storage;
 
-using AllocWrite = std::pair<Addr, Addr>;
+using AllocWrite = std::pair<Addr, uint64_t>;
 
 using AllocWrites = std::vector<AllocWrite>;
 
@@ -27,7 +27,7 @@ protected:
   BlockAllocator(Storage& store, Addr free) : free_(free), store_(store) {}
   Addr free_{ 0 };
   Storage& store_;
-  std::map<Addr, Addr> next_cache_;
+  std::map<Addr, uint64_t> next_cache_;
 };
 
 class PageAllocator : public BlockAllocator {
@@ -35,8 +35,8 @@ public:
   PageAllocator(Storage& store, Addr free, Addr eof)
       : BlockAllocator(store, free), eof_(eof) {}
   static constexpr size_t size() noexcept { return k_page_size; }
-  static constexpr Addr hdrOffset() noexcept {
-    return offsetof(DskDatabaseHdr, free_alloc_pg);
+  static Addr hdrOffset() noexcept {
+    return Addr(offsetof(DskDatabaseHdr, free_alloc_pg));
   }
   static constexpr BlockType type() noexcept { return BlockType::pg; }
   std::pair<Block, AllocWrites> allocBlock();

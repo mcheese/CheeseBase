@@ -72,7 +72,7 @@ TEST_CASE("update string") {
   }
   {
     auto ta = db.startTransaction();
-    disk::ObjectW tree{ta, root};
+    disk::ObjectW tree{ ta, root };
     tree.insert(ta.key("LL"), longinput, disk::Overwrite::Upsert);
     tree.insert(ta.key("LS"), shortinput, disk::Overwrite::Upsert);
     tree.insert(ta.key("SL"), longinput, disk::Overwrite::Upsert);

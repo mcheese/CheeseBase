@@ -107,7 +107,7 @@ TEST_CASE("B+Tree insert") {
     SECTION("extend with split to 3 leafs") {
       {
         auto ta = db.startTransaction();
-        disk::ObjectW node{ta, root};
+        disk::ObjectW node{ ta, root };
         for (auto& c : doc) {
           node.insert(ta.key(c.first + "#2"), *c.second,
                       disk::Overwrite::Upsert);

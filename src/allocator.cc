@@ -39,8 +39,8 @@ AllocWrites AllocTransaction::freeBlock(Addr block) {
   if (writes_.count(block) > 0) {
     hdr.data_ = writes_.at(block);
   } else {
-    hdr = gsl::as_span<DskBlockHdr>(alloc_->store_.loadPage(toPageNr(block))
-                                        ->subspan(toPageOffset(block)))[0];
+    hdr = gsl::as_span<DskBlockHdr>(alloc_->store_.loadPage(block.pageNr())
+                                        ->subspan(block.pageOffset()))[0];
   }
   AllocWrites ret;
 
@@ -64,7 +64,7 @@ AllocWrites AllocTransaction::freeBlock(Addr block) {
     throw ConsistencyError();
   }
 
-  if (hdr.next() != 0) {
+  if (hdr.next().value != 0) {
     auto next = freeBlock(hdr.next());
     std::move(next.begin(), next.end(), std::back_inserter(ret));
   }
@@ -112,11 +112,11 @@ Block AllocTransaction::allocExtension(Addr block, size_t size) {
   if (writes_.count(block) > 0) {
     hdr.data_ = writes_.at(block);
   } else {
-    hdr = gsl::as_span<DskBlockHdr>(alloc_->store_.loadPage(toPageNr(block))
-                                        ->subspan(toPageOffset(block)))[0];
+    hdr = gsl::as_span<DskBlockHdr>(alloc_->store_.loadPage(block.pageNr())
+                                        ->subspan(block.pageOffset()))[0];
   }
 
-  if (hdr.next() != 0)
+  if (hdr.next().value != 0)
     throw AllocError("block to extend is not the last block");
 
   auto alloc = allocBlock(size);
@@ -138,8 +138,7 @@ std::vector<Write> AllocTransaction::commit() {
   writes.reserve(writes_.size());
 
   for (auto& w : writes_) {
-    writes.push_back(
-        { w.first, gsl::as_bytes<Addr>(gsl::span<Addr>(w.second)) });
+    writes.push_back({ w.first, gsl::as_bytes(Span<uint64_t>(w.second)) });
   }
 
   return writes;

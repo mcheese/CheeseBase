@@ -8,7 +8,7 @@
 using namespace cheesebase;
 
 DskBlockHdr get_hdr(Addr addr, std::ifstream& fs) {
-  fs.seekg(addr, std::ios_base::beg);
+  fs.seekg(addr.value, std::ios_base::beg);
   DskBlockHdr hdr;
   fs.read((char*)&hdr, sizeof(hdr));
   return hdr;
@@ -17,8 +17,8 @@ bool check_free(std::set<Addr>& free, Addr first, BlockType type, int level,
                 std::ifstream& fs) {
 
   auto next = first;
-  while (next != 0) {
-    if (next % (k_page_size / level) != 0) {
+  while (!next.isNull()) {
+    if (next.value % (k_page_size / level) != 0) {
       std::cout << "Corrupted: invalid block in free list of PageAlloc!\n";
       return false;
     }
@@ -45,7 +45,7 @@ int main(int argc, char* argv[]) {
 
   fs.seekg(0, std::ios_base::end);
   auto end = fs.tellg();
-  if (db_hdr.end_of_file > static_cast<uint64_t>(end)) {
+  if (db_hdr.end_of_file.value > static_cast<uint64_t>(end)) {
     std::cout << "Corrupted: file size < end of file marker!\n";
     return 1;
   }
@@ -59,41 +59,41 @@ int main(int argc, char* argv[]) {
 
   size_t n = 1;
 
-  for (n = 1; n < toPageNr(db_hdr.end_of_file); ++n) {
-    Addr offset = 0;
+  for (n = 1; n < db_hdr.end_of_file.pageNr().value; ++n) {
+    Addr offset = Addr(0);
     do {
-      auto addr = toAddr(n) + offset;
+      auto addr = Addr(n * k_page_size + offset.value);
       auto hdr = get_hdr(addr, fs);
       int len;
       switch (hdr.type()) {
       case BlockType::pg:
-        offset += k_page_size;
+        offset.value += k_page_size;
         len = 64;
         break;
       case BlockType::t1:
-        offset += k_page_size / 2;
+        offset.value += k_page_size / 2;
         len = 32;
         break;
       case BlockType::t2:
-        offset += k_page_size / 4;
+        offset.value += k_page_size / 4;
         len = 16;
         break;
       case BlockType::t3:
-        offset += k_page_size / 8;
+        offset.value += k_page_size / 8;
         len = 8;
         break;
       case BlockType::t4:
-        offset += k_page_size / 16;
+        offset.value += k_page_size / 16;
         len = 4;
         break;
       default:
-        offset = k_page_size + 1;
+        offset.value = k_page_size + 1;
         len = 64;
       }
       char c =
-          (offset > k_page_size ? '!' : (free.count(addr) > 0 ? ' ' : ':'));
+          (offset.value > k_page_size ? '!' : (free.count(addr) > 0 ? ' ' : ':'));
       std::cout << "[" << std::string(len - 2, c).c_str() << "]";
-    } while (offset < k_page_size);
+    } while (offset.value < k_page_size);
     std::cout << "\n";
   }
 

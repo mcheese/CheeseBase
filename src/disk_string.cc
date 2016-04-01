@@ -42,8 +42,8 @@ CB_PACKED(struct DskStringHdr {
 
 StringW::StringW(Transaction& ta, Addr addr) : ValueW(ta, addr) {
   auto hdr = gsl::as_span<DskStringHdr>(
-      ta_.load(toPageNr(addr))
-          ->subspan(toPageOffset(addr) + sizeof(DskBlockHdr)))[0];
+      ta_.load(addr.pageNr())
+          ->subspan(addr.pageOffset() + ssizeof<DskBlockHdr>()))[0];
   hdr.check();
   hdr_ = hdr.data_;
 }
@@ -72,13 +72,13 @@ StringW::StringW(Transaction& ta, model::String str)
 
 Writes StringW::getWrites() const {
   Writes ret;
-  ret.push_back({ addr_ + sizeof(DskBlockHdr),
-                  gsl::as_bytes(Span<const uint64_t>(&hdr_, sizeof(hdr_))) });
+  ret.push_back({ Addr(addr_.value + sizeof(DskBlockHdr)),
+                  gsl::as_bytes(Span<const uint64_t>(&hdr_, ssizeof(hdr_))) });
   auto span = gsl::as_bytes(Span<const char>(str_));
   auto hdr_size = sizeof(DskBlockHdr) + sizeof(DskStringHdr);
   for (auto& blk : blocks_) {
     auto sz = std::min(blk.size - hdr_size, static_cast<size_t>(span.size()));
-    ret.push_back({ blk.addr + hdr_size, { span.subspan(0, sz) } });
+    ret.push_back({ Addr(blk.addr.value + hdr_size), { span.subspan(0, sz) } });
     span = span.subspan(sz);
     hdr_size = sizeof(DskBlockHdr);
   }
@@ -94,14 +94,15 @@ StringR::StringR(Database& db, Addr addr) : ValueR(db, addr) {}
 
 model::PValue StringR::getValue() {
   auto addr = addr_;
-  auto page = db_.loadPage(toPageNr(addr));
+  auto page = db_.loadPage(addr.pageNr());
   DskBlockHdr hdr =
-      gsl::as_span<DskBlockHdr>(page->subspan(toPageOffset(addr)))[0];
-  auto span = page->subspan(toPageOffset(addr), toBlockSize(hdr.type()));
+      gsl::as_span<DskBlockHdr>(page->subspan(addr.pageOffset()))[0];
+  auto span = page->subspan(addr.pageOffset(), toBlockSize(hdr.type()));
   auto next = hdr.next();
 
-  auto size = gsl::as_span<DskStringHdr>(span.subspan(
-      sizeof(DskBlockHdr), sizeof(DskStringHdr)))[0].size();
+  auto size = gsl::as_span<DskStringHdr>(
+                  span.subspan(sizeof(DskBlockHdr), sizeof(DskStringHdr)))[0]
+                  .size();
   std::string str;
   str.reserve(size);
 
@@ -110,14 +111,14 @@ model::PValue StringR::getValue() {
     auto sz = std::min(static_cast<size_t>(span.size()), size);
     str.append(gsl::as_span<const char>(span).data(), sz);
     size -= sz;
-    if (next != 0) {
-      if (toPageNr(addr) != toPageNr(next)) {
-        page = db_.loadPage(toPageNr(next));
+    if (!next.isNull()) {
+      if (addr.pageNr() != next.pageNr()) {
+        page = db_.loadPage(next.pageNr());
       }
       addr = next;
 
-      hdr = gsl::as_span<DskBlockHdr>(page->subspan(toPageOffset(addr)))[0];
-      span = page->subspan(toPageOffset(addr) + sizeof(DskBlockHdr),
+      hdr = gsl::as_span<DskBlockHdr>(page->subspan(addr.pageOffset()))[0];
+      span = page->subspan(addr.pageOffset() + sizeof(DskBlockHdr),
                            toBlockSize(hdr.type()) - sizeof(DskBlockHdr));
       next = hdr.next();
     } else {
