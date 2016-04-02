@@ -24,7 +24,7 @@ template <class T>
 using Span = gsl::span<T, gsl::dynamic_range>;
 
 struct PageNr {
-  explicit PageNr(uint64_t nr) : value{ nr } {}
+  constexpr explicit PageNr(uint64_t nr) : value{ nr } {}
   uint64_t addr() const noexcept { return value * k_page_size; }
 
   //! Provide hash callable for use in unordered_map.
@@ -43,8 +43,8 @@ struct PageNr {
 };
 
 struct Addr {
-  explicit Addr() = default;
-  explicit Addr(uint64_t addr) : value{ addr } {}
+  Addr() = default;
+  constexpr explicit Addr(uint64_t addr) : value{ addr } {}
 
   //! Get \c PageNr
   PageNr pageNr() const noexcept { return PageNr(value >> k_page_size_power); }

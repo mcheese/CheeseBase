@@ -55,12 +55,12 @@ Database::Database(const std::string& file)
 
     auto ta = startTransaction();
     disk::ObjectW tree(ta);
-    Expects(tree.addr() == k_root);
+    Expects(tree.addr() == kRoot);
     ta.commit(tree.getWrites());
   }
 
   auto ta = startTransaction();
-  disk::ObjectW(ta, k_root);
+  disk::ObjectW(ta, kRoot);
 }
 
 Transaction Database::startTransaction() { return Transaction(*this); };

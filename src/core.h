@@ -14,6 +14,8 @@
 
 namespace cheesebase {
 
+constexpr Addr kRoot{ k_page_size };
+
 class Database;
 
 class Transaction {
@@ -39,8 +41,6 @@ private:
   AllocTransaction alloc_;
   KeyTransaction kcache_;
 };
-
-const Addr k_root{ k_page_size };
 
 class Database {
   friend class Transaction;
