@@ -26,7 +26,7 @@ Key infiniteKey() {
 //! 6 byte key struct to write on disk.
 CB_PACKED(struct DskKey {
   DskKey() = default;
-  constexpr explicit DskKey(Key key)
+  explicit DskKey(Key key)
       : big_{ static_cast<uint32_t>(key.value) }
       , small_{ static_cast<uint16_t>(key.value >> 32) } {
     Expects(key.value < (static_cast<uint64_t>(1) << 48));
