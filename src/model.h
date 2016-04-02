@@ -49,8 +49,9 @@ using Map = std::map<K, V>;
 // values
 class Value {
 public:
-  virtual ~Value() = default;
   Value() = default;
+  virtual ~Value() = default;
+  Value(const Value&) = default;
 
   virtual std::ostream& print(std::ostream& os) const = 0;
   virtual std::ostream& prettyPrint(std::ostream& os,
@@ -66,11 +67,10 @@ public:
 
 using PValue = std::unique_ptr<Value>;
 
-class Object : public Value {
+class Object final : public Value {
 public:
   Object() = default;
   Object(Map<Key, PValue> childs) : childs_(std::move(childs)) {}
-  ~Object() override = default;
   MOVE_ONLY(Object)
 
   void append(Map<Key, PValue> a);
@@ -93,12 +93,11 @@ private:
   Map<Key, PValue> childs_;
 };
 
-class Array : public Value {
+class Array final : public Value {
 public:
   Array() = default;
   Array(Map<Index, PValue> childs) : childs_(std::move(childs)) {}
   Array(std::vector<PValue>&& childs);
-  ~Array() override = default;
   MOVE_ONLY(Array)
 
   void append(PValue v);
@@ -121,7 +120,7 @@ private:
   Map<Index, PValue> childs_;
 };
 
-class Scalar : public Value {
+class Scalar final : public Value {
 public:
   using value_type = boost::variant<String, Number, Bool, Null>;
   template <typename T>
@@ -129,8 +128,6 @@ public:
       : data_{ a } {}
 
   Scalar(const char* s) : data_{ std::string(s) } {}
-
-  ~Scalar() override = default;
 
   std::ostream& print(std::ostream& os) const override;
   std::ostream& prettyPrint(std::ostream& os, size_t depth = 0) const override;
