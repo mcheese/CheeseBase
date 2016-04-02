@@ -66,40 +66,7 @@ CB_PACKED(struct DskDatabaseHdr {
 static_assert(sizeof(DskDatabaseHdr) <= k_page_size / 2,
               "Database header should be smaller than half of the page size");
 
-using Key = uint64_t;
-const Key kMaxKey = static_cast<Key>(-1);
 
-CB_PACKED(struct DskKey {
-  DskKey() = default;
-  DskKey(uint32_t h, uint16_t i) : hash(h), index(i) {}
-  DskKey(Key k) {
-    index = gsl::narrow_cast<uint16_t>(k);
-    hash = gsl::narrow_cast<uint32_t>(k >> 16);
-  }
-  Key key() const { return ((static_cast<uint64_t>(hash) << 16) + index); }
-  uint32_t hash;
-  uint16_t index;
-
-  bool operator!=(const DskKey& o) {
-    return this->hash != o.hash || this->index != o.index;
-  }
-  bool operator==(const DskKey& o) { return !(*this != o); }
-});
-static_assert(sizeof(DskKey) == 6, "Invalid disk key size");
-
-CB_PACKED(using DskKeyCacheSize = uint16_t);
+using DskKeyCacheSize = uint16_t;
 static_assert(sizeof(DskKeyCacheSize) == 2, "Invalid disk key cache size size");
-
-CB_PACKED(struct DskValueHdr {
-  uint8_t magic_byte;
-  uint8_t type;
-});
-static_assert(sizeof(DskValueHdr) == 2, "Invalid disk value header size");
-
-CB_PACKED(struct DskPair {
-  DskKey key;
-  DskValueHdr value;
-});
-static_assert(sizeof(DskPair) == 8, "invalid disk pair size");
-
 } // namespace cheesebase

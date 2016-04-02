@@ -16,6 +16,46 @@ namespace disk {
 
 namespace {
 
+//! Returns (illegal) max value \c Key.
+Key infiniteKey() {
+  Key k{ 0 };
+  k.value = static_cast<uint64_t>(-1);
+  return k;
+};
+
+//! 6 byte key struct to write on disk.
+CB_PACKED(struct DskKey {
+  DskKey() = default;
+  constexpr explicit DskKey(Key key)
+      : big_{ static_cast<uint32_t>(key.value) }
+      , small_{ static_cast<uint16_t>(key.value >> 32) } {
+    Expects(key.value < (static_cast<uint64_t>(1) << 48));
+  }
+
+  Key key() const noexcept {
+    return Key(static_cast<uint64_t>(big_) +
+               (static_cast<uint64_t>(small_) << 32));
+  }
+
+private:
+  uint32_t big_;
+  uint16_t small_;
+});
+static_assert(sizeof(DskKey) == 6, "Invalid disk key size");
+
+CB_PACKED(struct DskValueHdr {
+  uint8_t magic_byte;
+  uint8_t type;
+});
+static_assert(sizeof(DskValueHdr) == 2, "Invalid disk value header size");
+
+CB_PACKED(struct DskPair {
+  DskKey key;
+  DskValueHdr value;
+});
+static_assert(sizeof(DskPair) == 8, "invalid disk pair size");
+
+
 CB_PACKED(struct DskEntry {
   DskEntry(uint64_t w) {
     *reinterpret_cast<uint64_t*>(this) = w;
@@ -41,7 +81,7 @@ CB_PACKED(struct DskInternalEntry {
   }
 
   uint64_t fromKey(Key k) noexcept {
-    key = k;
+    key = DskKey(k);
     return *reinterpret_cast<uint64_t*>(this);
   }
 
@@ -344,10 +384,10 @@ Key AbsLeafW::append(const model::Value& val, AbsInternalW* parent) {
   parent_ = parent;
   if (!buf_) initFromDisk();
 
-  Key key = 0;
+  Key key{ 0 };
   for (size_t i = 1; i < buf_->size() && buf_->at(i) != 0; i++) {
     auto e = DskEntry(buf_->at(i));
-    key = e.key.key() + 1;
+    key = Key(e.key.key().value + 1);
     i += e.extraWords();
   }
 
@@ -380,19 +420,18 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
     if (update) {
       auto old_entry = DskEntry(buf_->at(pos));
       auto old_extra = gsl::narrow_cast<int>(old_entry.extraWords());
-      auto old_type = old_entry.value.type;
-      switch (old_type) {
+      switch (old_entry.value.type) {
       case ValueType::object:
         ObjectW(ta_, Addr(buf_->at(pos + 1))).destroy();
-        linked_.erase(buf_->at(pos + 1));
+        linked_.erase(old_entry.key.key());
         break;
       case ValueType::string:
         StringW(ta_, Addr(buf_->at(pos + 1))).destroy();
-        linked_.erase(buf_->at(pos + 1));
+        linked_.erase(old_entry.key.key());
         break;
       case ValueType::array:
         ArrayW(ta_, Addr(buf_->at(pos + 1))).destroy();
-        linked_.erase(buf_->at(pos + 1));
+        linked_.erase(old_entry.key.key());
         break;
       }
       shiftBuffer(pos + old_extra, extra_words - old_extra);
@@ -420,8 +459,7 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
       auto& arr = dynamic_cast<const model::Array&>(val);
       auto el = std::make_unique<ArrayW>(ta_);
       for (auto& c : arr) {
-        Expects(DskKey(c.first).key() == c.first);
-        el->insert(c.first, *c.second, Overwrite::Insert);
+        el->insert(Key(c.first), *c.second, Overwrite::Insert);
       }
       buf_->at(pos + 1) = el->addr().value;
       auto emp = linked_.emplace(key, std::move(el));
@@ -712,7 +750,7 @@ void RootLeafW::split(Key key, const model::Value& val) {
     // new key is the very last
 
     // this should not really happen unless we have leafs with 2 elements
-    if (mid == 0) {
+    if (mid.isNull()) {
       mid = key;
     }
     right_leaf->insert(key, val, Overwrite::Upsert, new_me.get());
@@ -793,7 +831,7 @@ void AbsInternalW::insert(Key key, std::unique_ptr<NodeW> c) {
 
 Key AbsInternalW::append(const model::Value& val, AbsInternalW* parent) {
   parent_ = parent;
-  return searchChild(kMaxKey).append(val, this);
+  return searchChild(infiniteKey()).append(val, this);
 }
 
 bool AbsInternalW::remove(Key key, AbsInternalW* parent) {
@@ -1288,7 +1326,8 @@ Addr LeafR::getAllInLeaf(model::Array& obj) {
   auto next = DskLeafHdr().fromDsk(*it++).next();
 
   while (it != end && *it != 0) {
-    obj.append(readValue(it));
+    auto pair = readValue(it);
+    obj.append(pair.first.value, std::move(pair.second));
   }
 
   return next;
@@ -1408,12 +1447,12 @@ InternalR::InternalR(Database& db, Addr addr, ReadRef page)
 
 void InternalR::getAll(model::Object& obj) {
   // just follow the left most path and let leafs go through
-  searchChildNode(0)->getAll(obj);
+  searchChildNode(Key(0))->getAll(obj);
 }
 
 void InternalR::getAll(model::Array& arr) {
   // just follow the left most path and let leafs go through
-  searchChildNode(0)->getAll(arr);
+  searchChildNode(Key(0))->getAll(arr);
 }
 
 std::unique_ptr<model::Value> InternalR::getChildValue(Key key) {

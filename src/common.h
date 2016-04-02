@@ -5,6 +5,7 @@
 #pragma once
 
 #include "types.h"
+#include "exceptions.h"
 
 namespace cheesebase {
 
@@ -12,17 +13,23 @@ constexpr uint16_t kVersion{ 0x0001 };
 constexpr uint64_t k_magic{ 0x0000455342534843 + // CHSBSExx
                             (static_cast<uint64_t>(kVersion) << 48) };
 
-// size of a memory page
+//! Power of size of one memory page: page-size = 2^this
 const size_t k_page_size_power{ 12 };
+
+//! Size of one memory page. Change power instead of this.
 const size_t k_page_size{ 1u << k_page_size_power };
 
+//! Maximum size of pages kept in cache. Memory usage will be higher than this.
 const size_t k_default_cache_size{ k_page_size * 1024 * 10 }; // 40 MB - test
 
+//! Byte type. Use \c Span to convert.
 using Byte = gsl::byte;
 
+//! Bounds checked memory view. Like a smart pointer+size.
 template <class T>
 using Span = gsl::span<T, gsl::dynamic_range>;
 
+//! Represents number of memory page: floor(\c Addr / page-size).
 struct PageNr {
   constexpr explicit PageNr(uint64_t nr) : value{ nr } {}
   uint64_t addr() const noexcept { return value * k_page_size; }
@@ -42,6 +49,7 @@ struct PageNr {
   uint64_t value;
 };
 
+//! Represents address in database.
 struct Addr {
   Addr() = default;
   constexpr explicit Addr(uint64_t addr) : value{ addr } {}
@@ -72,6 +80,30 @@ struct Addr {
   uint64_t value;
 };
 
+//! Internal key type for object and array.
+struct Key {
+  static constexpr uint64_t sMaxKey{ (static_cast<uint64_t>(1) << 48) - 1 };
+
+  explicit Key() = default;
+  explicit Key(uint64_t key) : value{ key } {
+    if (key > sMaxKey) {
+      throw IndexOutOfRangeError();
+    }
+  }
+
+  //! True if key is 0.
+  bool isNull() const noexcept { return value == 0; }
+
+  bool operator==(Key o) const noexcept { return value == o.value; }
+  bool operator!=(Key o) const noexcept { return value != o.value; }
+  bool operator<(Key o) const noexcept { return value < o.value; }
+  bool operator>(Key o) const noexcept { return value > o.value; }
+  bool operator<=(Key o) const noexcept { return value <= o.value; }
+  bool operator>=(Key o) const noexcept { return value >= o.value; }
+
+  uint64_t value;
+};
+
 //! Signed wrapper for sizeof().
 template <typename T>
 constexpr auto ssizeof() {
@@ -92,6 +124,7 @@ struct Write {
   Span<const Byte> data;
 };
 
+//! Collection of writes.
 using Writes = std::vector<Write>;
 
 // Used by disk allocator
@@ -100,9 +133,16 @@ struct Block {
   size_t size;
 };
 
+//! View of one read only memory page.
 using PageReadView = gsl::span<const Byte, k_page_size>;
+//! View of one read-write memory page.
 using PageWriteView = gsl::span<Byte, k_page_size>;
 
+//! Copy content of \c Spans.
+/**
+ * @param from  Source of the copy.
+ * @param to    Target of the copy.
+ */
 template <typename T>
 void copySpan(Span<const T> from, Span<T> to) {
   Expects(from.size() <= to.size());

@@ -16,8 +16,41 @@
 namespace cheesebase {
 
 class KeyCache;
-using KeyHash = decltype(DskKey::hash);
-using KeyIndex = decltype(DskKey::index);
+
+struct StringKey {
+  using Hash = uint32_t;
+  using Index = uint16_t;
+
+  StringKey() = default;
+  constexpr StringKey(Hash hsh, Index idx) : index{idx}, hash{hsh} {}
+  StringKey(Key key)
+      : index{ static_cast<Index>(key.value >> 32) }
+      , hash{ static_cast<Hash>(key.value) } {}
+
+  Key key() const noexcept {
+    return Key(static_cast<uint64_t>(hash) +
+               (static_cast<uint64_t>(index) << 32));
+  }
+
+  bool operator==(const StringKey& o) const noexcept {
+    return index == o.index && hash == o.hash;
+  }
+
+  bool operator!=(const StringKey& o) const noexcept {
+    return index != o.index && hash != o.hash;
+  }
+
+  bool operator<(const StringKey& o) const noexcept {
+    return index < o.index || (index == o.index && hash < o.hash);
+  }
+
+  bool operator>(const StringKey& o) const noexcept {
+    return index > o.index || (index == o.index && hash > o.hash);
+  }
+
+  Index index;
+  Hash hash;
+};
 
 static const DskKeyCacheSize s_terminator{ 0 };
 
@@ -44,8 +77,9 @@ private:
   UgLock<UgMutex> ug_lck_;
   ExLock<UgMutex> ex_lck_;
   boost::container::flat_map<
-      KeyHash, boost::container::flat_map<
-                   KeyIndex, std::pair<std::string, DskKeyCacheSize>>> local_;
+      StringKey::Hash, boost::container::flat_map<
+                     StringKey::Index, std::pair<std::string, DskKeyCacheSize>>>
+      local_;
 };
 
 class KeyCache {
@@ -70,7 +104,7 @@ public:
 
 private:
   Storage& store_;
-  std::unordered_map<KeyHash, std::vector<std::string>> cache_;
+  std::unordered_map<StringKey::Hash, std::vector<std::string>> cache_;
   UgMutex mtx_;
   Block cur_block_;
   uint64_t offset_{ sizeof(DskBlockHdr) };

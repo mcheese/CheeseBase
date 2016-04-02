@@ -21,7 +21,6 @@ public:
   void destroy() override { return tree_.destroy(); }
 
   bool insert(Key index, const model::Value& val, Overwrite ow) {
-    Expects(DskKey(index).key() == index);
     return tree_.insert(index, val, ow);
   }
 
@@ -42,19 +41,19 @@ public:
   }
 
   model::PValue getChildValue(model::Index index) {
-    if (index > kMaxKey) throw IndexOutOfRangeError();
-    return tree_.getChildValue(index);
+    if (index > Key::sMaxKey) throw IndexOutOfRangeError();
+    return tree_.getChildValue(Key(index));
   }
 
   std::unique_ptr<ValueW> getChildCollectionW(Transaction& ta,
                                               model::Index index) {
-    if (index >= kMaxKey) throw IndexOutOfRangeError();
-    return tree_.getChildCollectionW(ta, index);
+    if (index > Key::sMaxKey) throw IndexOutOfRangeError();
+    return tree_.getChildCollectionW(ta, Key(index));
   }
 
   std::unique_ptr<ValueR> getChildCollectionR(model::Index index) {
-    if (index >= kMaxKey) throw IndexOutOfRangeError();
-    return tree_.getChildCollectionR(index);
+    if (index > Key::sMaxKey) throw IndexOutOfRangeError();
+    return tree_.getChildCollectionR(Key(index));
   }
 
   model::Array getArray() { return tree_.getArray(); }

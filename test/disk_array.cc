@@ -41,9 +41,9 @@ TEST_CASE("array") {
       auto i1 = arr.append(model::Scalar(std::string("a")));
       auto i2 = arr.append(model::Scalar(std::string("b")));
       auto i3 = arr.append(model::Scalar(std::string("c")));
-      REQUIRE(i1 == 0);
-      REQUIRE(i2 == 1);
-      REQUIRE(i3 == 2);
+      REQUIRE(i1 == Key(0));
+      REQUIRE(i2 == Key(1));
+      REQUIRE(i3 == Key(2));
       ta.commit(arr.getWrites());
     }
     {
@@ -55,8 +55,8 @@ TEST_CASE("array") {
     {
       auto ta = db.startTransaction();
       disk::ArrayW arr(ta, root);
-      arr.remove(1);
-      arr.insert(4, model::Scalar(true), disk::Overwrite::Insert);
+      arr.remove(Key(1));
+      arr.insert(Key(4), model::Scalar(true), disk::Overwrite::Insert);
       arr.append(model::Scalar(false));
       ta.commit(arr.getWrites());
     }

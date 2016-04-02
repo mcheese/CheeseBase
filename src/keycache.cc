@@ -8,24 +8,24 @@ namespace cheesebase {
 Key KeyTransaction::getKey(const std::string& str) {
   if (str.size() > 256) throw KeyCacheError("key too long");
   Expects(cache_ != nullptr);
-  auto h = hashString(str);
+  auto hash = hashString(str);
 
   // check local cache
-  if (local_.count(h) > 0) {
-    for (auto& p : local_[h]) {
-      if (p.second.first == str) return DskKey(h, p.first + 1).key();
+  if (local_.count(hash) > 0) {
+    for (auto& p : local_[hash]) {
+      if (p.second.first == str) return StringKey(hash, p.first + 1).key();
     }
   }
 
   ShLock<UgMutex> lck;
   if (!ug_lck_.owns_lock()) lck = ShLock<UgMutex>(cache_->mtx_);
   // check global cache
-  auto lookup = cache_->cache_.find(h);
+  auto lookup = cache_->cache_.find(hash);
   size_t i = 0;
   if (lookup != cache_->cache_.end()) {
     for (; i < lookup->second.size(); ++i) {
       if (lookup->second[i] == str) {
-        return DskKey(h, gsl::narrow<KeyIndex>(i + 1)).key();
+        return StringKey(hash, gsl::narrow<StringKey::Index>(i + 1)).key();
       }
     }
   }
@@ -37,22 +37,22 @@ Key KeyTransaction::getKey(const std::string& str) {
   }
   Ensures(ug_lck_.owns_lock());
   // nobody else can write now, need to check if str is there now
-  lookup = cache_->cache_.find(h);
+  lookup = cache_->cache_.find(hash);
   if (lookup != cache_->cache_.end()) {
     for (; i < lookup->second.size(); ++i) {
       if (lookup->second[i] == str)
-        return DskKey(h, gsl::narrow<KeyIndex>(i) + 1).key();
+        return StringKey(hash, gsl::narrow<StringKey::Index>(i) + 1).key();
     }
   }
 
-  if (i > std::numeric_limits<KeyIndex>::max())
+  if (i > std::numeric_limits<StringKey::Index>::max())
     throw KeyCacheError("can not store key name");
-  auto idx = gsl::narrow_cast<KeyIndex>(i);
+  auto idx = gsl::narrow_cast<StringKey::Index>(i);
 
-  local_[h].emplace(idx, std::pair<std::string, DskKeyCacheSize>{
+  local_[hash].emplace(idx, std::pair<std::string, DskKeyCacheSize>{
                              str, gsl::narrow<DskKeyCacheSize>(str.size()) });
 
-  return DskKey(h, idx + 1).key();
+  return StringKey(hash, idx + 1).key();
 }
 
 void KeyTransaction::upgrade() {
@@ -157,7 +157,7 @@ KeyCache::KeyCache(Block first_block, Storage& store)
 
 std::string KeyCache::getString(Key k) {
   ShLock<UgMutex> lck{ mtx_ };
-  DskKey key{ k };
+  StringKey key{ k };
   Expects(key.index > 0);
   auto lookup = cache_.find(key.hash);
   if (lookup == cache_.end() || lookup->second.size() < key.index)
@@ -174,8 +174,8 @@ boost::optional<Key> KeyCache::getKey(const std::string& str) {
   if (lookup != cache_.end()) {
     for (; i < lookup->second.size(); ++i) {
       if (lookup->second[i] == str) {
-        Expects(i <= std::numeric_limits<KeyIndex>::max());
-        return DskKey(h, gsl::narrow_cast<KeyIndex>(i + 1)).key();
+        Expects(i <= std::numeric_limits<StringKey::Index>::max());
+        return StringKey(h, gsl::narrow_cast<StringKey::Index>(i + 1)).key();
       }
     }
   }
@@ -186,4 +186,5 @@ boost::optional<Key> KeyCache::getKey(const std::string& str) {
 KeyTransaction KeyCache::startTransaction(AllocTransaction& alloc) {
   return KeyTransaction(this, &alloc);
 }
-}
+
+} // namespace cheesebase

@@ -98,7 +98,7 @@ void insertValue(Database& db, Location::const_iterator loc,
   auto obj = dynamic_cast<disk::ArrayW*>(coll.get());
   if (obj == nullptr) throw NotFoundError();
 
-  if (obj->insert(index, val, ow))
+  if (obj->insert(Key(index), val, ow))
     ta.commit(obj->getWrites());
   else
     throw CRUDError();
@@ -261,7 +261,7 @@ uint64_t CheeseBase::append(const model::Value& val, const Location& loc) {
 
   ta.commit(coll->getWrites());
 
-  return ret;
+  return ret.value;
 }
 
 std::unique_ptr<model::Value> CheeseBase::get(const Location& location) const {
@@ -301,7 +301,7 @@ void CheeseBase::remove(const Location& location) {
   } else {
     auto arr = dynamic_cast<disk::ArrayW*>(parent.get());
     if (arr == nullptr) throw NotFoundError();
-    success = arr->remove(boost::get<uint64_t>(location.back()));
+    success = arr->remove(Key(boost::get<uint64_t>(location.back())));
   }
 
   if (success)
