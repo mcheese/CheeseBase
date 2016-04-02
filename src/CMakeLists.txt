@@ -22,7 +22,6 @@ set(SRC
   murmurhash3.h murmurhash3.cc
   core.h core.cc
   cheesebase.h cheesebase.cc
-  cbindings.cc
 )
 
 add_library(cheesebase ${SRC})

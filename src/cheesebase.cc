@@ -23,11 +23,11 @@ std::unique_ptr<disk::ValueW> openWritable(Transaction& ta,
                                            Location::const_iterator loc,
                                            Location::const_iterator loc_end) {
   if (loc == loc_end) {
-    return std::make_unique<disk::ObjectW>(ta, k_root);
+    return std::make_unique<disk::ObjectW>(ta, kRoot);
 
   } else {
     std::unique_ptr<disk::ValueR> container =
-        std::make_unique<disk::ObjectR>(ta.db(), k_root);
+        std::make_unique<disk::ObjectR>(ta.db(), kRoot);
 
     // loc is random-access-iterator, so end - 1 is OK
     for (; loc != loc_end; loc++) {
@@ -57,7 +57,7 @@ std::unique_ptr<disk::ValueR> openReadonly(Database& db,
                                            Location::const_iterator loc,
                                            Location::const_iterator loc_end) {
   std::unique_ptr<disk::ValueR> container =
-      std::make_unique<disk::ObjectR>(db, k_root);
+      std::make_unique<disk::ObjectR>(db, kRoot);
 
   for (; loc != loc_end; loc++) {
     if (loc->which() == 0) {
@@ -268,7 +268,7 @@ std::unique_ptr<model::Value> CheeseBase::get(const Location& location) const {
   std::unique_ptr<model::Value> ret;
 
   if (location.empty()) {
-    ret = disk::ObjectR(*db_, k_root).getValue();
+    ret = disk::ObjectR(*db_, kRoot).getValue();
 
   } else {
     auto coll = openReadonly(*db_, location.begin(), location.end() - 1);
