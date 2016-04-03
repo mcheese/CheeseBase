@@ -16,6 +16,7 @@ set(SRC
   disk_string.h disk_string.cc
   disk_object.h
   disk_btree.h disk_btree.cc
+  disk_btree_impl.h disk_btree_impl.cc
   disk_model.h
   parser.h
   keycache.h keycache.cc
