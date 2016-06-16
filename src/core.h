@@ -23,6 +23,12 @@ class Transaction {
 
 public:
   ReadRef load(PageNr p);
+
+  template<std::ptrdiff_t S>
+  auto loadBlock(Addr addr) {
+    return storage_.loadBlock<S>(addr);
+  }
+
   Block alloc(size_t s);
   Block allocExtension(Addr block, size_t s);
   void free(Addr a);
@@ -51,7 +57,13 @@ public:
   std::string resolveKey(Key k) const;
   boost::optional<Key> getKey(const std::string& k) const;
   ReadRef loadPage(PageNr p);
-  BlockLockW getLockW(Addr);
+ 
+  template<std::ptrdiff_t S>
+  auto loadBlock(Addr addr) {
+    return store_->loadBlock<S>(addr);
+  }
+
+ BlockLockW getLockW(Addr);
   BlockLockR getLockR(Addr);
 
 private:

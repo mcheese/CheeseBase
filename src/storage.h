@@ -26,6 +26,13 @@ public:
   // lifetime of the object.
   PageRef<PageReadView> loadPage(PageNr page_nr);
 
+  template <std::ptrdiff_t S>
+  PageRef<Span<const Byte, S>> loadBlock(Addr addr) {
+    auto ref = loadPage(addr.pageNr());
+    return PageRef<Span<const Byte, S>>(ref->subspan(addr.pageOffset(), S),
+                                        std::move(ref));
+  }
+
   // Write data to the DB. Old data is overwritten and the file extended if
   // needed. The caller has to handle consistency of the database.
   // The write is guaranteed to be all-or-nothing. On return of the function

@@ -17,6 +17,8 @@ namespace btree {
 constexpr size_t k_entry_min_words = 1; // 6B header + 1B magic + 1B type
 constexpr size_t k_entry_max_words = 4; // min + 24 byte inline string
 constexpr size_t k_node_max_bytes = 256 - sizeof(DskBlockHdr);
+constexpr std::ptrdiff_t kNodeSize = k_node_max_bytes;
+constexpr std::ptrdiff_t kBlockSize = 256;
 constexpr size_t k_node_max_words = k_node_max_bytes / sizeof(uint64_t);
 constexpr size_t k_leaf_min_words =
     k_node_max_words / 2 - (k_entry_max_words - k_entry_min_words);
@@ -29,6 +31,8 @@ constexpr size_t k_internal_min_words = k_node_max_words / 2 - 1;
 // Dummy type used as argument
 enum class AllocateNew {};
 enum class DontRead {};
+
+using NodeRef = PageRef<Span<const Byte, kNodeSize>>;
 
 class AbsInternalW;
 class AbsLeafW;
@@ -47,7 +51,7 @@ class NodeW : public Node {
   friend class RootInternalW;
 
 public:
-  NodeW(Transaction& ta, Addr addr);
+  NodeW(Addr addr);
   virtual ~NodeW() = default;
 
   virtual Writes getWrites() const = 0;
@@ -66,20 +70,7 @@ public:
   virtual bool remove(Key key, AbsInternalW* parent) = 0;
 
   // filled size in words
-  size_t size() const;
-
-protected:
-  void shiftBuffer(size_t pos, int amount);
-  void initFromDisk();
-  virtual size_t findSize() = 0;
-
-  // get a view over internal data, independent of buf_ being initialized
-  // second part of pair is needed to keep ReadRef locked if buf_ is not used
-  std::pair<Span<const uint64_t>, std::unique_ptr<ReadRef>> getDataView() const;
-
-  Transaction& ta_;
-  std::unique_ptr<std::array<uint64_t, k_node_max_words>> buf_;
-  size_t top_{ 0 }; // size in uint64_ts
+  virtual size_t size() const;
 };
 
 class AbsLeafW : public NodeW {
@@ -105,8 +96,20 @@ public:
 
   boost::container::flat_map<Key, std::unique_ptr<ValueW>> linked_;
 
+  size_t size() const override;
+
 protected:
-  size_t findSize() override;
+  void shiftBuffer(size_t pos, int amount);
+  void initFromDisk();
+
+  // get a view over internal data, independent of buf_ being initialized
+  // second part of pair is needed to keep ReadRef locked if buf_ is not used
+  std::pair<Span<const uint64_t>, std::unique_ptr<ReadRef>> getDataView() const;
+
+  Transaction& ta_;
+  std::unique_ptr<std::array<uint64_t, k_node_max_words>> buf_;
+  size_t top_{ 0 }; // size in uint64_ts
+  size_t findSize();
   virtual void split(Key, const model::Value&) = 0;
   virtual void merge() = 0;
   // Destroy value at pos (if remote). Return size of the entry.
@@ -141,16 +144,69 @@ private:
   void merge() override;
 };
 
+struct DskInternalNode;
+struct DskInternalPair;
+
+class InternalEntriesW {
+  friend class AbsInternalW;
+
+public:
+  InternalEntriesW(Transaction& ta, Addr first, DskInternalPair* begin,
+                   DskInternalPair* end);
+  InternalEntriesW(Transaction& ta, Addr addr);
+
+  Addr searchChildAddr(Key key);
+  Addr searchSiblingAddr(Key key);
+  void insert(Key key, Addr addr);
+
+  //! Remove entry that includes key, returns lowest key of removed entry.
+  Key remove(Key key);
+
+  //! Update entry that includes key to new_key, returns overwritten key.
+  Key update(Key key, Key new_key);
+
+  //! Destroy all children and free memory.
+  void destroy();
+
+  //! True if no more space.
+  bool isFull();
+
+  //! Number of entries.
+  size_t size();
+
+  //! Add \c Write of this node to the container.
+  void addWrite(Writes&) const noexcept;
+
+  //! Iterator to first entry.
+  DskInternalPair* begin();
+
+  //! Iterator to middle entry. Rounds down on uneven entries.
+  DskInternalPair* mid();
+
+  //! Iterator to past the last entry.
+  DskInternalPair* end();
+
+  //! Remove all entries starting at \param from.
+  void removeTail(DskInternalPair* from);
+
+  Transaction& ta_;
+private:
+  void init();
+
+  Addr addr_;
+  std::unique_ptr<DskInternalNode> node_;
+};
+
 class AbsInternalW : public NodeW {
   friend class RootInternalW;
 
 public:
   AbsInternalW(Transaction& ta, Addr addr);
-  AbsInternalW(AllocateNew, Transaction& ta);
+  AbsInternalW(AllocateNew, Transaction& ta, Addr first, DskInternalPair* begin,
+               DskInternalPair* end);
 
   // used when extending single root leaf to internal root
-  AbsInternalW(Transaction& ta, Addr addr, size_t top,
-               std::unique_ptr<std::array<uint64_t, k_node_max_words>> buf);
+  AbsInternalW(InternalEntriesW&& entries);
 
   bool insert(Key key, const model::Value&, Overwrite,
               AbsInternalW* parent) override;
@@ -164,17 +220,16 @@ public:
   NodeW& searchChild(Key k);
   void destroy() override;
   void appendChild(std::pair<Addr, std::unique_ptr<NodeW>>&&);
-  NodeW& getSilbling(Key key, Addr addr);
+  NodeW& getSibling(Key key);
 
-  // Remove Key+Addr after *a*. *k* search should find *a*. Returns removed Key.
+  //! Remove Key-Addr-Pair that includes key, return removed \c Key.
   Key removeMerged(Key k, Addr a);
 
-  // Replace Key after *a* with *k*. *k* search should find *a*. Returns
-  // replaced Key.
-  Key updateMerged(Key k, Addr a);
+  //! Replace \c Key which includes key with new_key, returns replaced \c Key.
+  Key updateMerged(Key key, Key new_key);
 
 protected:
-  size_t findSize() override;
+  InternalEntriesW entries_;
   AbsInternalW* parent_;
   boost::container::flat_map<Addr, std::unique_ptr<NodeW>> childs_;
 

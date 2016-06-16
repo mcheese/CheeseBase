@@ -90,16 +90,19 @@ public:
 
   template <class L>
   PageRef(View page, L&& lock)
-      : page_(page), lock_(std::forward<L>(lock)) {}
+      : view_(page), lock_(std::forward<L>(lock)) {}
+
+  PageRef(View view, PageRef&& other)
+      : view_{ view }, lock_{ std::move(other.lock_) } {}
 
   MOVE_ONLY(PageRef)
 
-  View get() const { return page_; }
-  View operator*() const { return page_; }
-  const View* operator->() const { return &page_; }
+  View get() const noexcept { return view_; }
+  View operator*() const noexcept { return view_; }
+  const View* operator->() const noexcept { return &view_; }
 
 private:
-  View page_;
+  View view_;
   ShLock<RwMutex> lock_;
 };
 
