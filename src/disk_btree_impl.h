@@ -111,7 +111,7 @@ protected:
   size_t top_{ 0 }; // size in uint64_ts
   size_t findSize();
   virtual void split(Key, const model::Value&) = 0;
-  virtual void merge() = 0;
+  virtual void balance() = 0;
   // Destroy value at pos (if remote). Return size of the entry.
   template <typename ConstIt>
   size_t destroyValue(ConstIt it);
@@ -126,7 +126,7 @@ public:
 
 private:
   void split(Key, const model::Value&) override;
-  void merge() override;
+  void balance() override;
 };
 
 // tree just a single leaf
@@ -141,7 +141,7 @@ private:
   RootLeafW(LeafW&&, Addr addr, BtreeWritable& parent);
   BtreeWritable& tree_;
   void split(Key, const model::Value&) override;
-  void merge() override;
+  void balance() override;
 };
 
 struct DskInternalNode;
@@ -186,8 +186,21 @@ public:
   //! Iterator to past the last entry.
   DskInternalPair* end();
 
+  //! Get leftmost \c Addr
+  Addr first();
+
   //! Remove all entries starting at \param from.
   void removeTail(DskInternalPair* from);
+
+  //! Remove all entries until \param to.
+  void removeHead(DskInternalPair* to);
+
+  //! Prepend range of entries. \param sep has to be a seperator between the
+  //! last entry and the first of the existing node (\class Key used in parent).
+  void prepend(DskInternalPair* from, DskInternalPair* to, Key sep);
+
+  //! Append range of entries.
+  void append(DskInternalPair* from, DskInternalPair* to);
 
   Transaction& ta_;
 private:
@@ -222,8 +235,9 @@ public:
   void appendChild(std::pair<Addr, std::unique_ptr<NodeW>>&&);
   NodeW& getSibling(Key key);
 
-  //! Remove Key-Addr-Pair that includes key, return removed \c Key.
-  Key removeMerged(Key k, Addr a);
+  //! Remove Key-Addr-Pair that includes key, return removed \c Key and transfer
+  //! ownership of removed node to caller.
+  std::pair<Key, std::unique_ptr<NodeW>> removeMerged(Key k, Addr a);
 
   //! Replace \c Key which includes key with new_key, returns replaced \c Key.
   Key updateMerged(Key key, Key new_key);
@@ -235,7 +249,7 @@ protected:
 
 private:
   virtual void split(Key, std::unique_ptr<NodeW>) = 0;
-  virtual void merge() = 0;
+  virtual void balance() = 0;
 };
 
 class InternalW : public AbsInternalW {
@@ -247,7 +261,8 @@ public:
 
 private:
   void split(Key, std::unique_ptr<NodeW>) override;
-  void merge() override;
+  void balance() override;
+  void merge(InternalW& right);
 };
 
 class RootInternalW : public AbsInternalW {
@@ -262,7 +277,7 @@ private:
                 std::unique_ptr<std::array<uint64_t, k_node_max_words>> buf,
                 BtreeWritable& parent);
   void split(Key, std::unique_ptr<NodeW>) override;
-  void merge() override;
+  void balance() override;
   BtreeWritable& parent_;
 };
 

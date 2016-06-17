@@ -449,7 +449,7 @@ Writes AbsLeafW::getWrites() const {
     auto size = destroyValue(buf_->begin() + pos);
     shiftBuffer(pos + size, -gsl::narrow_cast<int>(size));
 
-    if (top_ < k_leaf_min_words) merge();
+    if (top_ < k_leaf_min_words) balance();
 
     return true;
   }
@@ -486,10 +486,12 @@ Writes AbsLeafW::getWrites() const {
   void AbsLeafW::initFromDisk() {
     if (!buf_) {
       buf_ = std::make_unique<std::array<uint64_t, k_node_max_words>>();
+      auto s = gsl::as_span(*buf_);
+      auto b = gsl::as_writeable_bytes(s);
       copySpan(ta_.load(addr_.pageNr())
                   ->subspan(addr_.pageOffset() + ssizeof<DskBlockHdr>(),
                             k_node_max_bytes),
-              gsl::as_writeable_bytes(Span<uint64_t>(*buf_)));
+              gsl::as_writeable_bytes(s));
       top_ = findSize();
     }
   }
@@ -558,7 +560,7 @@ Writes AbsLeafW::getWrites() const {
     parent_->insert(split_key, std::move(right_leaf));
   }
 
-  void LeafW::merge() {
+  void LeafW::balance() {
     Expects(buf_);
     Expects(top_ < k_leaf_min_words);
     Expects(top_ > 1); // even if merging, the node should not be empty
@@ -761,7 +763,7 @@ Writes AbsLeafW::getWrites() const {
     tree_.root_ = std::move(new_me);
   }
 
-  void RootLeafW::merge() {
+  void RootLeafW::balance() {
     // root leaf merging is not existent
     // this node type may be empty
   return; // NOP
@@ -927,6 +929,38 @@ void InternalEntriesW::removeTail(DskInternalPair* from) {
   node_->hdr.fromSize(std::distance(begin, from));
 }
 
+void InternalEntriesW::prepend(DskInternalPair* from, DskInternalPair* to,
+                               Key sep) {
+  init();
+  auto amount = std::distance(from, to);
+  if (amount == 0) return;
+  Expects(amount <= kMaxInternalEntries - size());
+  Expects(sep > std::prev(to)->entry.key.key());
+
+  std::copy_backward(begin(), end(), begin() + amount);
+  std::copy(std::next(from), to, begin());
+  (begin() + amount - 1)->addr = node_->first;
+  (begin() + amount - 1)->entry.fromKey(sep);
+  node_->first = from->addr;
+  node_->hdr.fromSize(size() + amount);
+}
+
+void InternalEntriesW::append(DskInternalPair* from, DskInternalPair* to) {
+  init();
+  auto amount = std::distance(from, to);
+  if (amount == 0) return;
+  Expects(amount <= kMaxInternalEntries - size());
+  Expects(from->entry.key.key() > std::prev(end())->entry.key.key());
+
+  std::copy(from, to, end());
+  node_->hdr.fromSize(size() + amount);
+}
+
+Addr InternalEntriesW::first() {
+  init();
+  return node_->first;
+}
+
 Key InternalEntriesW::update(Key key, Key new_key) {
   init();
   Expects(size() > 0);
@@ -1070,11 +1104,18 @@ NodeW& AbsInternalW::getSibling(Key key) {
   }
 }
 
-Key AbsInternalW::removeMerged(Key key, Addr addr) {
-  auto removed_key = entries_.remove(key);
-  childs_.erase(addr);
-  if (entries_.size() < kMinInternalEntries) merge();
-  return removed_key;
+std::pair<Key, std::unique_ptr<NodeW>> AbsInternalW::removeMerged(Key key,
+                                                                  Addr addr) {
+  std::pair<Key, std::unique_ptr<NodeW>> ret;
+  ret.first = entries_.remove(key);
+  auto lookup = childs_.find(addr);
+  if (lookup == childs_.end()) {
+    throw ConsistencyError("removeMerged with unknown Address");
+  }
+  ret.second = std::move(lookup->second);
+  childs_.erase(lookup);
+  if (entries_.size() < kMinInternalEntries) balance();
+  return ret;
 }
 
 Key AbsInternalW::updateMerged(Key key, Key new_key) {
@@ -1084,6 +1125,18 @@ Key AbsInternalW::updateMerged(Key key, Key new_key) {
 ////////////////////////////////////////////////////////////////////////////////
 // InternalW
 
+namespace {
+
+template <class C, typename K>
+void tryTransfer(C& from, C& to, const K& key) {
+  auto lookup = from.find(key);
+  if (lookup != from.end()) {
+    to.insert(std::move(*lookup));
+    from.erase(lookup);
+  }
+}
+
+} // anonymous namespace
 void InternalW::split(Key key, std::unique_ptr<NodeW> c) {
   Expects(parent_ != nullptr);
   Expects(entries_.isFull());
@@ -1096,11 +1149,7 @@ void InternalW::split(Key key, std::unique_ptr<NodeW> c) {
       AllocateNew(), entries_.ta_, mid->addr, std::next(mid), end);
 
   for (auto it = mid; it < end; ++it) {
-    auto lookup = childs_.find(it->addr);
-    if (lookup != childs_.end()) {
-      sibling->appendChild(std::move(*lookup));
-      childs_.erase(lookup);
-    }
+    tryTransfer(childs_, sibling->childs_, it->addr);
   }
   entries_.removeTail(mid);
 
@@ -1116,7 +1165,7 @@ void InternalW::split(Key key, std::unique_ptr<NodeW> c) {
   parent_->insert(mid_key, std::move(sibling));
 }
 
-void InternalW::merge() {
+void InternalW::balance() {
   Expects(parent_ != nullptr);
   Expects(entries_.size() <= kMinInternalEntries);
 
@@ -1133,120 +1182,56 @@ void InternalW::merge() {
     }
   } else {
     // pull stuff
-    
-  }
-
-
-
-  // this is required since removeMerged() on the root node may trigger a move
-  // of the buf_ unique_ptr.
-  auto& buf = *buf_;
-  auto& sibl_buf = *sibl.buf_;
-
-  auto sibl_key = DskInternalEntry(sibl_buf[2]).key.key();
-
-  if (top_ + sibl.size() <= k_node_max_words) {
-    // merge
-
-    if (first_key < sibl_key) {
-      // is right sibling, merge into here
-
-      // if we pull parent key now sibl would be deleted
-      auto parent_key_insert_pos = top_++;
-
-      appendRaw(Span<uint64_t>(sibl_buf).subspan(1, sibl.size() - 1));
-      for (auto& c : sibl.childs_) appendChild(std::move(c));
-
-      ta_.free(sibl.addr());
-      buf[parent_key_insert_pos] = DskInternalEntry().fromKey(
-          parent_->removeMerged(sibl_key, sibl.addr()));
-
-    } else {
-      // is left sibling, merge into it
-
-      auto parent_key_insert_pos = sibl.top_++;
-
-      sibl.appendRaw(Span<uint64_t>(buf).subspan(1, size() - 1));
-      for (auto& c : childs_) sibl.appendChild(std::move(c));
-
-      ta_.free(addr());
-      sibl_buf[parent_key_insert_pos] =
-          DskInternalEntry().fromKey(parent_->removeMerged(first_key, addr()));
-    }
-
-  } else {
-    // pull entries
-
-    auto avg = (size() + sibl.size()) / 2;
-    Expects(size() < avg);
-    auto to_pull = avg - size();
-    if (to_pull % 2 == 1) to_pull--;
+    auto to_pull = (sibl.entries_.size() - entries_.size()) / 2;
+    Ensures(to_pull > 0 && to_pull < kMaxInternalEntries);
 
     if (first_key > sibl_key) {
-      // is left sibling, pull biggest
+      // pull biggest from left
+      auto from = sibl.entries_.end() - to_pull;
+      auto to = sibl.entries_.end();
+      Ensures(from < to);
+      auto sep_key = parent_->updateMerged(first_key, from->entry.key.key());
+      entries_.prepend(from, to, sep_key);
 
-      //
-      //           [ - .X. - ]
-      //              /   \
-      //             /     \
-      // [h.#.#.#.A.B.]   [h.C.        ]
-      //          ^^^^
-      //
-      //           [ - .A. - ]
-      //              /   \
-      //             /     \
-      // [h.#.#.#.    ]   [h.B.X.C.    ]
-      //
-
-      auto beg = sibl_buf.begin() + (sibl.size() - to_pull);
-      auto end = beg + to_pull;
-      auto it = beg;
-
-      // make space
-      shiftBuffer(1, gsl::narrow_cast<int>(to_pull));
-
-      // first to pull goes into header
-      auto split_key = DskInternalEntry(*it++).key.key();
-      buf[to_pull] =
-          DskInternalEntry().fromKey(parent_->updateMerged(split_key, addr()));
-
-      auto insert = buf.begin() + 1;
-      while (it < end) {
-        auto lookup = sibl.childs_.find(Addr(*it));
-        if (lookup != sibl.childs_.end()) {
-          childs_.insert(std::move(*lookup));
-          sibl.childs_.erase(lookup);
-        }
-        *insert++ = *it++;               // Addr
-        if (it < end) *insert++ = *it++; // Key
+      for (auto it = from; it < to; ++it) {
+        tryTransfer(sibl.childs_, childs_, it->addr);
       }
 
-      std::fill(beg, end, 0);
-      sibl.top_ -= to_pull;
+      sibl.entries_.removeTail(from);
 
     } else {
-      // is right sibling, pull smallest
+      // pull smallest from right
+      auto first = sibl.entries_.first();
+      auto from = sibl.entries_.begin();
+      auto to = sibl.entries_.begin() + to_pull;
+      auto sep_key = parent_->updateMerged(sibl_key, to->entry.key.key());
+      entries_.insert(sep_key, first);
 
-      auto first = sibl_buf.begin() + 1;
-      auto last = first + to_pull - 1;
-      auto it = first;
-
-      auto split_key = DskInternalEntry(*last--).key.key();
-      buf[top_++] = DskInternalEntry().fromKey(
-          parent_->updateMerged(split_key, sibl.addr()));
-
-      while (it <= last) {
-        auto lookup = sibl.childs_.find(Addr(*it));
-        if (lookup != sibl.childs_.end()) {
-          childs_.insert(std::move(*lookup));
-          sibl.childs_.erase(lookup);
-        }
-        buf[top_++] = *it++;                 // Addr
-        if (it <= last) buf[top_++] = *it++; // Key
+      tryTransfer(sibl.childs_, childs_, first);
+      for (auto it = from; it < to; ++it) {
+        tryTransfer(sibl.childs_, childs_, it->addr);
       }
 
-      sibl.shiftBuffer(1 + to_pull, -gsl::narrow_cast<int>(to_pull));
+      entries_.append(from, to);
+      sibl.entries_.removeHead(to);
     }
+  }
+}
+
+void InternalW::merge(InternalW& right) {
+  Expects(entries_.size() + right.entries_.size() + 1 <= kMaxInternalEntries);
+
+  auto from = right.entries_.begin();
+  auto to = right.entries_.end();
+
+  Expects(entries_.begin()->entry.key.key() < from->entry.key.key());
+
+  auto right_node = parent_->removeMerged(from->entry.key.key(), right.addr());
+  entries_.insert(right_node.first, right.entries_.first());
+  entries_.append(from, to);
+
+  for (auto& c : right.childs_) {
+    childs_.emplace(std::move(c));
   }
 }
 
@@ -1323,7 +1308,7 @@ void RootInternalW::split(Key key, std::unique_ptr<NodeW> child) {
   childs_.emplace(left->addr(), std::move(left));
 }
 
-void RootInternalW::merge() {
+void RootInternalW::balance() {
   // this node may be smaller than min size
   if (top_ >= 4) return;
 
