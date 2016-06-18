@@ -154,6 +154,7 @@ public:
   InternalEntriesW(Transaction& ta, Addr first, DskInternalPair* begin,
                    DskInternalPair* end);
   InternalEntriesW(Transaction& ta, Addr addr);
+  InternalEntriesW(Transaction& ta, Addr addr, Addr left, Key sep, Addr right);
 
   Addr searchChildAddr(Key key);
   Addr searchSiblingAddr(Key key);
@@ -202,6 +203,12 @@ public:
   //! Append range of entries.
   void append(DskInternalPair* from, DskInternalPair* to);
 
+  //! Transform to root, 2 childs and a seperator, dismiss old entries.
+  void makeRoot(Addr left, Key sep, Addr right);
+
+  //! Take over \c DskInternalNode from \param other.
+  void takeNodeFrom(InternalEntriesW& other);
+
   Transaction& ta_;
 private:
   void init();
@@ -219,7 +226,7 @@ public:
                DskInternalPair* end);
 
   // used when extending single root leaf to internal root
-  AbsInternalW(InternalEntriesW&& entries);
+  AbsInternalW(Transaction& ta, Addr addr, Addr left, Key sep, Addr right);
 
   bool insert(Key key, const model::Value&, Overwrite,
               AbsInternalW* parent) override;
@@ -273,9 +280,9 @@ public:
 
 private:
   // used to construct while splitting RootLeafW
-  RootInternalW(Transaction& ta, Addr addr, size_t top,
-                std::unique_ptr<std::array<uint64_t, k_node_max_words>> buf,
-                BtreeWritable& parent);
+  RootInternalW(Transaction& ta, Addr addr, std::unique_ptr<LeafW> left_leaf,
+      Key sep, std::unique_ptr<LeafW> right_leaf, BtreeWritable& parent);
+
   void split(Key, std::unique_ptr<NodeW>) override;
   void balance() override;
   BtreeWritable& parent_;
