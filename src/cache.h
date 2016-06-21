@@ -85,15 +85,19 @@ private:
 // Locked reference of a page.
 template <class View>
 class PageRef {
+  template <class V>
+  friend class PageRef;
+
 public:
   PageRef() = default;
 
+  template <class V>
+  PageRef(View view, PageRef<V>&& other)
+      : view_{ view }, lock_{ std::move(other.lock_) } {}
+
   template <class L>
   PageRef(View page, L&& lock)
-      : view_(page), lock_(std::forward<L>(lock)) {}
-
-  PageRef(View view, PageRef&& other)
-      : view_{ view }, lock_{ std::move(other.lock_) } {}
+      : view_{ page }, lock_{ std::forward<L>(lock) } {}
 
   MOVE_ONLY(PageRef)
 

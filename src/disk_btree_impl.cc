@@ -125,7 +125,7 @@ CB_PACKED(struct DskLeafHdr {
 static_assert(sizeof(DskLeafHdr) == 8, "Invalid DskLeafHdr size");
 
 constexpr size_t kMaxInternalEntries = (kNodeSize - 16) / 16;
-constexpr size_t kMinInternalEntries = (kMaxInternalEntries / 2) - 1;
+constexpr size_t kMinInternalEntries = (kMaxInternalEntries / 2) - 2;
 
 CB_PACKED(struct DskInternalHdr {
   DskInternalHdr() = default;
@@ -486,12 +486,11 @@ Writes AbsLeafW::getWrites() const {
   void AbsLeafW::initFromDisk() {
     if (!buf_) {
       buf_ = std::make_unique<std::array<uint64_t, k_node_max_words>>();
-      auto s = gsl::as_span(*buf_);
-      auto b = gsl::as_writeable_bytes(s);
-      copySpan(ta_.load(addr_.pageNr())
-                  ->subspan(addr_.pageOffset() + ssizeof<DskBlockHdr>(),
-                            k_node_max_bytes),
-              gsl::as_writeable_bytes(s));
+      copySpan(
+          ta_.load(addr_.pageNr())
+              ->subspan(addr_.pageOffset() + ssizeof<DskBlockHdr>(),
+                        k_node_max_bytes),
+          gsl::as_writeable_bytes(Span<uint64_t, k_node_max_words>(*buf_)));
       top_ = findSize();
     }
   }
@@ -789,10 +788,10 @@ CB_PACKED(struct DskInternalNode {
 
   char padding[kNodeSize % 16];
 
-  auto begin() noexcept { return pairs.begin(); }
-  auto end() { return pairs.begin() + hdr.size(); }
-  auto begin() const noexcept { return pairs.cbegin(); }
-  auto end() const { return pairs.cbegin() + hdr.size(); }
+  DskInternalPair* begin() noexcept { return pairs.data(); }
+  DskInternalPair* end() { return pairs.data() + hdr.size(); }
+  const DskInternalPair* begin() const noexcept { return pairs.data(); }
+  const DskInternalPair* end() const { return pairs.data() + hdr.size(); }
 });
 static_assert(sizeof(DskInternalNode) == kNodeSize,
               "Invalid DskInternalNode size");
@@ -813,6 +812,19 @@ InternalEntriesW::InternalEntriesW(Transaction& ta, Addr first,
   node_->first = first;
   std::copy(begin, end, node_->begin());
   for (auto it = node_->pairs.begin() + amount; it < node_->pairs.end(); ++it) {
+    it->zero();
+  }
+}
+
+InternalEntriesW::InternalEntriesW(Transaction& ta, Addr addr, Addr left,
+                                   Key sep, Addr right)
+    : ta_{ ta }, addr_{ addr }, node_{ std::make_unique<DskInternalNode>() } {
+  node_->hdr.fromSize(1);
+  node_->first = left;
+  node_->begin()->entry.fromKey(sep);
+  node_->begin()->addr = right;
+  for (auto it = std::next(node_->pairs.begin()); it < node_->pairs.end();
+       ++it) {
     it->zero();
   }
 }
@@ -899,7 +911,7 @@ void InternalEntriesW::insert(Key key, Addr addr) {
 
 Key InternalEntriesW::remove(Key key) {
   init();
-  Expects(size() >= 2);
+  Expects(size() >= 1);
 
   auto end = node_->end();
   auto it = std::upper_bound(node_->begin(), end, key);
@@ -923,6 +935,20 @@ void InternalEntriesW::removeTail(DskInternalPair* from) {
   node_->hdr.fromSize(std::distance(begin, from));
 }
 
+void InternalEntriesW::removeHead(DskInternalPair* to) {
+  init();
+  auto end = node_->end();
+  auto begin = node_->begin();
+  auto amount = std::distance(std::next(to), end);
+  Expects(to < end);
+  Expects(to > begin);
+
+  node_->first = to->addr;
+  std::copy(std::next(to), end, begin);
+  for (auto it = begin + amount; it < end; ++it) it->zero();
+  node_->hdr.fromSize(amount);
+}
+
 void InternalEntriesW::prepend(DskInternalPair* from, DskInternalPair* to,
                                Key sep) {
   init();
@@ -931,7 +957,7 @@ void InternalEntriesW::prepend(DskInternalPair* from, DskInternalPair* to,
   Expects(amount <= kMaxInternalEntries - size());
   Expects(sep > std::prev(to)->entry.key.key());
 
-  std::copy_backward(begin(), end(), begin() + amount);
+  std::copy_backward(begin(), end(), end() + amount);
   std::copy(std::next(from), to, begin());
   (begin() + amount - 1)->addr = node_->first;
   (begin() + amount - 1)->entry.fromKey(sep);
@@ -986,7 +1012,9 @@ Key InternalEntriesW::update(Key key, Key new_key) {
 
 void InternalEntriesW::addWrite(Writes& writes) const noexcept {
   if (node_){
-    writes.push_back({ addr_, gsl::as_bytes(Span<DskInternalNode>(*node_)) });
+    node_->hdr.check();
+    writes.push_back({ Addr(addr_.value + ssizeof<DskBlockHdr>()),
+                       gsl::as_bytes(Span<DskInternalNode>(*node_)) });
   }
 }
 
@@ -1242,7 +1270,7 @@ void InternalW::merge(InternalW& right) {
   entries_.append(from, to);
 
   for (auto& c : right.childs_) {
-    childs_.emplace(std::move(c));
+    childs_.emplace(c.first, std::move(c.second));
   }
 }
 
@@ -1258,7 +1286,10 @@ RootInternalW::RootInternalW(Transaction& ta, Addr addr,
                              BtreeWritable& parent)
     : AbsInternalW(ta, addr, left_leaf->addr(), sep,
                                     right_leaf->addr())
-    , parent_{ parent } {}
+    , parent_{ parent } {
+  childs_.emplace(left_leaf->addr(), std::move(left_leaf));
+  childs_.emplace(right_leaf->addr(), std::move(right_leaf));
+}
 
 void RootInternalW::split(Key key, std::unique_ptr<NodeW> child) {
   Expects(entries_.isFull());
@@ -1509,7 +1540,7 @@ LeafR::readValue(Span<const uint64_t>::const_iterator& it) {
 InternalR::InternalR(Database& db, Addr addr, ReadRef page)
     : NodeR(db, addr, std::move(page)) {
   auto view = getData();
-  data_ = view.subspan(0, DskInternalHdr().fromRaw(view[0]).size());
+  data_ = view.subspan(0, DskInternalHdr().fromRaw(view[0]).size()*2 + 2);
 }
 
 void InternalR::getAll(model::Object& obj) {

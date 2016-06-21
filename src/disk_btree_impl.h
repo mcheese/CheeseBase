@@ -68,9 +68,6 @@ public:
 
   // delete value, returns true if found and removed
   virtual bool remove(Key key, AbsInternalW* parent) = 0;
-
-  // filled size in words
-  virtual size_t size() const;
 };
 
 class AbsLeafW : public NodeW {
@@ -96,7 +93,7 @@ public:
 
   boost::container::flat_map<Key, std::unique_ptr<ValueW>> linked_;
 
-  size_t size() const override;
+  size_t size() const;
 
 protected:
   void shiftBuffer(size_t pos, int amount);
