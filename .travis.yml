@@ -12,6 +12,7 @@ matrix:
             - cmake
             - cmake-data
             - gcc-5
+            - libstdc++-5-dev
             
 install:
   - export LLVM_VERSION=3.7.0
