@@ -125,7 +125,7 @@ CB_PACKED(struct DskLeafHdr {
 static_assert(sizeof(DskLeafHdr) == 8, "Invalid DskLeafHdr size");
 
 constexpr size_t kMaxInternalEntries = (kNodeSize - 16) / 16;
-constexpr size_t kMinInternalEntries = (kMaxInternalEntries / 2) - 2;
+constexpr size_t kMinInternalEntries = (kMaxInternalEntries / 2) - 1;
 
 CB_PACKED(struct DskInternalHdr {
   DskInternalHdr() = default;
@@ -589,7 +589,7 @@ Writes AbsLeafW::getWrites() const {
         ta_.free(sibl.addr());
 
         // do this last because it destroys sibling
-        parent_->removeMerged(sibl_key, sibl.addr());
+        parent_->removeMerged(parent_->searchEntry(sibl_key));
 
       } else {
         // is left sibl, merge there
@@ -603,7 +603,7 @@ Writes AbsLeafW::getWrites() const {
         ta_.free(addr_);
 
         // do this last because it destroys this
-        parent_->removeMerged(first_key, addr_);
+        parent_->removeMerged(parent_->searchEntry(first_key));
       }
 
     } else {
@@ -909,18 +909,26 @@ void InternalEntriesW::insert(Key key, Addr addr) {
   ++(node_->hdr);
 }
 
-Key InternalEntriesW::remove(Key key) {
+DskInternalPair* InternalEntriesW::search(Key key) {
   init();
   Expects(size() >= 1);
+  auto it = std::upper_bound(node_->begin(), node_->end(), key);
+  Expects(it > node_->begin());
+  return std::prev(it);
+}
 
-  auto end = node_->end();
-  auto it = std::upper_bound(node_->begin(), end, key);
-  Expects(it != node_->begin());
-
-  auto removed_key = std::prev(it)->entry.key.key();
-  std::move(it, end, std::prev(it));
-  std::prev(end)->zero();
+void InternalEntriesW::remove(DskInternalPair* e) {
+  init();
+  Expects(e >= node_->begin() && e < node_->end());
+  std::copy(std::next(e), node_->end(), e);
+  std::prev(node_->end())->zero();
   --(node_->hdr);
+}
+
+Key InternalEntriesW::remove(Key key) {
+  auto it = search(key);
+  auto removed_key = it->entry.key.key();
+  remove(it);
   return removed_key;
 }
 
@@ -1143,18 +1151,19 @@ NodeW& AbsInternalW::getSibling(Key key) {
   }
 }
 
-std::pair<Key, std::unique_ptr<NodeW>> AbsInternalW::removeMerged(Key key,
-                                                                  Addr addr) {
-  std::pair<Key, std::unique_ptr<NodeW>> ret;
-  ret.first = entries_.remove(key);
-  auto lookup = childs_.find(addr);
+DskInternalPair* AbsInternalW::searchEntry(Key key) {
+  return entries_.search(key);
+}
+
+void AbsInternalW::removeMerged(DskInternalPair* it) {
+  auto lookup = childs_.find(it->addr);
   if (lookup == childs_.end()) {
     throw ConsistencyError("removeMerged with unknown Address");
   }
-  ret.second = std::move(lookup->second);
   childs_.erase(lookup);
+
+  entries_.remove(it);
   if (entries_.size() < kMinInternalEntries) balance();
-  return ret;
 }
 
 Key AbsInternalW::updateMerged(Key key, Key new_key) {
@@ -1206,7 +1215,7 @@ void InternalW::split(Key key, std::unique_ptr<NodeW> c) {
 
 void InternalW::balance() {
   Expects(parent_ != nullptr);
-  Expects(entries_.size() <= kMinInternalEntries);
+  Expects(entries_.size() < kMinInternalEntries);
 
   auto first_key = entries_.begin()->entry.key.key();
   auto& sibl = static_cast<InternalW&>(parent_->getSibling(first_key));
@@ -1258,20 +1267,22 @@ void InternalW::balance() {
 }
 
 void InternalW::merge(InternalW& right) {
+  Expects(&right != this);
   Expects(entries_.size() + right.entries_.size() + 1 <= kMaxInternalEntries);
 
   auto from = right.entries_.begin();
   auto to = right.entries_.end();
 
   Expects(entries_.begin()->entry.key.key() < from->entry.key.key());
-
-  auto right_node = parent_->removeMerged(from->entry.key.key(), right.addr());
-  entries_.insert(right_node.first, right.entries_.first());
+  auto right_entry = parent_->searchEntry(from->entry.key.key());
+  entries_.insert(right_entry->entry.key.key(), right.entries_.first());
   entries_.append(from, to);
 
   for (auto& c : right.childs_) {
     childs_.emplace(c.first, std::move(c.second));
   }
+
+  parent_->removeMerged(right_entry);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

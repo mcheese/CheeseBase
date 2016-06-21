@@ -157,6 +157,11 @@ public:
   Addr searchSiblingAddr(Key key);
   void insert(Key key, Addr addr);
 
+  //! Get iterator to entry including \param key.
+  DskInternalPair* search(Key key);
+
+  void remove(DskInternalPair* entry);
+
   //! Remove entry that includes key, returns lowest key of removed entry.
   Key remove(Key key);
 
@@ -169,7 +174,7 @@ public:
   //! True if no more space.
   bool isFull();
 
-  //! Number of entries.
+  //! Number of entries == # \c Key == # \c Addr - 1.
   size_t size();
 
   //! Add \c Write of this node to the container.
@@ -207,9 +212,9 @@ public:
   void takeNodeFrom(InternalEntriesW& other);
 
   Transaction& ta_;
+
 private:
   void init();
-
   Addr addr_;
   std::unique_ptr<DskInternalNode> node_;
 };
@@ -239,9 +244,11 @@ public:
   void appendChild(std::pair<Addr, std::unique_ptr<NodeW>>&&);
   NodeW& getSibling(Key key);
 
-  //! Remove Key-Addr-Pair that includes key, return removed \c Key and transfer
-  //! ownership of removed node to caller.
-  std::pair<Key, std::unique_ptr<NodeW>> removeMerged(Key k, Addr a);
+  //! Return Key-Addr-Pair iterator refered to by \param key.
+  DskInternalPair* searchEntry(Key key);
+
+  //! Remove Key-Addr-Pair referenced by \param entry.
+  void removeMerged(DskInternalPair* entry);
 
   //! Replace \c Key which includes key with new_key, returns replaced \c Key.
   Key updateMerged(Key key, Key new_key);
