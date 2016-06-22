@@ -22,7 +22,7 @@ class Transaction {
   friend class Database;
 
 public:
-  ReadRef load(PageNr p);
+  ReadRef<k_page_size> load(PageNr p);
 
   template<std::ptrdiff_t S>
   auto loadBlock(Addr addr) {
@@ -56,8 +56,8 @@ public:
   Transaction startTransaction();
   std::string resolveKey(Key k) const;
   boost::optional<Key> getKey(const std::string& k) const;
-  ReadRef loadPage(PageNr p);
- 
+  ReadRef<k_page_size> loadPage(PageNr p);
+
   template<std::ptrdiff_t S>
   auto loadBlock(Addr addr) {
     return store_->loadBlock<S>(addr);

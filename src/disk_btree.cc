@@ -46,27 +46,27 @@ BtreeReadOnly::BtreeReadOnly(Database& db, Addr root) : db_(db), root_(root) {}
 
 model::Object BtreeReadOnly::getObject() {
   model::Object obj;
-  openNodeR(db_, root_)->getAll(obj);
+  NodeR::getAll(db_, root_, obj);
   return obj;
 }
 
 model::Array BtreeReadOnly::getArray() {
   model::Array obj;
-  openNodeR(db_, root_)->getAll(obj);
+  NodeR::getAll(db_, root_, obj);
   return obj;
 }
 
 std::unique_ptr<model::Value> BtreeReadOnly::getChildValue(Key key) {
-  return openNodeR(db_, root_)->getChildValue(key);
+  return NodeR::getChildValue(db_, root_, key);
 }
 
 std::unique_ptr<ValueW> BtreeReadOnly::getChildCollectionW(Transaction& ta,
                                                            Key key) {
-  return openNodeR(db_, root_)->getChildCollectionW(ta, key);
+  return NodeR::getChildCollectionW(ta, root_, key);
 }
 
 std::unique_ptr<ValueR> BtreeReadOnly::getChildCollectionR(Key key) {
-  return openNodeR(db_, root_)->getChildCollectionR(key);
+  return NodeR::getChildCollectionR(db_, root_, key);
 }
 
 } // namespace btree

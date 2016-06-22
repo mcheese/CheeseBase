@@ -169,12 +169,11 @@ static_assert(sizeof(DskInternalHdr) == 8, "Invalid DskInternalHdr size");
 ////////////////////////////////////////////////////////////////////////////////
 // free functions
 
-bool isNodeLeaf(const ReadRef& page, Addr addr) {
+bool isNodeLeaf(const ReadRef<kBlockSize>& block) {
   // first byte of Addr is always 0
   // next-ptr of leafs put a flag in the first byte, marking the node as leaf
-  return gsl::as_span<const DskLeafHdr>(page->subspan(
-      addr.pageOffset() + ssizeof<DskBlockHdr>(), sizeof(DskLeafHdr)))[0]
-      .hasMagic();
+  return gsl::as_span<const DskLeafHdr>(block->subspan(
+      ssizeof<DskBlockHdr>(), sizeof(DskLeafHdr)))[0].hasMagic();
 }
 
 size_t searchLeafPosition(Key key, Span<const uint64_t> span) {
@@ -212,9 +211,9 @@ size_t searchInternalPosition(Key key, Span<const uint64_t> span) {
 }
 
 std::unique_ptr<NodeW> openNodeW(Transaction& ta, Addr addr) {
-  auto page = ta.load(addr.pageNr());
+  auto block = ta.loadBlock<kBlockSize>(addr);
 
-  if (isNodeLeaf(page, addr))
+  if (isNodeLeaf(block))
     return std::make_unique<LeafW>(ta, addr);
   else
     return std::make_unique<InternalW>(ta, addr);
@@ -223,23 +222,13 @@ std::unique_ptr<NodeW> openNodeW(Transaction& ta, Addr addr) {
 } // anonymous namespace
 
 std::unique_ptr<NodeW> openRootW(Transaction& ta, Addr addr, BtreeWritable& tree) {
-  auto page = ta.load(addr.pageNr());
+  auto block = ta.loadBlock<kBlockSize>(addr);
 
-  if (isNodeLeaf(page, addr))
+  if (isNodeLeaf(block))
     return std::make_unique<RootLeafW>(ta, addr, tree);
   else
     return std::make_unique<RootInternalW>(ta, addr, tree);
 }
-
-std::unique_ptr<NodeR> openNodeR(Database& db, Addr addr) {
-  auto page = db.loadPage(addr.pageNr());
-
-  if (isNodeLeaf(page, addr))
-    return std::make_unique<LeafR>(db, addr, std::move(page));
-  else
-    return std::make_unique<InternalR>(db, addr, std::move(page));
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////
 // Node
@@ -495,11 +484,11 @@ Writes AbsLeafW::getWrites() const {
     }
   }
 
-  std::pair<Span<const uint64_t>, std::unique_ptr<ReadRef>>
+  std::pair<Span<const uint64_t>, std::unique_ptr<ReadRef<k_page_size>>>
   AbsLeafW::getDataView() const {
     if (buf_) return { Span<const uint64_t>(*buf_), nullptr };
 
-    auto p = std::make_unique<ReadRef>(ta_.load(addr_.pageNr()));
+    auto p = std::make_unique<ReadRef<k_page_size>>(ta_.load(addr_.pageNr()));
     return { gsl::as_span<const uint64_t>((*p)->subspan(
                 addr_.pageOffset() + ssizeof<DskBlockHdr>(), k_node_max_bytes)),
             std::move(p) };
@@ -1383,116 +1372,11 @@ void RootInternalW::balance() {
 ////////////////////////////////////////////////////////////////////////////////
 // NodeR
 
-NodeR::NodeR(Database& db, Addr addr, ReadRef page)
-    : Node(addr), db_(db), page_(std::move(page)) {}
-
-Span<const uint64_t> NodeR::getData() const {
-  return gsl::as_span<const uint64_t>(page_->subspan(
-      addr_.pageOffset() + ssizeof<DskBlockHdr>(), k_node_max_bytes));
-}
-
-////////////////////////////////////////////////////////////////////////////////
-// LeafR
-
-LeafR::LeafR(Database& db, Addr addr, ReadRef page)
-    : NodeR(db, addr, std::move(page)) {}
-
-LeafR::LeafR(Database& db, Addr addr)
-    : NodeR(db, addr, db.loadPage(addr.pageNr())) {}
-
-void LeafR::getAll(model::Object& obj) {
-  auto next = getAllInLeaf(obj);
-  while (!next.isNull()) {
-    next = LeafR(db_, next).getAllInLeaf(obj);
-  }
-}
-
-Addr LeafR::getAllInLeaf(model::Object& obj) {
-  auto data = getData();
-  auto it = data.begin();
-  auto end = data.end();
-  auto next = DskLeafHdr().fromDsk(*it++).next();
-
-  while (it != end && *it != 0) {
-    auto pair = readValue(it);
-    obj.append(db_.resolveKey(pair.first), std::move(pair.second));
-  }
-
-  return next;
-}
-
-void LeafR::getAll(model::Array& obj) {
-  auto next = getAllInLeaf(obj);
-  while (!next.isNull()) {
-    next = LeafR(db_, next).getAllInLeaf(obj);
-  }
-}
-
-Addr LeafR::getAllInLeaf(model::Array& obj) {
-  auto data = getData();
-  auto it = data.begin();
-  auto end = data.end();
-  auto next = DskLeafHdr().fromDsk(*it++).next();
-
-  while (it != end && *it != 0) {
-    auto pair = readValue(it);
-    obj.append(pair.first.value, std::move(pair.second));
-  }
-
-  return next;
-}
-
-std::unique_ptr<model::Value> LeafR::getChildValue(Key key) {
-  auto view = getData();
-  auto pos = searchLeafPosition(key, view);
-  if (pos >= static_cast<size_t>(view.size()) || view[pos] == 0) return nullptr;
-
-  if (DskEntry(view[pos]).key.key() != key) return nullptr;
-
-  auto it = view.begin() + pos;
-  return readValue(it).second;
-}
-
-std::unique_ptr<ValueW> LeafR::getChildCollectionW(Transaction& ta, Key key) {
-  auto view = getData();
-  auto pos = searchLeafPosition(key, view);
-  if (pos + 1 >= static_cast<size_t>(view.size()) || view[pos] == 0)
-    return nullptr;
-
-  auto entry = DskEntry(view[pos]);
-  if (entry.key.key() != key) return nullptr;
-
-  auto t = entry.value.type;
-  if (t == ValueType::object) {
-    return std::make_unique<ObjectW>(ta, Addr(view[pos + 1]));
-  } else if (t == ValueType::array) {
-    return std::make_unique<ArrayW>(ta, Addr(view[pos + 1]));
-  } else {
-    return nullptr;
-  }
-}
-
-std::unique_ptr<ValueR> LeafR::getChildCollectionR(Key key) {
-  auto view = getData();
-  auto pos = searchLeafPosition(key, view);
-  if (pos + 1 >= static_cast<size_t>(view.size()) || view[pos] == 0)
-    return nullptr;
-
-  auto entry = DskEntry(view[pos]);
-  if (entry.key.key() != key) return nullptr;
-
-  auto t = entry.value.type;
-  if (t == ValueType::object) {
-    return std::make_unique<ObjectR>(db_, Addr(view[pos + 1]));
-  } else if (t == ValueType::array) {
-    return std::make_unique<ArrayR>(db_, Addr(view[pos + 1]));
-  } else {
-    return nullptr;
-  }
-}
+namespace NodeR {
+namespace {
 
 std::pair<Key, model::PValue>
-LeafR::readValue(Span<const uint64_t>::const_iterator& it) {
+readValue(Database& db, Span<const uint64_t>::const_iterator& it) {
   auto entry = DskEntry(*it++);
   std::pair<Key, model::PValue> ret;
   ret.first = entry.key.key();
@@ -1512,10 +1396,10 @@ LeafR::readValue(Span<const uint64_t>::const_iterator& it) {
   } else {
     switch (entry.value.type) {
     case ValueType::object:
-      ret.second = ObjectR(db_, Addr(*it++)).getValue();
+      ret.second = ObjectR(db, Addr(*it++)).getValue();
       break;
     case ValueType::array:
-      ret.second = ArrayR(db_, Addr(*it++)).getValue();
+      ret.second = ArrayR(db, Addr(*it++)).getValue();
       break;
     case ValueType::number:
       union {
@@ -1526,7 +1410,7 @@ LeafR::readValue(Span<const uint64_t>::const_iterator& it) {
       ret.second = std::make_unique<model::Scalar>(num.number);
       break;
     case ValueType::string:
-      ret.second = StringR(db_, Addr(*it++)).getValue();
+      ret.second = StringR(db, Addr(*it++)).getValue();
       break;
     case ValueType::boolean_true:
       ret.second = std::make_unique<model::Scalar>(true);
@@ -1545,43 +1429,136 @@ LeafR::readValue(Span<const uint64_t>::const_iterator& it) {
   return ret;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-// InternalR
-
-InternalR::InternalR(Database& db, Addr addr, ReadRef page)
-    : NodeR(db, addr, std::move(page)) {
-  auto view = getData();
-  data_ = view.subspan(0, DskInternalHdr().fromRaw(view[0]).size()*2 + 2);
+Span<const uint64_t> leafView(ReadRef<kBlockSize>& block) {
+  return gsl::as_span<const uint64_t>(
+      block->subspan(ssizeof<DskBlockHdr>(), kNodeSize));
 }
 
-void InternalR::getAll(model::Object& obj) {
-  // just follow the left most path and let leafs go through
-  searchChildNode(Key(0))->getAll(obj);
+Addr getAllInLeaf(Database& db, ReadRef<kBlockSize>& block, model::Object& obj) {
+  auto data = leafView(block);
+  auto it = data.begin();
+  auto next = DskLeafHdr().fromDsk(*it++).next();
+
+  while (it != data.end() && *it != 0) {
+    auto pair = readValue(db, it);
+    obj.append(db.resolveKey(pair.first), std::move(pair.second));
+  }
+
+  return next;
 }
 
-void InternalR::getAll(model::Array& arr) {
-  // just follow the left most path and let leafs go through
-  searchChildNode(Key(0))->getAll(arr);
+Addr getAllInLeaf(Database& db, ReadRef<kBlockSize>& block, model::Array& arr) {
+  auto data = leafView(block);
+  auto it = data.begin();
+  auto next = DskLeafHdr().fromDsk(*it++).next();
+
+  while (it != data.end() && *it != 0) {
+    auto pair = readValue(db, it);
+    arr.append(pair.first.value, std::move(pair.second));
+  }
+
+  return next;
 }
 
-std::unique_ptr<model::Value> InternalR::getChildValue(Key key) {
-  return searchChildNode(key)->getChildValue(key);
+const DskInternalNode& internalView(ReadRef<kBlockSize>& block) {
+  auto& n = gsl::as_span<DskInternalNode>(
+      block->subspan(ssizeof<DskBlockHdr>(), kNodeSize))[0];
+  n.hdr.check();
+  return n;
 }
 
-std::unique_ptr<ValueW> InternalR::getChildCollectionW(Transaction& ta,
-                                                       Key key) {
-  return searchChildNode(key)->getChildCollectionW(ta, key);
+
+template <class Val, class Obj, class Arr, class Ta>
+std::unique_ptr<Val> getChildCollection(Ta& ta, Addr addr, Key key) {
+  auto block = ta.template loadBlock<kBlockSize>(addr);
+
+  if (isNodeLeaf(block)) {
+    auto view = leafView(block);
+    auto pos = searchLeafPosition(key, view);
+    if (pos + 1 >= static_cast<size_t>(view.size()) || view[pos] == 0)
+      return nullptr;
+
+    auto entry = DskEntry(view[pos]);
+    if (entry.key.key() != key) return nullptr;
+    Addr child_addr{ view[pos + 1] };
+
+    block.free();
+
+    auto t = entry.value.type;
+    if (t == ValueType::object) {
+      return std::make_unique<Obj>(ta, child_addr);
+    } else if (t == ValueType::array) {
+      return std::make_unique<Arr>(ta, child_addr);
+    } else {
+      return nullptr;
+    }
+
+  } else {
+    auto node = internalView(block);
+    auto child_addr = searchInternalAddrHelper(node, key);
+    block.free();
+    return getChildCollection<Val, Obj, Arr>(ta, child_addr, key);
+  }
 }
 
-std::unique_ptr<ValueR> InternalR::getChildCollectionR(Key key) {
-  return searchChildNode(key)->getChildCollectionR(key);
+} // anonymous namespace
+
+template <class C>
+void getAll(Database& db, Addr addr, C& obj) {
+  auto block = db.loadBlock<kBlockSize>(addr);
+
+  if (isNodeLeaf(block)) {
+    auto next = getAllInLeaf(db, block, obj);
+    block.free();
+    while (!next.isNull()) {
+      auto next_block = db.loadBlock<kBlockSize>(next);
+      next = getAllInLeaf(db, next_block, obj);
+    }
+
+  } else {
+    auto leftmost = internalView(block).first;
+    block.free();
+    getAll(db, leftmost, obj);
+  }
 }
 
-std::unique_ptr<NodeR> InternalR::searchChildNode(Key k) {
-  auto pos = searchInternalPosition(k, data_);
-  return openNodeR(db_, Addr(data_[pos]));
+// explicit instantiation
+template void getAll<model::Object>(Database& db, Addr addr,
+                                    model::Object& obj);
+template void getAll<model::Array>(Database& db, Addr addr, model::Array& obj);
+
+std::unique_ptr<model::Value> getChildValue(Database& db, Addr addr, Key key) {
+  auto block = db.loadBlock<kBlockSize>(addr);
+
+  if (isNodeLeaf(block)) {
+    auto view = leafView(block);
+    auto pos = searchLeafPosition(key, view);
+    if (pos >= static_cast<size_t>(view.size()) || view[pos] == 0)
+      return nullptr;
+
+    if (DskEntry(view[pos]).key.key() != key) return nullptr;
+
+    auto it = view.begin() + pos;
+    // TODO: should free block here, but readValue needs it and may recurse
+    return readValue(db, it).second;
+
+  } else {
+    auto node = internalView(block);
+    auto child_addr = searchInternalAddrHelper(node, key);
+    block.free();
+    return getChildValue(db, child_addr, key);
+  }
 }
 
+std::unique_ptr<ValueW> getChildCollectionW(Transaction& ta, Addr addr, Key key) {
+  return getChildCollection<ValueW, ObjectW, ArrayW>(ta, addr, key);
+}
+
+std::unique_ptr<ValueR> getChildCollectionR(Database& db, Addr addr, Key key) {
+  return getChildCollection<ValueR, ObjectR, ArrayR>(db, addr, key);
+}
+
+} // namespace NodeR
 } // namespace btree
 } // namespace disk
 } // namespace cheesebase

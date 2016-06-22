@@ -101,7 +101,8 @@ protected:
 
   // get a view over internal data, independent of buf_ being initialized
   // second part of pair is needed to keep ReadRef locked if buf_ is not used
-  std::pair<Span<const uint64_t>, std::unique_ptr<ReadRef>> getDataView() const;
+  std::pair<Span<const uint64_t>, std::unique_ptr<ReadRef<k_page_size>>>
+  getDataView() const;
 
   Transaction& ta_;
   std::unique_ptr<std::array<uint64_t, k_node_max_words>> buf_;
@@ -298,63 +299,15 @@ std::unique_ptr<NodeW> openRootW(Transaction& ta, Addr addr,
 ////////////////////////////////////////////////////////////////////////////////
 // ReadOnly
 
-class NodeR : public Node {
-public:
-  virtual void getAll(model::Object& obj) = 0;
-  virtual void getAll(model::Array& obj) = 0;
-  virtual std::unique_ptr<model::Value> getChildValue(Key) = 0;
-  virtual std::unique_ptr<ValueW> getChildCollectionW(Transaction&, Key) = 0;
-  virtual std::unique_ptr<ValueR> getChildCollectionR(Key) = 0;
+namespace NodeR {
 
-protected:
-  NodeR(Database& db, Addr addr, ReadRef page);
+template <class C>
+void getAll(Database& db, Addr addr, C& obj);
+std::unique_ptr<model::Value> getChildValue(Database& db, Addr addr, Key key);
+std::unique_ptr<ValueW> getChildCollectionW(Transaction& ta, Addr addr, Key);
+std::unique_ptr<ValueR> getChildCollectionR(Database& db, Addr addr, Key key);
 
-  Span<const uint64_t> getData() const;
-
-  Database& db_;
-  ReadRef page_;
-};
-
-class LeafR : public NodeR {
-public:
-  LeafR(Database& db, Addr addr, ReadRef page);
-  LeafR(Database& db, Addr addr);
-
-  // fill obj with values in this and all following leafs
-  void getAll(model::Object& obj) override;
-  void getAll(model::Array& obj) override;
-
-  // fill obj with values in this leaf, returns next leaf address
-  Addr getAllInLeaf(model::Object& obj);
-  Addr getAllInLeaf(model::Array& obj);
-
-  std::unique_ptr<model::Value> getChildValue(Key) override;
-  std::unique_ptr<ValueW> getChildCollectionW(Transaction&, Key) override;
-  std::unique_ptr<ValueR> getChildCollectionR(Key) override;
-
-private:
-  std::pair<Key, std::unique_ptr<model::Value>>
-  readValue(Span<const uint64_t>::const_iterator& it);
-};
-
-class InternalR : public NodeR {
-public:
-  InternalR(Database& db, Addr addr, ReadRef page);
-
-  void getAll(model::Object& obj) override;
-  void getAll(model::Array& obj) override;
-
-  std::unique_ptr<model::Value> getChildValue(Key) override;
-  std::unique_ptr<ValueW> getChildCollectionW(Transaction&, Key) override;
-  std::unique_ptr<ValueR> getChildCollectionR(Key) override;
-
-private:
-  std::unique_ptr<NodeR> searchChildNode(Key k);
-
-  Span<const uint64_t> data_;
-};
-
-std::unique_ptr<NodeR> openNodeR(Database& db, Addr addr);
+} // namespace NodeR
 
 } // namespace btree
 } // namespace disk

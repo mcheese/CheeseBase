@@ -27,7 +27,7 @@ public:
   PageRef<PageReadView> loadPage(PageNr page_nr);
 
   template <std::ptrdiff_t S>
-  PageRef<Span<const Byte, S>> loadBlock(Addr addr) {
+  ReadRef<S> loadBlock(Addr addr) {
     auto ref = loadPage(addr.pageNr());
     return PageRef<Span<const Byte, S>>(ref->subspan(addr.pageOffset(), S),
                                         std::move(ref));
