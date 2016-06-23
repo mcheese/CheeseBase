@@ -18,7 +18,7 @@ BtreeWritable::BtreeWritable(Transaction& ta, Addr root) {
 }
 
 BtreeWritable::BtreeWritable(Transaction& ta) {
-  root_ = std::make_unique<RootLeafW>(AllocateNew(), ta, Addr(0), *this);
+  root_ = std::make_unique<RootLeafW>(ta, *this);
 }
 
 BtreeWritable::~BtreeWritable() {}

@@ -70,9 +70,14 @@ public:
   virtual bool remove(Key key, AbsInternalW* parent) = 0;
 };
 
+struct DskLeafNode;
+class LeafW;
+using LeafNodeIt = uint64_t*;
+
 class AbsLeafW : public NodeW {
 public:
-  AbsLeafW(AllocateNew, Transaction& ta, Addr next);
+  AbsLeafW(AllocateNew, AbsLeafW&& o, Addr next);
+  AbsLeafW(AllocateNew, Transaction& ta, Addr next = Addr(0));
   AbsLeafW(Transaction& ta, Addr addr);
 
   // serialize and insert value, may trigger split
@@ -82,8 +87,10 @@ public:
   // find maximum key and insert value as key+1
   Key append(const model::Value&, AbsInternalW* parent) override;
 
-  // append raw words without further checking
-  void insert(Span<const uint64_t> raw);
+  template <typename It>
+  void appendWords(It from, It to);
+  template <typename It>
+  void prependWords(It from, It to);
 
   bool remove(Key key, AbsInternalW* parent) override;
 
@@ -96,18 +103,12 @@ public:
   size_t size() const;
 
 protected:
-  void shiftBuffer(size_t pos, int amount);
-  void initFromDisk();
-
-  // get a view over internal data, independent of buf_ being initialized
-  // second part of pair is needed to keep ReadRef locked if buf_ is not used
-  std::pair<Span<const uint64_t>, std::unique_ptr<ReadRef<k_page_size>>>
-  getDataView() const;
+  void init();
 
   Transaction& ta_;
-  std::unique_ptr<std::array<uint64_t, k_node_max_words>> buf_;
-  size_t top_{ 0 }; // size in uint64_ts
-  size_t findSize();
+  std::unique_ptr<DskLeafNode> node_;
+  size_t size_{ 0 };
+  std::unique_ptr<LeafW> splitHelper(Key, const model::Value&);
   virtual void split(Key, const model::Value&) = 0;
   virtual void balance() = 0;
   // Destroy value at pos (if remote). Return size of the entry.
@@ -124,6 +125,7 @@ public:
 
 private:
   void split(Key, const model::Value&) override;
+  void merge(LeafW& right);
   void balance() override;
 };
 
@@ -132,8 +134,9 @@ class RootLeafW : public AbsLeafW {
   friend class RootInternalW;
 
 public:
-  RootLeafW(AllocateNew, Transaction& ta, Addr next, BtreeWritable& tree);
+  RootLeafW(Transaction& ta, BtreeWritable& tree);
   RootLeafW(Transaction& ta, Addr addr, BtreeWritable& tree);
+  virtual ~RootLeafW();
 
 private:
   RootLeafW(LeafW&&, Addr addr, BtreeWritable& parent);
@@ -267,9 +270,6 @@ private:
 class InternalW : public AbsInternalW {
 public:
   using AbsInternalW::AbsInternalW;
-
-  // append words without further checking, increases top position
-  void appendRaw(Span<const uint64_t> raw);
 
 private:
   void split(Key, std::unique_ptr<NodeW>) override;
