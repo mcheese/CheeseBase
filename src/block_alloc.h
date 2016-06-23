@@ -2,14 +2,56 @@
 
 #pragma once
 
+#include "common.h"
 #include "sync.h"
-#include "structs.h"
 #include "types.h"
 #include <gsl.h>
 
 #include <map>
 
 namespace cheesebase {
+
+enum class BlockType {
+  pg = 'P', // 1 page (4k)
+  t1 = '1', // 1/2 page (2k)
+  t2 = '2', // 1/4 page (1k)
+  t3 = '3', // 1/8 page (512)
+  t4 = '4'  // 1/16 page (256)
+};
+
+constexpr size_t toBlockSize(BlockType t) {
+  return t == BlockType::pg
+    ? k_page_size
+    : t == BlockType::t1
+    ? k_page_size / 2
+    : t == BlockType::t2
+    ? k_page_size / 4
+    : t == BlockType::t3
+    ? k_page_size / 8
+    : t == BlockType::t4 ? k_page_size / 16
+    : throw ConsistencyError(
+      "Invalid block type");
+}
+
+CB_PACKED(struct DskBlockHdr {
+  DskBlockHdr() = default;
+  DskBlockHdr(BlockType type, Addr next)
+    : data_{ (static_cast<uint64_t>(type) << 56) + next.value } {
+    Expects(static_cast<uint64_t>(type) <= 0xff);
+    Expects(next.value <= lowerBitmask(56));
+  }
+
+  Addr next() const noexcept { return Addr(data_ & lowerBitmask(56)); }
+
+  BlockType type() const noexcept {
+    return gsl::narrow_cast<BlockType>(data_ >> 56);
+  }
+
+  uint64_t data() const noexcept { return data_; }
+
+  uint64_t data_;
+});
+
 
 class Storage;
 

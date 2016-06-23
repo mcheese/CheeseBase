@@ -17,6 +17,14 @@ namespace btree {
 
 namespace {
 
+constexpr std::ptrdiff_t kNodeSize = kBlockSize - sizeof(DskBlockHdr);
+constexpr size_t kLeafNodeMaxWords = kNodeSize / sizeof(uint64_t);
+constexpr size_t kLeafNodeMinWords = kLeafNodeMaxWords / 2 - kLeafEntryMaxWords;
+constexpr size_t kMaxLeafWords = (kNodeSize - 8) / 8;
+constexpr size_t kMinLeafWords = kMaxLeafWords / 2 - kLeafEntryMaxWords;
+constexpr size_t kMaxInternalEntries = (kNodeSize - 16) / 16;
+constexpr size_t kMinInternalEntries = (kMaxInternalEntries / 2) - 1;
+
 ////////////////////////////////////////////////////////////////////////////////
 // on disk structures
 
@@ -53,13 +61,13 @@ CB_PACKED(struct DskValueHdr {
 });
 static_assert(sizeof(DskValueHdr) == 2, "Invalid disk value header size");
 
-CB_PACKED(struct DskEntry {
-  DskEntry(uint64_t w) {
+CB_PACKED(struct DskLeafEntry {
+  DskLeafEntry(uint64_t w) {
     *reinterpret_cast<uint64_t*>(this) = w;
     if (value.magic_byte != '!')
       throw ConsistencyError("No magic byte in value");
   }
-  DskEntry(Key k, ValueType t) : value{ '!', t }, key{ k } {}
+  DskLeafEntry(Key k, ValueType t) : value{ '!', t }, key{ k } {}
 
   size_t extraWords() const { return nrExtraWords(value.type); }
   uint64_t word() { return *reinterpret_cast<uint64_t*>(this); }
@@ -67,7 +75,7 @@ CB_PACKED(struct DskEntry {
   DskValueHdr value;
   DskKey key;
 });
-static_assert(sizeof(DskEntry) == 8, "Invalid DskEntry size");
+static_assert(sizeof(DskLeafEntry) == 8, "Invalid DskLeafEntry size");
 
 CB_PACKED(struct DskInternalEntry {
   DskInternalEntry() = default;
@@ -97,9 +105,9 @@ CB_PACKED(struct DskInternalEntry {
 });
 static_assert(sizeof(DskInternalEntry) == 8, "Invalid DskInternalEntry size");
 
-Key keyFromWord(uint64_t w) { return DskEntry(w).key.key(); }
+Key keyFromWord(uint64_t w) { return DskLeafEntry(w).key.key(); }
 
-size_t entrySize(uint64_t e) { return DskEntry(e).extraWords() + 1; }
+size_t entrySize(uint64_t e) { return DskLeafEntry(e).extraWords() + 1; }
 
 CB_PACKED(struct DskLeafHdr {
   DskLeafHdr() = default;
@@ -123,11 +131,6 @@ CB_PACKED(struct DskLeafHdr {
   uint64_t data;
 });
 static_assert(sizeof(DskLeafHdr) == 8, "Invalid DskLeafHdr size");
-
-constexpr size_t kMaxLeafWords = (kNodeSize - 8) / 8;
-constexpr size_t kMinLeafWords = kMaxLeafWords / 2 - k_entry_max_words;
-constexpr size_t kMaxInternalEntries = (kNodeSize - 16) / 16;
-constexpr size_t kMinInternalEntries = (kMaxInternalEntries / 2) - 1;
 
 CB_PACKED(struct DskInternalHdr {
   DskInternalHdr() = default;
@@ -316,7 +319,7 @@ void AbsLeafW::destroy() {
 
 template <typename ConstIt>
 size_t AbsLeafW::destroyValue(ConstIt it) {
-  auto entry = DskEntry(*it);
+  auto entry = DskLeafEntry(*it);
 
   switch (entry.value.type) {
   case ValueType::object:
@@ -340,7 +343,7 @@ Key AbsLeafW::append(const model::Value& val, AbsInternalW* parent) {
   Key key{ 0 };
   auto it = node_->words.begin();
   while (it < node_->words.end() && *it != 0) {
-    auto e = DskEntry(*it);
+    auto e = DskLeafEntry(*it);
     key = Key(e.key.key().value + 1);
     it += 1 + e.extraWords();
   }
@@ -368,12 +371,12 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
   }
 
   // enough space to insert?
-  if (size_ + 1 + extra_words - (update ?  (DskEntry(*it).extraWords() + 1) : 0) <=
+  if (size_ + 1 + extra_words - (update ?  (DskLeafEntry(*it).extraWords() + 1) : 0) <=
       kMaxLeafWords) {
 
     // make space
     if (update) {
-      auto old_entry = DskEntry(*it);
+      auto old_entry = DskLeafEntry(*it);
       auto old_extra = gsl::narrow_cast<int>(old_entry.extraWords());
       switch (old_entry.value.type) {
       case ValueType::object:
@@ -398,7 +401,7 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
 
     // put the first word
     auto t = valueType(val);
-    *it = DskEntry{ key, t }.word();
+    *it = DskLeafEntry{ key, t }.word();
 
     // put extra words
     // recurse into inserting remotely stored elements if needed
@@ -596,7 +599,7 @@ void LeafW::balance() {
       auto it = sibl.node_->begin();
       auto sibl_beg = sibl.node_->begin();
       while (size_ + std::distance(sibl_beg, it) < medium) {
-        auto entry = DskEntry(*it);
+        auto entry = DskLeafEntry(*it);
         tryTransfer(sibl.linked_, linked_, entry.key.key());
         it += entry.extraWords() + 1;
       }
@@ -612,7 +615,7 @@ void LeafW::balance() {
       auto it = sibl.node_->begin();
       auto sibl_top = sibl.node_->begin() + sibl.size();
       while (size_ + std::distance(it, sibl_top) > medium) {
-        auto entry = DskEntry(*it);
+        auto entry = DskLeafEntry(*it);
         tryTransfer(sibl.linked_, linked_, entry.key.key());
         it += entry.extraWords() + 1;
       }
@@ -1287,7 +1290,7 @@ namespace {
 
 template <typename ConstIt>
 std::pair<Key, model::PValue> readValue(Database& db, ConstIt& it) {
-  auto entry = DskEntry(*it++);
+  auto entry = DskLeafEntry(*it++);
   std::pair<Key, model::PValue> ret;
   ret.first = entry.key.key();
 
@@ -1387,7 +1390,7 @@ std::unique_ptr<Val> getChildCollection(Ta& ta, Addr addr, Key key) {
     auto it = node.search(key);
 
     if (std::next(it) >= node.end() || *it == 0) return nullptr;
-    auto entry = DskEntry(*it);
+    auto entry = DskLeafEntry(*it);
     if (entry.key.key() != key) return nullptr;
     Addr child_addr{ *std::next(it) };
 
@@ -1444,7 +1447,7 @@ std::unique_ptr<model::Value> getChildValue(Database& db, Addr addr, Key key) {
     auto it = node.search(key);
 
     if (it >= node.end() || *it == 0) return nullptr;
-    if (DskEntry(*it).key.key() != key) return nullptr;
+    if (DskLeafEntry(*it).key.key() != key) return nullptr;
 
     // TODO: should free block here, but readValue needs it and may recurse
     return readValue(db, it).second;

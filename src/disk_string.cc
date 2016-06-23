@@ -3,7 +3,6 @@
 #include "disk_string.h"
 
 #include "core.h"
-#include "structs.h"
 
 namespace cheesebase {
 namespace disk {

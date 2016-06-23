@@ -2,7 +2,6 @@
 #pragma once
 
 #include "common.h"
-#include "structs.h"
 #include "disk_btree.h"
 #include "cache.h"
 #include <boost/container/flat_map.hpp>
@@ -14,25 +13,14 @@ namespace btree {
 ////////////////////////////////////////////////////////////////////////////////
 // constants
 
-constexpr size_t k_entry_min_words = 1; // 6B header + 1B magic + 1B type
-constexpr size_t k_entry_max_words = 4; // min + 24 byte inline string
-constexpr size_t k_node_max_bytes = 256 - sizeof(DskBlockHdr);
-constexpr std::ptrdiff_t kNodeSize = k_node_max_bytes;
+constexpr size_t kLeafEntryMaxWords = 4; // hdr + 24 byte inline string
 constexpr std::ptrdiff_t kBlockSize = 256;
-constexpr size_t k_node_max_words = k_node_max_bytes / sizeof(uint64_t);
-constexpr size_t k_leaf_min_words =
-    k_node_max_words / 2 - (k_entry_max_words - k_entry_min_words);
-constexpr size_t k_internal_min_words = k_node_max_words / 2 - 1;
-
 
 ////////////////////////////////////////////////////////////////////////////////
 // Writable
 
 // Dummy type used as argument
 enum class AllocateNew {};
-enum class DontRead {};
-
-using NodeRef = PageRef<Span<const Byte, kNodeSize>>;
 
 class AbsInternalW;
 class AbsLeafW;

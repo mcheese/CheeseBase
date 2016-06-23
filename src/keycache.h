@@ -5,7 +5,6 @@
 #pragma once
 
 #include "common.h"
-#include "structs.h"
 #include "sync.h"
 #include "storage.h"
 #include "allocator.h"
@@ -14,6 +13,8 @@
 #include <boost/optional.hpp>
 
 namespace cheesebase {
+
+using DskKeyCacheSize = uint16_t;
 
 class KeyCache;
 

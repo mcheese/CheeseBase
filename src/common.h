@@ -9,9 +9,6 @@
 
 namespace cheesebase {
 
-constexpr uint16_t kVersion{ 0x0001 };
-constexpr uint64_t k_magic{ 0x0000455342534843 + // CHSBSExx
-                            (static_cast<uint64_t>(kVersion) << 48) };
 
 //! Power of size of one memory page: page-size = 2^this
 const size_t k_page_size_power{ 12 };
@@ -155,5 +152,25 @@ void copySpan(Span<const T> from, Span<T> to) {
   }
   Ensures(input == from.cend());
 }
+
+constexpr uint64_t lowerBitmask(size_t n) {
+  return (static_cast<uint64_t>(1) << n) - 1;
+}
+
+constexpr uint16_t kVersion{ 0x0001 };
+constexpr uint64_t k_magic{ 0x0000455342534843 + // CHSBSExx
+(static_cast<uint64_t>(kVersion) << 48) };
+
+CB_PACKED(struct DskDatabaseHdr {
+  uint64_t magic;
+  Addr end_of_file;
+  Addr free_alloc_pg;
+  Addr free_alloc_t1;
+  Addr free_alloc_t2;
+  Addr free_alloc_t3;
+  Addr free_alloc_t4;
+});
+static_assert(sizeof(DskDatabaseHdr) <= k_page_size / 2,
+              "Database header should be smaller than half of the page size");
 
 } // namespace cheesebase
