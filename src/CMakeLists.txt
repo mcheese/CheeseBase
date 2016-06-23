@@ -1,28 +1,19 @@
 cmake_minimum_required(VERSION 3.1)
 
 set(SRC
-  common.h
-  types.h
-  sync.h
-  macros.h
-  structs.h
-  storage.h storage.cc
-  cache.h cache.cc
-  allocator.h allocator.cc
-  block_alloc.h block_alloc.cc
-  block_locks.h block_locks.cc
-  model.h model.cc
-  disk_value.h
-  disk_string.h disk_string.cc
-  disk_object.h
-  disk_btree.h disk_btree.cc
-  disk_btree_impl.h disk_btree_impl.cc
-  disk_model.h
-  parser.h
-  keycache.h keycache.cc
-  murmurhash3.h murmurhash3.cc
-  core.h core.cc
-  cheesebase.h cheesebase.cc
+  storage.cc
+  cache.cc
+  allocator.cc
+  block_alloc.cc
+  block_locks.cc
+  model.cc
+  disk_string.cc
+  disk_btree.cc
+  disk_btree_impl.cc
+  keycache.cc
+  murmurhash3.cc
+  core.cc
+  cheesebase.cc
 )
 
 add_library(cheesebase ${SRC})
