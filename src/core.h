@@ -22,7 +22,13 @@ class Transaction {
   friend class Database;
 
 public:
-  ReadRef load(PageNr p);
+  ReadRef<k_page_size> load(PageNr p);
+
+  template<std::ptrdiff_t S>
+  auto loadBlock(Addr addr) {
+    return storage_.loadBlock<S>(addr);
+  }
+
   Block alloc(size_t s);
   Block allocExtension(Addr block, size_t s);
   void free(Addr a);
@@ -50,8 +56,14 @@ public:
   Transaction startTransaction();
   std::string resolveKey(Key k) const;
   boost::optional<Key> getKey(const std::string& k) const;
-  ReadRef loadPage(PageNr p);
-  BlockLockW getLockW(Addr);
+  ReadRef<k_page_size> loadPage(PageNr p);
+
+  template<std::ptrdiff_t S>
+  auto loadBlock(Addr addr) {
+    return store_->loadBlock<S>(addr);
+  }
+
+ BlockLockW getLockW(Addr);
   BlockLockR getLockR(Addr);
 
 private:

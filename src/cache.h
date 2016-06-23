@@ -85,26 +85,39 @@ private:
 // Locked reference of a page.
 template <class View>
 class PageRef {
+  template <class V>
+  friend class PageRef;
+
 public:
   PageRef() = default;
 
+  template <class V>
+  PageRef(View view, PageRef<V>&& other)
+      : view_{ view }, lock_{ std::move(other.lock_) } {}
+
   template <class L>
   PageRef(View page, L&& lock)
-      : page_(page), lock_(std::forward<L>(lock)) {}
+      : view_{ page }, lock_{ std::forward<L>(lock) } {}
 
   MOVE_ONLY(PageRef)
 
-  View get() const { return page_; }
-  View operator*() const { return page_; }
-  const View* operator->() const { return &page_; }
+  View get() const noexcept { Expects(lock_.owns_lock()); return view_; }
+  View operator*() const noexcept { Expects(lock_.owns_lock()); return view_; }
+  const View* operator->() const noexcept { Expects(lock_.owns_lock()); return &view_; }
+
+  void free() {
+    lock_.unlock();
+  }
 
 private:
-  View page_;
+  View view_;
   ShLock<RwMutex> lock_;
 };
 
-using ReadRef = PageRef<PageReadView>;
-using WriteRef = PageRef<PageWriteView>;
+template <std::ptrdiff_t S>
+using ReadRef = PageRef<Span<const Byte, S>>;
+template <std::ptrdiff_t S>
+using WriteRef = PageRef<Span<Byte, S>>;
 
 class Cache {
 public:

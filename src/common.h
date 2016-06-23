@@ -26,8 +26,8 @@ const size_t k_default_cache_size{ k_page_size * 1024 * 10 }; // 40 MB - test
 using Byte = gsl::byte;
 
 //! Bounds checked memory view. Like a smart pointer+size.
-template <class T>
-using Span = gsl::span<T, gsl::dynamic_range>;
+template <class T, std::ptrdiff_t R = gsl::dynamic_range>
+using Span = gsl::span<T, R>;
 
 //! Represents number of memory page: floor(\c Addr / page-size).
 struct PageNr {

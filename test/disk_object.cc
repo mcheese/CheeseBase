@@ -180,7 +180,8 @@ TEST_CASE("B+Tree insert") {
           disk::ObjectW tree{ ta, root };
           for (size_t i = 0; i < times / 2; ++i) {
             for (auto& c : doc) {
-              tree.remove(c.first + "#" + std::to_string(i));
+              auto del = tree.remove(c.first + "#" + std::to_string(i));
+              REQUIRE(del);
             }
           }
           ta.commit(tree.getWrites());
