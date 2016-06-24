@@ -1,9 +1,11 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
+#include "btree.h"
 
-#include "disk_btree.h"
-#include "disk_btree_impl.h"
-#include "disk_object.h"
-#include "disk_array.h"
+#include "common.h"
+#include "leaf.h"
+#include "read.h"
+#include "../object.h"
+#include "../array.h"
 
 namespace cheesebase {
 namespace disk {

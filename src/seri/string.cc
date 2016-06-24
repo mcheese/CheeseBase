@@ -1,8 +1,8 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
 
-#include "disk_string.h"
+#include "string.h"
 
-#include "core.h"
+#include "../core.h"
 
 namespace cheesebase {
 namespace disk {

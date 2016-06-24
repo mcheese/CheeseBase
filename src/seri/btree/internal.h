@@ -1,140 +1,123 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
 #pragma once
 
+#include "btree.h"
 #include "common.h"
-#include "disk_btree.h"
-#include "cache.h"
+#include "../../common.h"
+#include "../../cache.h"
 #include <boost/container/flat_map.hpp>
 
 namespace cheesebase {
 namespace disk {
 namespace btree {
 
-////////////////////////////////////////////////////////////////////////////////
-// constants
+constexpr size_t kMaxInternalEntries = (kNodeSize - 16) / 16;
+constexpr size_t kMinInternalEntries = (kMaxInternalEntries / 2) - 1;
 
-constexpr size_t kLeafEntryMaxWords = 4; // hdr + 24 byte inline string
-constexpr std::ptrdiff_t kBlockSize = 256;
+// Magic byte + number of elements
+CB_PACKED(struct DskInternalHdr {
+  DskInternalHdr() = default;
+  DskInternalHdr& fromSize(uint64_t d) {
+    Expects((d & (static_cast<uint64_t>(0xff) << 56)) == 0);
+    constexpr uint64_t magic = static_cast<uint64_t>('I') << 56;
+    data = d + magic;
+    return *this;
+  }
+  DskInternalHdr& fromRaw(uint64_t w) {
+    data = w;
+    if (!hasMagic()) throw ConsistencyError("No magic byte in internal node");
+    return *this;
+  }
 
-////////////////////////////////////////////////////////////////////////////////
-// Writable
+  bool hasMagic() const noexcept { return (data >> 56) == 'I'; }
+  void check() const {
+    if (!hasMagic()) throw ConsistencyError("Expected internal node header");
+  }
 
-// Dummy type used as argument
-enum class AllocateNew {};
+  size_t size() const {
+    size_t s = gsl::narrow_cast<size_t>(data & lowerBitmask(56));
+    if (s > kMaxInternalEntries)
+      throw ConsistencyError("Internal node entry count to big");
+    return s;
+  }
 
-class AbsInternalW;
-class AbsLeafW;
+  void operator--() {
+    Expects(data & lowerBitmask(56));
+    data--;
+  }
 
-class Node {
-public:
-  virtual ~Node() = default;
-  Addr addr() const;
+  void operator++() {
+    data++;
+  }
 
-protected:
-  Node(Addr addr);
-  Addr addr_;
-};
+  uint64_t data;
+});
+static_assert(sizeof(DskInternalHdr) == 8, "Invalid DskInternalHdr size");
 
-class NodeW : public Node {
-  friend class RootInternalW;
+// Magic bytes + key
+CB_PACKED(struct DskInternalEntry {
+  DskInternalEntry() = default;
+  DskInternalEntry(uint64_t w) {
+    *reinterpret_cast<uint64_t*>(this) = w;
+    if (magic[0] != '-' || magic[1] != '>')
+      throw ConsistencyError("No magic byte in key");
+  }
 
-public:
-  NodeW(Addr addr);
-  virtual ~NodeW() = default;
+  uint64_t fromKey(Key k) noexcept {
+    key = DskKey(k);
+    magic[0] = '-';
+    magic[1] = '>';
+    return *reinterpret_cast<uint64_t*>(this);
+  }
 
-  virtual Writes getWrites() const = 0;
+  uint64_t word() const noexcept {
+    return *reinterpret_cast<const uint64_t*>(this);
+  }
 
-  // inserts value, returns true on success
-  virtual bool insert(Key key, const model::Value&, Overwrite,
-                      AbsInternalW* parent) = 0;
+  void zero() noexcept {
+    *reinterpret_cast<uint64_t*>(this) = 0;
+  }
 
-  // inserts value at maximum existing key + 1 and returns this key
-  virtual Key append(const model::Value& val, AbsInternalW* parent) = 0;
+  char magic[2];
+  DskKey key;
+});
+static_assert(sizeof(DskInternalEntry) == 8, "Invalid DskInternalEntry size");
 
-  // deallocate node and all its children
-  virtual void destroy() = 0;
+CB_PACKED(struct DskInternalPair {
+  DskInternalPair() = default;
 
-  // delete value, returns true if found and removed
-  virtual bool remove(Key key, AbsInternalW* parent) = 0;
-};
+  void zero() {
+    addr.value = 0;
+    entry.zero();
+  }
 
-struct DskLeafNode;
+  DskInternalEntry entry;
+  Addr addr;
+});
+static_assert(sizeof(DskInternalPair) == 16, "Invalid DskInternalPair size");
+
+inline bool operator<(Key k, const DskInternalPair& p) {
+  return k < p.entry.key.key();
+}
+
+CB_PACKED(struct DskInternalNode {
+  DskInternalHdr hdr;
+  Addr first;
+  std::array<DskInternalPair, kMaxInternalEntries> pairs;
+  char padding[kNodeSize % 16];
+
+  Addr searchAddr(Key key) const;
+  DskInternalPair* begin() noexcept { return pairs.data(); }
+  DskInternalPair* end() { return pairs.data() + hdr.size(); }
+  const DskInternalPair* begin() const noexcept { return pairs.data(); }
+  const DskInternalPair* end() const { return pairs.data() + hdr.size(); }
+});
+static_assert(sizeof(DskInternalNode) == kNodeSize,
+              "Invalid DskInternalNode size");
+
+
 class LeafW;
-using LeafNodeIt = uint64_t*;
-
-class AbsLeafW : public NodeW {
-public:
-  AbsLeafW(AllocateNew, AbsLeafW&& o, Addr next);
-  AbsLeafW(AllocateNew, Transaction& ta, Addr next = Addr(0));
-  AbsLeafW(Transaction& ta, Addr addr);
-
-  // serialize and insert value, may trigger split
-  bool insert(Key key, const model::Value&, Overwrite,
-              AbsInternalW* parent) override;
-
-  // find maximum key and insert value as key+1
-  Key append(const model::Value&, AbsInternalW* parent) override;
-
-  template <typename It>
-  void appendWords(It from, It to);
-  template <typename It>
-  void prependWords(It from, It to);
-
-  bool remove(Key key, AbsInternalW* parent) override;
-
-  Writes getWrites() const override;
-
-  void destroy() override;
-
-  boost::container::flat_map<Key, std::unique_ptr<ValueW>> linked_;
-
-  size_t size() const;
-
-protected:
-  void init();
-
-  Transaction& ta_;
-  std::unique_ptr<DskLeafNode> node_;
-  size_t size_{ 0 };
-  std::unique_ptr<LeafW> splitHelper(Key, const model::Value&);
-  virtual void split(Key, const model::Value&) = 0;
-  virtual void balance() = 0;
-  // Destroy value at pos (if remote). Return size of the entry.
-  template <typename ConstIt>
-  size_t destroyValue(ConstIt it);
-  AbsInternalW* parent_;
-};
-
-class LeafW : public AbsLeafW {
-  friend class RootLeafW;
-
-public:
-  using AbsLeafW::AbsLeafW;
-
-private:
-  void split(Key, const model::Value&) override;
-  void merge(LeafW& right);
-  void balance() override;
-};
-
-// tree just a single leaf
-class RootLeafW : public AbsLeafW {
-  friend class RootInternalW;
-
-public:
-  RootLeafW(Transaction& ta, BtreeWritable& tree);
-  RootLeafW(Transaction& ta, Addr addr, BtreeWritable& tree);
-  virtual ~RootLeafW();
-
-private:
-  RootLeafW(LeafW&&, Addr addr, BtreeWritable& parent);
-  BtreeWritable& tree_;
-  void split(Key, const model::Value&) override;
-  void balance() override;
-};
-
-struct DskInternalNode;
-struct DskInternalPair;
+class AbsInternalW;
 
 class InternalEntriesW {
   friend class AbsInternalW;
@@ -205,7 +188,6 @@ public:
 
   Transaction& ta_;
 
-private:
   void init();
   Addr addr_;
   std::unique_ptr<DskInternalNode> node_;
@@ -280,22 +262,6 @@ private:
   void balance() override;
   BtreeWritable& parent_;
 };
-
-std::unique_ptr<NodeW> openRootW(Transaction& ta, Addr addr,
-                                 BtreeWritable& parent);
-
-////////////////////////////////////////////////////////////////////////////////
-// ReadOnly
-
-namespace NodeR {
-
-template <class C>
-void getAll(Database& db, Addr addr, C& obj);
-std::unique_ptr<model::Value> getChildValue(Database& db, Addr addr, Key key);
-std::unique_ptr<ValueW> getChildCollectionW(Transaction& ta, Addr addr, Key);
-std::unique_ptr<ValueR> getChildCollectionR(Database& db, Addr addr, Key key);
-
-} // namespace NodeR
 
 } // namespace btree
 } // namespace disk

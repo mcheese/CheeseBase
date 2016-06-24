@@ -1,10 +1,9 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
-
 #pragma once
 
-#include "disk_value.h"
-#include "model.h"
-#include "types.h"
+#include "value.h"
+#include "../model.h"
+#include "../types.h"
 
 namespace cheesebase {
 namespace disk {

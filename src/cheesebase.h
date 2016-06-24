@@ -3,9 +3,9 @@
 // API
 
 #pragma once
+#include "model.h"
 #include <memory>
 #include <string>
-#include <model.h>
 
 namespace cheesebase {
 class Database;

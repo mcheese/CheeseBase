@@ -3,8 +3,8 @@
 #include "cheesebase.h"
 
 #include "core.h"
-#include "disk_object.h"
-#include "disk_array.h"
+#include "seri/object.h"
+#include "seri/array.h"
 #include "parser.h"
 #include "exceptions.h"
 #include <sstream>

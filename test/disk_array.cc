@@ -1,6 +1,6 @@
 #include "catch.hpp"
-#include "disk_object.h"
-#include "disk_array.h"
+#include "seri/object.h"
+#include "seri/array.h"
 #include "parser.h"
 #include <boost/filesystem.hpp>
 

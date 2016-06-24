@@ -3,7 +3,7 @@
 #endif
 #include "catch.hpp"
 #include "keycache.h"
-#include "disk_object.h"
+#include "seri/object.h"
 #include "parser.h"
 #include <boost/filesystem.hpp>
 

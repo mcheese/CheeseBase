@@ -13,6 +13,8 @@ add_executable(test-cheesebase
   storage.cc
 )
 
+include_directories(../src)
+
 target_link_libraries(test-cheesebase cheesebase ${Boost_LIBRARIES})
 add_test(test-cheesebase test-cheesebase)
 

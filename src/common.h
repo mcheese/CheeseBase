@@ -4,8 +4,11 @@
 
 #pragma once
 
-#include "types.h"
+#include "macros.h"
 #include "exceptions.h"
+#include <gsl.h>
+#include <boost/cstdint.hpp>
+#include <vector>
 
 namespace cheesebase {
 
