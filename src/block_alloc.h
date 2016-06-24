@@ -21,22 +21,22 @@ enum class BlockType {
 
 constexpr size_t toBlockSize(BlockType t) {
   return t == BlockType::pg
-    ? k_page_size
-    : t == BlockType::t1
-    ? k_page_size / 2
-    : t == BlockType::t2
-    ? k_page_size / 4
-    : t == BlockType::t3
-    ? k_page_size / 8
-    : t == BlockType::t4 ? k_page_size / 16
-    : throw ConsistencyError(
-      "Invalid block type");
+             ? k_page_size
+             : t == BlockType::t1
+                   ? k_page_size / 2
+                   : t == BlockType::t2
+                         ? k_page_size / 4
+                         : t == BlockType::t3
+                               ? k_page_size / 8
+                               : t == BlockType::t4 ? k_page_size / 16
+                                                    : throw ConsistencyError(
+                                                          "Invalid block type");
 }
 
 CB_PACKED(struct DskBlockHdr {
   DskBlockHdr() = default;
   DskBlockHdr(BlockType type, Addr next)
-    : data_{ (static_cast<uint64_t>(type) << 56) + next.value } {
+      : data_{ (static_cast<uint64_t>(type) << 56) + next.value } {
     Expects(static_cast<uint64_t>(type) <= 0xff);
     Expects(next.value <= lowerBitmask(56));
   }
@@ -51,7 +51,6 @@ CB_PACKED(struct DskBlockHdr {
 
   uint64_t data_;
 });
-
 
 class Storage;
 

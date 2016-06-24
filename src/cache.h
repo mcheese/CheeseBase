@@ -101,13 +101,20 @@ public:
 
   MOVE_ONLY(PageRef)
 
-  View get() const noexcept { Expects(lock_.owns_lock()); return view_; }
-  View operator*() const noexcept { Expects(lock_.owns_lock()); return view_; }
-  const View* operator->() const noexcept { Expects(lock_.owns_lock()); return &view_; }
-
-  void free() {
-    lock_.unlock();
+  View get() const noexcept {
+    Expects(lock_.owns_lock());
+    return view_;
   }
+  View operator*() const noexcept {
+    Expects(lock_.owns_lock());
+    return view_;
+  }
+  const View* operator->() const noexcept {
+    Expects(lock_.owns_lock());
+    return &view_;
+  }
+
+  void free() { lock_.unlock(); }
 
 private:
   View view_;

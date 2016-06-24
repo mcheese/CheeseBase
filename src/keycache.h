@@ -23,7 +23,7 @@ struct StringKey {
   using Index = uint16_t;
 
   StringKey() = default;
-  constexpr StringKey(Hash hsh, Index idx) : index{idx}, hash{hsh} {}
+  constexpr StringKey(Hash hsh, Index idx) : index{ idx }, hash{ hsh } {}
   StringKey(Key key)
       : index{ static_cast<Index>(key.value >> 32) }
       , hash{ static_cast<Hash>(key.value) } {}
@@ -78,9 +78,9 @@ private:
   UgLock<UgMutex> ug_lck_;
   ExLock<UgMutex> ex_lck_;
   boost::container::flat_map<
-      StringKey::Hash, boost::container::flat_map<
-                     StringKey::Index, std::pair<std::string, DskKeyCacheSize>>>
-      local_;
+      StringKey::Hash,
+      boost::container::flat_map<
+          StringKey::Index, std::pair<std::string, DskKeyCacheSize>>> local_;
 };
 
 class KeyCache {

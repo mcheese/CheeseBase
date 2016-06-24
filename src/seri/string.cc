@@ -99,9 +99,8 @@ model::PValue StringR::getValue() {
   auto span = page->subspan(addr.pageOffset(), toBlockSize(hdr.type()));
   auto next = hdr.next();
 
-  auto size = gsl::as_span<DskStringHdr>(
-                  span.subspan(sizeof(DskBlockHdr), sizeof(DskStringHdr)))[0]
-                  .size();
+  auto size = gsl::as_span<DskStringHdr>(span.subspan(
+      sizeof(DskBlockHdr), sizeof(DskStringHdr)))[0].size();
   std::string str;
   str.reserve(size);
 

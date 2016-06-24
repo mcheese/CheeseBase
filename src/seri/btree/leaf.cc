@@ -125,7 +125,8 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
   }
 
   // enough space to insert?
-  if (size_ + 1 + extra_words - (update ?  (DskLeafEntry(*it).extraWords() + 1) : 0) <=
+  if (size_ + 1 + extra_words -
+          (update ? (DskLeafEntry(*it).extraWords() + 1) : 0) <=
       kMaxLeafWords) {
 
     // make space
@@ -280,7 +281,7 @@ std::unique_ptr<LeafW> AbsLeafW::splitHelper(Key key, const model::Value& val) {
   right_leaf->appendWords(it, top);
   {
     auto linked_from = linked_.lower_bound(keyFromWord(*it));
-    for (auto it = linked_from; it < linked_.end(); ++it){
+    for (auto it = linked_from; it < linked_.end(); ++it) {
       right_leaf->linked_.emplace(std::move(*it));
     }
     linked_.erase(linked_from, linked_.end());
@@ -294,7 +295,8 @@ std::unique_ptr<LeafW> AbsLeafW::splitHelper(Key key, const model::Value& val) {
     right_leaf->insert(key, val, Overwrite::Upsert, parent_);
 
   Ensures(size_ >= kMinLeafWords && size_ <= kMaxLeafWords);
-  Ensures(right_leaf->size() >= kMinLeafWords && right_leaf->size() <= kMaxLeafWords);
+  Ensures(right_leaf->size() >= kMinLeafWords &&
+          right_leaf->size() <= kMaxLeafWords);
 
   return right_leaf;
 }
@@ -392,8 +394,7 @@ void LeafW::balance() {
 RootLeafW::~RootLeafW() {}
 
 RootLeafW::RootLeafW(Transaction& ta, BtreeWritable& parent)
-    : AbsLeafW(AllocateNew(), ta)
-    , tree_(parent) {}
+    : AbsLeafW(AllocateNew(), ta), tree_(parent) {}
 
 RootLeafW::RootLeafW(Transaction& ta, Addr addr, BtreeWritable& parent)
     : AbsLeafW(ta, addr), tree_(parent) {}
@@ -413,8 +414,7 @@ void RootLeafW::split(Key key, const model::Value& val) {
 
   auto sep_key = keyFromWord(*right->node_->begin());
   auto new_me = std::unique_ptr<RootInternalW>(new RootInternalW(
-      ta_, addr_, std::move(left), sep_key,
-      std::move(right), tree_));
+      ta_, addr_, std::move(left), sep_key, std::move(right), tree_));
   tree_.root_ = std::move(new_me);
 }
 

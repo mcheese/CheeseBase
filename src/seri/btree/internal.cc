@@ -33,7 +33,8 @@ InternalEntriesW::InternalEntriesW(Transaction& ta, Addr addr)
     : ta_{ ta }, addr_{ addr } {}
 
 InternalEntriesW::InternalEntriesW(Transaction& ta, Addr first,
-                                   DskInternalPair* begin, DskInternalPair* end)
+                                   DskInternalNode::iterator begin,
+                                   DskInternalNode::iterator end)
     : ta_{ ta }
     , addr_{ ta.alloc(kNodeSize).addr }
     , node_{ std::make_unique<DskInternalNode>() } {
@@ -84,7 +85,7 @@ Addr InternalEntriesW::searchChildAddr(Key key) {
   if (!node_) {
     auto ref = ta_.loadBlock<kBlockSize>(addr_);
     return gsl::as_span<const DskInternalNode>(
-      ref->subspan(ssizeof<DskBlockHdr>()))[0].searchAddr(key);
+               ref->subspan(ssizeof<DskBlockHdr>()))[0].searchAddr(key);
   }
   return node_->searchAddr(key);
 }
@@ -92,9 +93,9 @@ Addr InternalEntriesW::searchChildAddr(Key key) {
 Addr InternalEntriesW::searchSiblingAddr(Key key) {
   if (!node_) {
     auto ref = ta_.loadBlock<kBlockSize>(addr_);
-    return searchSiblingAddrHelper(gsl::as_span<DskInternalNode>(
-                                 ref->subspan(ssizeof<DskBlockHdr>()))[0],
-                             key);
+    return searchSiblingAddrHelper(
+        gsl::as_span<DskInternalNode>(ref->subspan(ssizeof<DskBlockHdr>()))[0],
+        key);
   }
   return searchSiblingAddrHelper(*node_, key);
 }
@@ -115,9 +116,7 @@ size_t InternalEntriesW::size() {
   return node_->hdr.size();
 }
 
-bool InternalEntriesW::isFull() {
-  return size() >= kMaxInternalEntries;
-}
+bool InternalEntriesW::isFull() { return size() >= kMaxInternalEntries; }
 
 void InternalEntriesW::insert(Key key, Addr addr) {
   init();
@@ -134,7 +133,7 @@ void InternalEntriesW::insert(Key key, Addr addr) {
   ++(node_->hdr);
 }
 
-DskInternalPair* InternalEntriesW::search(Key key) {
+DskInternalNode::iterator InternalEntriesW::search(Key key) {
   init();
   Expects(size() >= 1);
   auto it = std::upper_bound(node_->begin(), node_->end(), key);
@@ -142,7 +141,7 @@ DskInternalPair* InternalEntriesW::search(Key key) {
   return std::prev(it);
 }
 
-void InternalEntriesW::remove(DskInternalPair* e) {
+void InternalEntriesW::remove(DskInternalNode::iterator e) {
   init();
   Expects(e >= node_->begin() && e < node_->end());
   std::copy(std::next(e), node_->end(), e);
@@ -157,7 +156,7 @@ Key InternalEntriesW::remove(Key key) {
   return removed_key;
 }
 
-void InternalEntriesW::removeTail(DskInternalPair* from) {
+void InternalEntriesW::removeTail(DskInternalNode::iterator from) {
   init();
   auto end = node_->end();
   auto begin = node_->begin();
@@ -168,7 +167,7 @@ void InternalEntriesW::removeTail(DskInternalPair* from) {
   node_->hdr.fromSize(std::distance(begin, from));
 }
 
-void InternalEntriesW::removeHead(DskInternalPair* to) {
+void InternalEntriesW::removeHead(DskInternalNode::iterator to) {
   init();
   auto end = node_->end();
   auto begin = node_->begin();
@@ -182,8 +181,8 @@ void InternalEntriesW::removeHead(DskInternalPair* to) {
   node_->hdr.fromSize(amount);
 }
 
-void InternalEntriesW::prepend(DskInternalPair* from, DskInternalPair* to,
-                               Key sep) {
+void InternalEntriesW::prepend(DskInternalNode::iterator from,
+                               DskInternalNode::iterator to, Key sep) {
   init();
   auto amount = std::distance(from, to);
   if (amount == 0) return;
@@ -198,7 +197,8 @@ void InternalEntriesW::prepend(DskInternalPair* from, DskInternalPair* to,
   node_->hdr.fromSize(size() + amount);
 }
 
-void InternalEntriesW::append(DskInternalPair* from, DskInternalPair* to) {
+void InternalEntriesW::append(DskInternalNode::iterator from,
+                              DskInternalNode::iterator to) {
   init();
   auto amount = std::distance(from, to);
   if (amount == 0) return;
@@ -209,7 +209,7 @@ void InternalEntriesW::append(DskInternalPair* from, DskInternalPair* to) {
   node_->hdr.fromSize(size() + amount);
 }
 
-void InternalEntriesW::makeRoot(Addr left, Key sep, Addr right){
+void InternalEntriesW::makeRoot(Addr left, Key sep, Addr right) {
   init();
   node_->first = left;
   node_->begin()->entry.fromKey(sep);
@@ -244,7 +244,7 @@ Key InternalEntriesW::update(Key key, Key new_key) {
 }
 
 void InternalEntriesW::addWrite(Writes& writes) const noexcept {
-  if (node_){
+  if (node_) {
     node_->hdr.check();
     writes.push_back({ Addr(addr_.value + ssizeof<DskBlockHdr>()),
                        gsl::as_bytes(Span<DskInternalNode>(*node_)) });
@@ -272,19 +272,19 @@ void InternalEntriesW::destroy() {
   ta_.free(addr_);
 }
 
-DskInternalPair* InternalEntriesW::begin() {
+DskInternalNode::iterator InternalEntriesW::begin() {
   init();
   return node_->begin();
 }
 
-DskInternalPair* InternalEntriesW::mid() {
+DskInternalNode::iterator InternalEntriesW::mid() {
   init();
   auto size = node_->hdr.size();
   Expects(size >= 3);
   return node_->begin() + size / 2;
 }
 
-DskInternalPair* InternalEntriesW::end() {
+DskInternalNode::iterator InternalEntriesW::end() {
   init();
   return node_->end();
 }
@@ -293,10 +293,11 @@ DskInternalPair* InternalEntriesW::end() {
 // AbsInternalW
 
 AbsInternalW::AbsInternalW(Transaction& ta, Addr addr)
-    : NodeW(addr), entries_{ ta, addr} {}
+    : NodeW(addr), entries_{ ta, addr } {}
 
 AbsInternalW::AbsInternalW(AllocateNew, Transaction& ta, Addr first,
-    DskInternalPair* begin, DskInternalPair* end)
+                           DskInternalNode::iterator begin,
+                           DskInternalNode::iterator end)
     : NodeW(Addr(0)), entries_{ ta, first, begin, end } {
   addr_ = entries_.addr_;
 }
@@ -378,11 +379,11 @@ NodeW& AbsInternalW::getSibling(Key key) {
   }
 }
 
-DskInternalPair* AbsInternalW::searchEntry(Key key) {
+DskInternalNode::iterator AbsInternalW::searchEntry(Key key) {
   return entries_.search(key);
 }
 
-void AbsInternalW::removeMerged(DskInternalPair* it) {
+void AbsInternalW::removeMerged(DskInternalNode::iterator it) {
   auto lookup = childs_.find(it->addr);
   if (lookup == childs_.end()) {
     throw ConsistencyError("removeMerged with unknown Address");
@@ -408,8 +409,8 @@ void InternalW::split(Key key, std::unique_ptr<NodeW> c) {
   auto end = entries_.end();
   auto mid_key = mid->entry.key.key();
 
-  auto sibling = std::make_unique<InternalW>(
-      AllocateNew(), entries_.ta_, mid->addr, std::next(mid), end);
+  auto sibling = std::make_unique<InternalW>(AllocateNew(), entries_.ta_,
+                                             mid->addr, std::next(mid), end);
 
   for (auto it = mid; it < end; ++it) {
     tryTransfer(childs_, sibling->childs_, it->addr);
@@ -510,8 +511,7 @@ RootInternalW::RootInternalW(Transaction& ta, Addr addr,
                              std::unique_ptr<LeafW> left_leaf, Key sep,
                              std::unique_ptr<LeafW> right_leaf,
                              BtreeWritable& parent)
-    : AbsInternalW(ta, addr, left_leaf->addr(), sep,
-                                    right_leaf->addr())
+    : AbsInternalW(ta, addr, left_leaf->addr(), sep, right_leaf->addr())
     , parent_{ parent } {
   auto left_addr = left_leaf->addr();
   auto right_addr = right_leaf->addr();
@@ -527,11 +527,11 @@ void RootInternalW::split(Key key, std::unique_ptr<NodeW> child) {
   auto end = entries_.end();
   auto mid_key = mid->entry.key.key();
 
-  auto left = std::make_unique<InternalW>(
-      AllocateNew(), entries_.ta_, entries_.first(), beg, mid);
+  auto left = std::make_unique<InternalW>(AllocateNew(), entries_.ta_,
+                                          entries_.first(), beg, mid);
 
-  auto right = std::make_unique<InternalW>(
-      AllocateNew(), entries_.ta_, mid->addr, std::next(mid), end);
+  auto right = std::make_unique<InternalW>(AllocateNew(), entries_.ta_,
+                                           mid->addr, std::next(mid), end);
 
   tryTransfer(childs_, left->childs_, entries_.first());
   for (auto it = beg; it < mid; ++it) {

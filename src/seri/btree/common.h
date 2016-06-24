@@ -16,14 +16,14 @@ constexpr std::ptrdiff_t kNodeSize = kBlockSize - sizeof(DskBlockHdr);
 CB_PACKED(struct DskKey {
   DskKey() = default;
   explicit DskKey(Key key)
-    : big_{ static_cast<uint32_t>(key.value) }
-    , small_{ static_cast<uint16_t>(key.value >> 32) } {
+      : big_{ static_cast<uint32_t>(key.value) }
+      , small_{ static_cast<uint16_t>(key.value >> 32) } {
     Expects(key.value < (static_cast<uint64_t>(1) << 48));
   }
 
   Key key() const noexcept {
     return Key(static_cast<uint64_t>(big_) +
-      (static_cast<uint64_t>(small_) << 32));
+               (static_cast<uint64_t>(small_) << 32));
   }
 
 private:
@@ -31,7 +31,6 @@ private:
   uint16_t small_;
 });
 static_assert(sizeof(DskKey) == 6, "Invalid disk key size");
-
 
 // Dummy type used as argument
 enum class AllocateNew {};

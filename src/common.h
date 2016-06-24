@@ -12,7 +12,6 @@
 
 namespace cheesebase {
 
-
 //! Power of size of one memory page: page-size = 2^this
 const size_t k_page_size_power{ 12 };
 
@@ -162,7 +161,7 @@ constexpr uint64_t lowerBitmask(size_t n) {
 
 constexpr uint16_t kVersion{ 0x0001 };
 constexpr uint64_t k_magic{ 0x0000455342534843 + // CHSBSExx
-(static_cast<uint64_t>(kVersion) << 48) };
+                            (static_cast<uint64_t>(kVersion) << 48) };
 
 CB_PACKED(struct DskDatabaseHdr {
   uint64_t magic;

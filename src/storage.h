@@ -24,13 +24,12 @@ public:
   // returns a PageReadRef object holding a read-locked reference of the page.
   // The referenced page is guaranteed to be valid and unchanged for the
   // lifetime of the object.
-  PageRef<PageReadView> loadPage(PageNr page_nr);
+  ReadRef<k_page_size> loadPage(PageNr page_nr);
 
   template <std::ptrdiff_t S>
   ReadRef<S> loadBlock(Addr addr) {
     auto ref = loadPage(addr.pageNr());
-    return PageRef<Span<const Byte, S>>(ref->subspan(addr.pageOffset(), S),
-                                        std::move(ref));
+    return { ref->subspan(addr.pageOffset(), S), std::move(ref) };
   }
 
   // Write data to the DB. Old data is overwritten and the file extended if

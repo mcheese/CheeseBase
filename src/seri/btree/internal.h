@@ -46,9 +46,7 @@ CB_PACKED(struct DskInternalHdr {
     data--;
   }
 
-  void operator++() {
-    data++;
-  }
+  void operator++() { data++; }
 
   uint64_t data;
 });
@@ -74,9 +72,7 @@ CB_PACKED(struct DskInternalEntry {
     return *reinterpret_cast<const uint64_t*>(this);
   }
 
-  void zero() noexcept {
-    *reinterpret_cast<uint64_t*>(this) = 0;
-  }
+  void zero() noexcept { *reinterpret_cast<uint64_t*>(this) = 0; }
 
   char magic[2];
   DskKey key;
@@ -106,15 +102,15 @@ CB_PACKED(struct DskInternalNode {
   std::array<DskInternalPair, kMaxInternalEntries> pairs;
   char padding[kNodeSize % 16];
 
+  using iterator = decltype(pairs.begin());
   Addr searchAddr(Key key) const;
-  DskInternalPair* begin() noexcept { return pairs.data(); }
-  DskInternalPair* end() { return pairs.data() + hdr.size(); }
-  const DskInternalPair* begin() const noexcept { return pairs.data(); }
-  const DskInternalPair* end() const { return pairs.data() + hdr.size(); }
+  auto begin() noexcept { return pairs.begin(); }
+  auto end() noexcept { return pairs.begin() + hdr.size(); }
+  auto begin() const noexcept { return pairs.begin(); }
+  auto end() const noexcept { return pairs.begin() + hdr.size(); }
 });
 static_assert(sizeof(DskInternalNode) == kNodeSize,
               "Invalid DskInternalNode size");
-
 
 class LeafW;
 class AbsInternalW;
@@ -123,8 +119,8 @@ class InternalEntriesW {
   friend class AbsInternalW;
 
 public:
-  InternalEntriesW(Transaction& ta, Addr first, DskInternalPair* begin,
-                   DskInternalPair* end);
+  InternalEntriesW(Transaction& ta, Addr first, DskInternalNode::iterator begin,
+                   DskInternalNode::iterator end);
   InternalEntriesW(Transaction& ta, Addr addr);
   InternalEntriesW(Transaction& ta, Addr addr, Addr left, Key sep, Addr right);
 
@@ -133,9 +129,9 @@ public:
   void insert(Key key, Addr addr);
 
   //! Get iterator to entry including \param key.
-  DskInternalPair* search(Key key);
+  DskInternalNode::iterator search(Key key);
 
-  void remove(DskInternalPair* entry);
+  void remove(DskInternalNode::iterator entry);
 
   //! Remove entry that includes key, returns lowest key of removed entry.
   Key remove(Key key);
@@ -156,29 +152,30 @@ public:
   void addWrite(Writes&) const noexcept;
 
   //! Iterator to first entry.
-  DskInternalPair* begin();
+  DskInternalNode::iterator begin();
 
   //! Iterator to middle entry. Rounds down on uneven entries.
-  DskInternalPair* mid();
+  DskInternalNode::iterator mid();
 
   //! Iterator to past the last entry.
-  DskInternalPair* end();
+  DskInternalNode::iterator end();
 
   //! Get leftmost \c Addr
   Addr first();
 
   //! Remove all entries starting at \param from.
-  void removeTail(DskInternalPair* from);
+  void removeTail(DskInternalNode::iterator from);
 
   //! Remove all entries until \param to.
-  void removeHead(DskInternalPair* to);
+  void removeHead(DskInternalNode::iterator to);
 
   //! Prepend range of entries. \param sep has to be a seperator between the
   //! last entry and the first of the existing node (\class Key used in parent).
-  void prepend(DskInternalPair* from, DskInternalPair* to, Key sep);
+  void prepend(DskInternalNode::iterator from, DskInternalNode::iterator to,
+               Key sep);
 
   //! Append range of entries.
-  void append(DskInternalPair* from, DskInternalPair* to);
+  void append(DskInternalNode::iterator from, DskInternalNode::iterator to);
 
   //! Transform to root, 2 childs and a seperator, dismiss old entries.
   void makeRoot(Addr left, Key sep, Addr right);
@@ -198,8 +195,8 @@ class AbsInternalW : public NodeW {
 
 public:
   AbsInternalW(Transaction& ta, Addr addr);
-  AbsInternalW(AllocateNew, Transaction& ta, Addr first, DskInternalPair* begin,
-               DskInternalPair* end);
+  AbsInternalW(AllocateNew, Transaction& ta, Addr first,
+               DskInternalNode::iterator begin, DskInternalNode::iterator end);
 
   // used when extending single root leaf to internal root
   AbsInternalW(Transaction& ta, Addr addr, Addr left, Key sep, Addr right);
@@ -219,10 +216,10 @@ public:
   NodeW& getSibling(Key key);
 
   //! Return Key-Addr-Pair iterator refered to by \param key.
-  DskInternalPair* searchEntry(Key key);
+  DskInternalNode::iterator searchEntry(Key key);
 
   //! Remove Key-Addr-Pair referenced by \param entry.
-  void removeMerged(DskInternalPair* entry);
+  void removeMerged(DskInternalNode::iterator entry);
 
   //! Replace \c Key which includes key with new_key, returns replaced \c Key.
   Key updateMerged(Key key, Key new_key);
@@ -256,7 +253,8 @@ public:
 private:
   // used to construct while splitting RootLeafW
   RootInternalW(Transaction& ta, Addr addr, std::unique_ptr<LeafW> left_leaf,
-      Key sep, std::unique_ptr<LeafW> right_leaf, BtreeWritable& parent);
+                Key sep, std::unique_ptr<LeafW> right_leaf,
+                BtreeWritable& parent);
 
   void split(Key, std::unique_ptr<NodeW>) override;
   void balance() override;

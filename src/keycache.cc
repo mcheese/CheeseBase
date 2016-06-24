@@ -49,8 +49,9 @@ Key KeyTransaction::getKey(const std::string& str) {
     throw KeyCacheError("can not store key name");
   auto idx = gsl::narrow_cast<StringKey::Index>(i);
 
-  local_[hash].emplace(idx, std::pair<std::string, DskKeyCacheSize>{
-                             str, gsl::narrow<DskKeyCacheSize>(str.size()) });
+  local_[hash].emplace(idx,
+                       std::pair<std::string, DskKeyCacheSize>{
+                           str, gsl::narrow<DskKeyCacheSize>(str.size()) });
 
   return StringKey(hash, idx + 1).key();
 }

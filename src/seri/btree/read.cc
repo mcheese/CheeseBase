@@ -72,7 +72,8 @@ const DskLeafNode& leafView(ReadRef<kBlockSize>& block) {
       block->subspan(ssizeof<DskBlockHdr>(), kNodeSize))[0];
 }
 
-Addr getAllInLeaf(Database& db, ReadRef<kBlockSize>& block, model::Object& obj) {
+Addr getAllInLeaf(Database& db, ReadRef<kBlockSize>& block,
+                  model::Object& obj) {
   auto node = leafView(block);
   auto it = node.begin();
   auto next = node.hdr.next();
@@ -104,7 +105,6 @@ const DskInternalNode& internalView(ReadRef<kBlockSize>& block) {
   n.hdr.check();
   return n;
 }
-
 
 template <class Val, class Obj, class Arr, class Ta>
 std::unique_ptr<Val> getChildCollection(Ta& ta, Addr addr, Key key) {
@@ -185,7 +185,8 @@ std::unique_ptr<model::Value> getChildValue(Database& db, Addr addr, Key key) {
   }
 }
 
-std::unique_ptr<ValueW> getChildCollectionW(Transaction& ta, Addr addr, Key key) {
+std::unique_ptr<ValueW> getChildCollectionW(Transaction& ta, Addr addr,
+                                            Key key) {
   return getChildCollection<ValueW, ObjectW, ArrayW>(ta, addr, key);
 }
 

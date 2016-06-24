@@ -65,7 +65,9 @@ Database::Database(const std::string& file)
 
 Transaction Database::startTransaction() { return Transaction(*this); };
 
-ReadRef<k_page_size> Database::loadPage(PageNr p) { return store_->loadPage(p); }
+ReadRef<k_page_size> Database::loadPage(PageNr p) {
+  return store_->loadPage(p);
+}
 
 std::string Database::resolveKey(Key k) const {
   return keycache_->getString(k);
@@ -80,7 +82,9 @@ BlockLockR Database::getLockR(Addr addr) { return lock_pool_->getLockR(addr); }
 BlockLockW Transaction::getLockW(Addr addr) { return db_.getLockW(addr); }
 BlockLockR Transaction::getLockR(Addr addr) { return db_.getLockR(addr); }
 
-ReadRef<k_page_size> Transaction::load(PageNr p) { return storage_.loadPage(p); };
+ReadRef<k_page_size> Transaction::load(PageNr p) {
+  return storage_.loadPage(p);
+};
 
 Block Transaction::alloc(size_t s) { return alloc_.alloc(s); };
 
