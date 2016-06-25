@@ -22,11 +22,11 @@ TEST_CASE("KeyCache single") {
 
   // build first keycache block
   constexpr auto kc_pos = k_page_size / 2;
-  DskBlockHdr cache_hdr{ BlockType::t1, Addr(0) };
+  KeyNext cache_hdr{ Addr(0) };
   uint64_t term{ 0 };
   store.storeWrite(Writes{
-      { Addr(kc_pos), gsl::as_bytes(gsl::span<DskBlockHdr>(cache_hdr)) },
-      { Addr(kc_pos + sizeof(DskBlockHdr)),
+      { Addr(kc_pos), gsl::as_bytes(gsl::span<KeyNext>(cache_hdr)) },
+      { Addr(kc_pos + sizeof(KeyNext)),
         gsl::as_bytes(gsl::span<uint64_t>(term)) } });
 
   KeyCache keys{ Block{ Addr(kc_pos), kc_pos }, store };

@@ -11,9 +11,26 @@ PageRef<PageReadView> Storage::loadPage(PageNr page_nr) {
   return cache_.readPage(page_nr);
 }
 
+namespace {
+
+template <typename S>
+void writeToSpan(const decltype(Write::data)& data, S target) {
+  if (data.type() == typeid(uint64_t)) {
+    Expects(sizeof(uint64_t) <= target.size());
+    auto word = boost::get<uint64_t>(data);
+    auto source = gsl::as_bytes<uint64_t>({ word });
+    std::copy(source.begin(), source.end(), target.begin());
+  } else {
+    auto& span = boost::get<Span<const Byte>>(data);
+    Expects(span.size() <= target.size());
+    std::copy(span.begin(), span.end(), target.begin());
+  }
+}
+}
+
 void Storage::storeWrite(Write write) {
   auto p = cache_.writePage(write.addr.pageNr());
-  copySpan(write.data, p->subspan(write.addr.pageOffset()));
+  writeToSpan(write.data, p->subspan(write.addr.pageOffset()));
 }
 
 void Storage::storeWrite(std::vector<Write> transaction) {
@@ -30,7 +47,7 @@ void Storage::storeWrite(std::vector<Write> transaction) {
     auto nr = it->addr.pageNr();
     auto ref = cache_.writePage(nr);
     do {
-      copySpan(it->data, ref->subspan(it->addr.pageOffset()));
+      writeToSpan(it->data, ref->subspan(it->addr.pageOffset()));
       ++it;
     } while (it != transaction.end() && nr.value == it->addr.pageNr().value);
   }

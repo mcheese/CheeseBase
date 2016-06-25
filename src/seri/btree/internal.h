@@ -11,7 +11,7 @@ namespace cheesebase {
 namespace disk {
 namespace btree {
 
-constexpr size_t kMaxInternalEntries = (kNodeSize - 16) / 16;
+constexpr size_t kMaxInternalEntries = (kBlockSize - 16) / 16;
 constexpr size_t kMinInternalEntries = (kMaxInternalEntries / 2) - 1;
 
 // Magic byte + number of elements
@@ -100,7 +100,6 @@ CB_PACKED(struct DskInternalNode {
   DskInternalHdr hdr;
   Addr first;
   std::array<DskInternalPair, kMaxInternalEntries> pairs;
-  char padding[kNodeSize % 16];
 
   using iterator = decltype(pairs.begin());
   Addr searchAddr(Key key) const;
@@ -109,7 +108,7 @@ CB_PACKED(struct DskInternalNode {
   auto begin() const noexcept { return pairs.begin(); }
   auto end() const noexcept { return pairs.begin() + hdr.size(); }
 });
-static_assert(sizeof(DskInternalNode) == kNodeSize,
+static_assert(sizeof(DskInternalNode) == kBlockSize,
               "Invalid DskInternalNode size");
 
 class LeafW;

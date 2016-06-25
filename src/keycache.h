@@ -54,6 +54,7 @@ struct StringKey {
 };
 
 static const DskKeyCacheSize s_terminator{ 0 };
+using KeyNext = DskNext<'K'>;
 
 class KeyTransaction {
   friend KeyCache;
@@ -108,7 +109,7 @@ private:
   std::unordered_map<StringKey::Hash, std::vector<std::string>> cache_;
   UgMutex mtx_;
   Block cur_block_;
-  uint64_t offset_{ sizeof(DskBlockHdr) };
+  uint64_t offset_{ sizeof(KeyNext) };
 };
 
 } // namespace cheesebase

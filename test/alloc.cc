@@ -23,7 +23,8 @@ const size_t t4_block = k_page_size / 16 - 50;
 
 bool contains(const std::vector<Write>& ws, Addr addr, uint64_t word) {
   for (const auto& w : ws) {
-    if (w.addr == addr && w.data == gsl::as_bytes(gsl::span<uint64_t>(word)))
+    if (w.addr == addr && w.data.type() == typeid(uint64_t) &&
+        boost::get<uint64_t>(w.data) == word)
       return true;
   }
   return false;
@@ -71,8 +72,8 @@ TEST_CASE("allocate and free blocks") {
 
   auto b4 = t.alloc(t4_block);
   auto b5 = t.alloc(t2_block);
-  t.free(b1.addr);
-  t.free(b3.addr);
+  t.free(b1);
+  t.free(b3);
   auto b6 = t.alloc(t2_block);
   auto b7 = t.alloc(t1_block);
   writes = t.commit();
@@ -97,48 +98,4 @@ TEST_CASE("allocate and free blocks") {
 
   store.storeWrite(writes);
   t.end();
-
-  t = alloc.startTransaction();
-  auto b8 = t.allocExtension(b5.addr, t1_block);
-  auto b9 = t.allocExtension(b8.addr, t2_block);
-
-  writes = t.commit();
-
-  // layout
-  //
-  // [~~~~~~~~~~~~~~~~~~~~~~~~~~ reserved ~~~~~~~~~~~~~~~~~~~~~~~~~~]
-  // [  ][b4][      ][::::: b5 :::b8][::::: b6 :::::][::::: b9 :::::]
-  // [::::::::::::::::::::::::::::: b2 :::::::::::::::::::::::::::::]
-  // [::::::::::::: b7 :::::::::::::][::::::::::::: b8 :::::::::::b9]
-  //
-  REQUIRE(b8.addr.value == k_page_size * 3.5);
-  REQUIRE(b9.addr.value == k_page_size * 1.75);
-  REQUIRE(contains(writes, t2_addr, 0));
-  REQUIRE(contains(writes, t1_addr, 0));
-  REQUIRE(
-      contains(writes, b5.addr, DskBlockHdr(BlockType::t2, b8.addr).data()));
-  REQUIRE(
-      contains(writes, b8.addr, DskBlockHdr(BlockType::t1, b9.addr).data()));
-
-  store.storeWrite(writes);
-  t.end();
-
-  t = alloc.startTransaction();
-  t.free(b5.addr);
-
-  writes = t.commit();
-
-  // layout
-  //
-  // [~~~~~~~~~~~~~~~~~~~~~~~~~~ reserved ~~~~~~~~~~~~~~~~~~~~~~~~~~]
-  // [  ][b4][      ][              ][::::: b6 :::::][              ]
-  // [::::::::::::::::::::::::::::: b2 :::::::::::::::::::::::::::::]
-  // [::::::::::::: b7 :::::::::::::][                              ]
-  //
-  REQUIRE(contains(writes, t2_addr, b9.addr.value));
-  REQUIRE(contains(writes, t1_addr, b8.addr.value));
-  REQUIRE(
-      contains(writes, b9.addr, DskBlockHdr(BlockType::t2, b5.addr).data()));
-
-  store.storeWrite(writes);
 }

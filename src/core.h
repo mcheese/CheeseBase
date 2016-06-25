@@ -25,13 +25,12 @@ public:
   ReadRef<k_page_size> load(PageNr p);
 
   template <std::ptrdiff_t S>
-  auto loadBlock(Addr addr) {
+  ReadRef<S> loadBlock(Addr addr) {
     return storage_.loadBlock<S>(addr);
   }
 
   Block alloc(size_t s);
-  Block allocExtension(Addr block, size_t s);
-  void free(Addr a);
+  void free(Addr a, size_t s);
   Key key(const std::string& s);
   BlockLockW getLockW(Addr);
   BlockLockR getLockR(Addr);

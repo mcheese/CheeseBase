@@ -21,19 +21,23 @@ Database::Database(const std::string& file)
     hdr = gsl::as_span<const DskDatabaseHdr>(
         page->subspan(0, ssizeof<DskDatabaseHdr>()))[0];
 
-    auto kc_blk = gsl::as_span<DskBlockHdr>(page->subspan(k_page_size / 2))[0];
+    auto kc_blk =
+        gsl::as_span<KeyNext>(page->subspan(ssizeof<DskDatabaseHdr>()))[0];
+    kc_blk.check();
     if (hdr.magic != k_magic || hdr.free_alloc_pg.value % k_page_size != 0 ||
         hdr.free_alloc_t1.value % (k_page_size / 2) != 0 ||
         hdr.free_alloc_t2.value % (k_page_size / 4) != 0 ||
         hdr.free_alloc_t3.value % (k_page_size / 8) != 0 ||
         hdr.free_alloc_t4.value % (k_page_size / 16) != 0 ||
         hdr.end_of_file.value % k_page_size != 0 ||
-        hdr.end_of_file.value < k_page_size || kc_blk.type() != BlockType::t1)
+        hdr.end_of_file.value < k_page_size)
       throw DatabaseError("Invalid database header");
 
     alloc_ = std::make_unique<Allocator>(hdr, *store_);
     keycache_ = std::make_unique<KeyCache>(
-        Block{ Addr(k_page_size / 2), k_page_size / 2 }, *store_);
+        Block{ Addr(sizeof(DskDatabaseHdr)),
+               k_page_size - sizeof(DskDatabaseHdr) },
+        *store_);
 
   } else {
     store_ = std::make_unique<Storage>(file, OpenMode::create_new);
@@ -42,16 +46,16 @@ Database::Database(const std::string& file)
     hdr.end_of_file = Addr(k_page_size);
 
     // manually create first block of KeyCache
-    DskBlockHdr cache_hdr{ BlockType::t1, Addr(0) };
     DskKeyCacheSize cache_term = 0;
-    store_->storeWrite(Writes{
-        { Addr(0), gsl::as_bytes<DskDatabaseHdr>({ hdr }) },
-        { Addr(k_page_size / 2), gsl::as_bytes<DskBlockHdr>({ cache_hdr }) },
-        { Addr(k_page_size / 2 + sizeof(DskBlockHdr)),
-          gsl::as_bytes<DskKeyCacheSize>({ cache_term }) } });
+    store_->storeWrite(
+        Writes{ { Addr(0), gsl::as_bytes<DskDatabaseHdr>({ hdr }) },
+                { Addr(sizeof(DskDatabaseHdr)), KeyNext(Addr(0)).data() },
+                { Addr(sizeof(DskDatabaseHdr) + sizeof(KeyNext)), 0 } });
     alloc_ = std::make_unique<Allocator>(hdr, *store_);
     keycache_ = std::make_unique<KeyCache>(
-        Block{ Addr(k_page_size / 2), k_page_size / 2 }, *store_);
+        Block{ Addr(sizeof(DskDatabaseHdr)),
+               k_page_size - sizeof(DskDatabaseHdr) },
+        *store_);
 
     auto ta = startTransaction();
     disk::ObjectW tree(ta);
@@ -88,11 +92,7 @@ ReadRef<k_page_size> Transaction::load(PageNr p) {
 
 Block Transaction::alloc(size_t s) { return alloc_.alloc(s); };
 
-Block Transaction::allocExtension(Addr block, size_t s) {
-  return alloc_.allocExtension(block, s);
-}
-
-void Transaction::free(Addr a) { return alloc_.free(a); }
+void Transaction::free(Addr a, size_t s) { return alloc_.free(a, s); }
 
 Key Transaction::key(const std::string& s) { return kcache_.getKey(s); }
 

@@ -11,7 +11,6 @@ namespace disk {
 namespace btree {
 
 constexpr std::ptrdiff_t kBlockSize = 256;
-constexpr std::ptrdiff_t kNodeSize = kBlockSize - sizeof(DskBlockHdr);
 
 CB_PACKED(struct DskKey {
   DskKey() = default;

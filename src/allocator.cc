@@ -14,62 +14,38 @@ Allocator::Allocator(const DskDatabaseHdr& h, Storage& store)
     , t4_alloc_(store, h.free_alloc_t4, t3_alloc_) {}
 
 AllocTransaction Allocator::startTransaction() {
-  return AllocTransaction(this, ExLock<Mutex>{ mutex_ });
+  return AllocTransaction(*this, ExLock<Mutex>{ mutex_ });
 }
 
-std::pair<Block, AllocWrites> AllocTransaction::allocBlock(size_t size) {
-  constexpr auto hdr = sizeof(DskBlockHdr);
-
-  if (size <= alloc_->t4_alloc_.size() - hdr)
+std::pair<Block, std::vector<AllocWrite>>
+AllocTransaction::allocBlock(size_t size) {
+  if (size <= alloc_->t4_alloc_.size())
     return alloc_->t4_alloc_.allocBlock();
-  else if (size <= alloc_->t3_alloc_.size() - hdr)
+  else if (size <= alloc_->t3_alloc_.size())
     return alloc_->t3_alloc_.allocBlock();
-  else if (size <= alloc_->t2_alloc_.size() - hdr)
+  else if (size <= alloc_->t2_alloc_.size())
     return alloc_->t2_alloc_.allocBlock();
-  else if (size <= alloc_->t1_alloc_.size() - hdr)
+  else if (size <= alloc_->t1_alloc_.size())
     return alloc_->t1_alloc_.allocBlock();
-  else if (size <= alloc_->pg_alloc_.size() - hdr)
+  else if (size <= alloc_->pg_alloc_.size())
     return alloc_->pg_alloc_.allocBlock();
   else
     throw AllocError("requested size to big");
 }
 
-AllocWrites AllocTransaction::freeBlock(Addr block) {
-  DskBlockHdr hdr;
-  if (writes_.count(block) > 0) {
-    hdr.data_ = writes_.at(block);
-  } else {
-    hdr = gsl::as_span<DskBlockHdr>(alloc_->store_.loadPage(block.pageNr())
-                                        ->subspan(block.pageOffset()))[0];
-  }
-  AllocWrites ret;
-
-  switch (hdr.type()) {
-  case BlockType::pg:
-    ret = alloc_->pg_alloc_.freeBlock(block);
-    break;
-  case BlockType::t1:
-    ret = alloc_->t1_alloc_.freeBlock(block);
-    break;
-  case BlockType::t2:
-    ret = alloc_->t2_alloc_.freeBlock(block);
-    break;
-  case BlockType::t3:
-    ret = alloc_->t3_alloc_.freeBlock(block);
-    break;
-  case BlockType::t4:
-    ret = alloc_->t4_alloc_.freeBlock(block);
-    break;
-  default:
-    throw ConsistencyError();
-  }
-
-  if (hdr.next().value != 0) {
-    auto next = freeBlock(hdr.next());
-    std::move(next.begin(), next.end(), std::back_inserter(ret));
-  }
-
-  return ret;
+std::vector<AllocWrite> AllocTransaction::freeBlock(Addr addr, size_t size) {
+  if (size <= alloc_->t4_alloc_.size())
+    return alloc_->t4_alloc_.freeBlock(addr);
+  else if (size <= alloc_->t3_alloc_.size())
+    return alloc_->t3_alloc_.freeBlock(addr);
+  else if (size <= alloc_->t2_alloc_.size())
+    return alloc_->t2_alloc_.freeBlock(addr);
+  else if (size <= alloc_->t1_alloc_.size())
+    return alloc_->t1_alloc_.freeBlock(addr);
+  else if (size <= alloc_->pg_alloc_.size())
+    return alloc_->pg_alloc_.freeBlock(addr);
+  else
+    throw AllocError("requested size to big");
 }
 
 void Allocator::clearCache() {
@@ -80,9 +56,8 @@ void Allocator::clearCache() {
   t4_alloc_.clearCache();
 }
 
-AllocTransaction::AllocTransaction(gsl::not_null<Allocator*> alloc,
-                                   ExLock<Mutex> lock)
-    : alloc_(alloc), lock_(std::move(lock)){};
+AllocTransaction::AllocTransaction(Allocator& alloc, ExLock<Mutex> lock)
+    : alloc_(&alloc), lock_(std::move(lock)){};
 
 AllocTransaction::~AllocTransaction() { end(); }
 
@@ -92,44 +67,21 @@ Block AllocTransaction::alloc(size_t size) {
   auto& block = alloc.first;
   auto& writes = alloc.second;
 
+  // in case it was freed in the same TA and has a Next written in
+  writes_.erase(block.addr);
   for (auto& w : writes) {
     writes_[w.first] = w.second;
   }
   return block;
 }
 
-void AllocTransaction::free(Addr block) {
+void AllocTransaction::free(Block block) { free(block.addr, block.size); }
+
+void AllocTransaction::free(Addr addr, size_t size) {
   Expects(lock_.owns_lock());
-  for (auto& w : freeBlock(block)) {
+  for (auto& w : freeBlock(addr, size)) {
     writes_[w.first] = w.second;
   }
-}
-
-Block AllocTransaction::allocExtension(Addr block, size_t size) {
-  Expects(lock_.owns_lock());
-
-  DskBlockHdr hdr;
-  if (writes_.count(block) > 0) {
-    hdr.data_ = writes_.at(block);
-  } else {
-    hdr = gsl::as_span<DskBlockHdr>(alloc_->store_.loadPage(block.pageNr())
-                                        ->subspan(block.pageOffset()))[0];
-  }
-
-  if (hdr.next().value != 0)
-    throw AllocError("block to extend is not the last block");
-
-  auto alloc = allocBlock(size);
-  auto& new_block = alloc.first;
-  auto& writes = alloc.second;
-
-  writes_[block] = DskBlockHdr(hdr.type(), new_block.addr).data();
-
-  for (auto& w : writes) {
-    writes_[w.first] = w.second;
-  }
-
-  return new_block;
 }
 
 std::vector<Write> AllocTransaction::commit() {
@@ -138,7 +90,7 @@ std::vector<Write> AllocTransaction::commit() {
   writes.reserve(writes_.size());
 
   for (auto& w : writes_) {
-    writes.push_back({ w.first, gsl::as_bytes(Span<uint64_t>(w.second)) });
+    writes.push_back({ w.first, w.second });
   }
 
   return writes;

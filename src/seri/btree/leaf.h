@@ -14,7 +14,7 @@ namespace disk {
 namespace btree {
 
 constexpr size_t kLeafEntryMaxWords = 4; // hdr + 24 byte inline string
-constexpr size_t kMaxLeafWords = (kNodeSize - 8) / 8;
+constexpr size_t kMaxLeafWords = (kBlockSize - 8) / 8;
 constexpr size_t kMinLeafWords = kMaxLeafWords / 2 - kLeafEntryMaxWords;
 
 CB_PACKED(struct DskValueHdr {
@@ -69,7 +69,7 @@ CB_PACKED(struct DskLeafNode {
   DskLeafNode() = default;
 
   DskLeafHdr hdr;
-  std::array<uint64_t, (kNodeSize - ssizeof<DskLeafHdr>()) / 8> words;
+  std::array<uint64_t, (kBlockSize - ssizeof<DskLeafHdr>()) / 8> words;
 
   using iterator = decltype(words)::iterator;
   using const_iterator = decltype(words)::const_iterator;
@@ -102,7 +102,7 @@ CB_PACKED(struct DskLeafNode {
     }
   }
 });
-static_assert(ssizeof<DskLeafNode>() == kNodeSize, "Invalid DskLeafNode size");
+static_assert(ssizeof<DskLeafNode>() == kBlockSize, "Invalid DskLeafNode size");
 
 class LeafW;
 

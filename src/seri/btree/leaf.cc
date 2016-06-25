@@ -19,7 +19,7 @@ namespace btree {
 // AbsLeafW
 
 AbsLeafW::AbsLeafW(AllocateNew, AbsLeafW&& o, Addr next)
-    : NodeW(o.ta_.alloc(kNodeSize).addr)
+    : NodeW(o.ta_.alloc(kBlockSize).addr)
     , ta_{ o.ta_ }
     , node_{ std::move(o.node_) }
     , size_{ o.size_ }
@@ -28,7 +28,7 @@ AbsLeafW::AbsLeafW(AllocateNew, AbsLeafW&& o, Addr next)
 }
 
 AbsLeafW::AbsLeafW(AllocateNew, Transaction& ta, Addr next)
-    : NodeW(ta.alloc(kNodeSize).addr)
+    : NodeW(ta.alloc(kBlockSize).addr)
     , ta_{ ta }
     , node_{ std::make_unique<DskLeafNode>() }
     , size_{ 0 } {
@@ -41,9 +41,7 @@ Writes AbsLeafW::getWrites() const {
   Writes w;
   w.reserve(1 + linked_.size()); // may be more, but a good guess
 
-  if (node_)
-    w.push_back({ Addr(addr_.value + sizeof(DskBlockHdr)),
-                  gsl::as_bytes(Span<DskLeafNode>(*node_)) });
+  if (node_) w.push_back({ addr_, gsl::as_bytes(Span<DskLeafNode>(*node_)) });
 
   for (auto& c : linked_) {
     auto cw = c.second->getWrites();
@@ -62,30 +60,41 @@ void AbsLeafW::destroy() {
   if (node_) {
     dstr(*node_);
   } else {
-    auto block = ta_.loadBlock<kBlockSize>(addr_);
-    auto& node = gsl::as_span<DskLeafNode>(
-        block->subspan(ssizeof<DskBlockHdr>(), kNodeSize))[0];
-    dstr(node);
+    auto ref = ta_.loadBlock<kBlockSize>(addr_);
+    dstr(getFromSpan<DskLeafNode>(*ref));
   }
 
-  ta_.free(addr_);
+  ta_.free(addr_, kBlockSize);
 }
 
 template <typename ConstIt>
 size_t AbsLeafW::destroyValue(ConstIt it) {
   auto entry = DskLeafEntry(*it);
 
-  switch (entry.value.type) {
-  case ValueType::object:
-    ObjectW(ta_, Addr(*std::next(it))).destroy();
-    break;
-  case ValueType::string:
-    StringW(ta_, Addr(*std::next(it))).destroy();
-    break;
-  case ValueType::array:
-    ArrayW(ta_, Addr(*std::next(it))).destroy();
-    break;
+  if (entry.value.type == ValueType::object ||
+      entry.value.type == ValueType::string ||
+      entry.value.type == ValueType::array) {
+
+    auto lookup = linked_.find(entry.key.key());
+    if (lookup != linked_.end()) {
+      lookup->second->destroy();
+      linked_.erase(lookup);
+    } else {
+      auto addr = Addr(*std::next(it));
+      switch (entry.value.type) {
+      case ValueType::object:
+        ObjectW(ta_, addr).destroy();
+        break;
+      case ValueType::string:
+        StringW(ta_, addr).destroy();
+        break;
+      case ValueType::array:
+        ArrayW(ta_, addr).destroy();
+        break;
+      }
+    }
   }
+
   return entry.extraWords() + 1;
 }
 
@@ -131,24 +140,10 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
 
     // make space
     if (update) {
-      auto old_entry = DskLeafEntry(*it);
-      auto old_extra = gsl::narrow_cast<int>(old_entry.extraWords());
-      switch (old_entry.value.type) {
-      case ValueType::object:
-        ObjectW(ta_, Addr(*std::next(it))).destroy();
-        linked_.erase(old_entry.key.key());
-        break;
-      case ValueType::string:
-        StringW(ta_, Addr(*std::next(it))).destroy();
-        linked_.erase(old_entry.key.key());
-        break;
-      case ValueType::array:
-        ArrayW(ta_, Addr(*std::next(it))).destroy();
-        linked_.erase(old_entry.key.key());
-        break;
-      }
-      node_->shift(it + old_extra + 1, extra_words - old_extra);
-      size_ += extra_words - old_extra;
+      auto old_size = destroyValue(it);
+      int diff = 1 + extra_words - old_size;
+      node_->shift(it + old_size, diff);
+      size_ += diff;
     } else {
       node_->shift(it, 1 + extra_words);
       size_ += 1 + extra_words;
@@ -245,8 +240,7 @@ void AbsLeafW::init() {
   if (!node_) {
     node_ = std::make_unique<DskLeafNode>();
     auto block = ta_.loadBlock<kBlockSize>(addr_);
-    auto span = block->subspan(ssizeof<DskBlockHdr>(), kNodeSize);
-    std::copy(span.begin(), span.end(),
+    std::copy(block->begin(), block->end(),
               gsl::as_writeable_bytes(Span<DskLeafNode, 1>(*node_)).begin());
     size_ = node_->findSize();
   }
@@ -318,7 +312,7 @@ void LeafW::merge(LeafW& right) {
   }
   right.linked_.clear();
   node_->hdr.fromAddr(right.node_->hdr.next());
-  ta_.free(right.addr());
+  ta_.free(right.addr(), kBlockSize);
   parent_->removeMerged(
       parent_->searchEntry(keyFromWord(*right.node_->begin())));
 }
@@ -404,7 +398,7 @@ RootLeafW::RootLeafW(LeafW&& o, Addr a, BtreeWritable& parent)
   node_ = std::move(o.node_);
   linked_ = std::move(o.linked_);
   size_ = o.size();
-  ta_.free(o.addr_);
+  ta_.free(o.addr_, kBlockSize);
 }
 
 void RootLeafW::split(Key key, const model::Value& val) {

@@ -36,7 +36,7 @@ InternalEntriesW::InternalEntriesW(Transaction& ta, Addr first,
                                    DskInternalNode::iterator begin,
                                    DskInternalNode::iterator end)
     : ta_{ ta }
-    , addr_{ ta.alloc(kBlockSize).addr }
+    , addr_{ ta.alloc(kNodeSize).addr }
     , node_{ std::make_unique<DskInternalNode>() } {
   auto amount = std::distance(begin, end);
   Expects(amount <= kMaxInternalEntries);
@@ -84,7 +84,8 @@ auto searchSiblingAddrHelper(const DskInternalNode& node, Key key) {
 Addr InternalEntriesW::searchChildAddr(Key key) {
   if (!node_) {
     auto ref = ta_.loadBlock<kBlockSize>(addr_);
-    return getFromSpan<DskInternalNode>(*ref).searchAddr(key);
+    return gsl::as_span<const DskInternalNode>(
+               ref->subspan(8))[0].searchAddr(key);
   }
   return node_->searchAddr(key);
 }
@@ -92,7 +93,9 @@ Addr InternalEntriesW::searchChildAddr(Key key) {
 Addr InternalEntriesW::searchSiblingAddr(Key key) {
   if (!node_) {
     auto ref = ta_.loadBlock<kBlockSize>(addr_);
-    return searchSiblingAddrHelper(getFromSpan<DskInternalNode>(*ref), key);
+    return searchSiblingAddrHelper(
+        gsl::as_span<DskInternalNode>(ref->subspan(8))[0],
+        key);
   }
   return searchSiblingAddrHelper(*node_, key);
 }
@@ -101,8 +104,9 @@ void InternalEntriesW::init() {
   if (!node_) {
     node_ = std::make_unique<DskInternalNode>();
     auto ref = ta_.loadBlock<kBlockSize>(addr_);
+    auto source = ref->subspan(8, kNodeSize);
     auto target = gsl::as_writeable_bytes(Span<DskInternalNode>(*node_));
-    std::copy(ref->begin(), ref->end(), target.begin());
+    std::copy(source.begin(), source.end(), target.begin());
     node_->hdr.check();
   }
 }
@@ -242,14 +246,15 @@ Key InternalEntriesW::update(Key key, Key new_key) {
 void InternalEntriesW::addWrite(Writes& writes) const noexcept {
   if (node_) {
     node_->hdr.check();
-    writes.push_back({ addr_, gsl::as_bytes(Span<DskInternalNode>(*node_)) });
+    writes.push_back({ Addr(addr_.value + 8),
+                       gsl::as_bytes(Span<DskInternalNode>(*node_)) });
   }
 }
 
 void InternalEntriesW::destroy() {
   if (!node_) {
     auto ref = ta_.loadBlock<kBlockSize>(addr_);
-    auto& node = getFromSpan<DskInternalNode>(*ref);
+    auto& node = getFromSpan<DskInternalNode>(ref->subspan(8));
 
     openNodeW(ta_, node.first)->destroy();
     for (auto& e : node) {
@@ -263,7 +268,7 @@ void InternalEntriesW::destroy() {
     }
   }
 
-  ta_.free(addr_, kBlockSize);
+  ta_.free(addr_, kNodeSize);
 }
 
 DskInternalNode::iterator InternalEntriesW::begin() {
@@ -571,7 +576,7 @@ void RootInternalW::balance() {
 
     entries_.takeNodeFrom(child_internal->entries_);
     childs_ = std::move(child_internal->childs_);
-    entries_.ta_.free(child_internal->addr(), kBlockSize);
+    entries_.ta_.free(child_internal->addr(), kNodeSize);
 
     return;
   }

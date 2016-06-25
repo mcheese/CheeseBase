@@ -9,6 +9,7 @@
 #include <gsl.h>
 #include <boost/cstdint.hpp>
 #include <vector>
+#include <boost/variant.hpp>
 
 namespace cheesebase {
 
@@ -27,6 +28,12 @@ using Byte = gsl::byte;
 //! Bounds checked memory view. Like a smart pointer+size.
 template <class T, std::ptrdiff_t R = gsl::dynamic_range>
 using Span = gsl::span<T, R>;
+
+constexpr uint64_t lowerBitmask(size_t n) {
+  return (static_cast<uint64_t>(1) << n) - 1;
+}
+
+constexpr uint64_t upperBitmask(size_t n) { return ~lowerBitmask(64 - n); }
 
 //! Represents number of memory page: floor(\c Addr / page-size).
 struct PageNr {
@@ -79,6 +86,24 @@ struct Addr {
   uint64_t value;
 };
 
+// Word on disk keeping an address and 1 byte generic magic byte.
+template <char T>
+struct DskNext {
+  DskNext() = default;
+  DskNext(Addr next) : data_{ (static_cast<uint64_t>(T) << 56) + next.value } {}
+
+  void check() const {
+    if ((data_ >> 56) != T) throw ConsistencyError();
+  }
+  Addr next() const {
+    check();
+    return Addr(data_ & lowerBitmask(56));
+  }
+  uint64_t data() const noexcept { return data_; }
+
+  uint64_t data_;
+};
+
 //! Internal key type for object and array.
 struct Key {
   static constexpr uint64_t sMaxKey{ (static_cast<uint64_t>(1) << 48) - 1 };
@@ -117,10 +142,15 @@ constexpr auto ssizeof(const T&) {
   return ssizeof<T>();
 }
 
+template <typename T, typename S>
+auto& getFromSpan(S span) {
+  return gsl::as_span<T>(span.subspan(0, ssizeof<T>()))[0];
+}
+
 //! Represents a write to disk.
 struct Write {
   Addr addr;
-  Span<const Byte> data;
+  boost::variant<Span<const Byte>, uint64_t> data;
 };
 
 //! Collection of writes.
@@ -153,10 +183,6 @@ void copySpan(Span<const T> from, Span<T> to) {
     ++input;
   }
   Ensures(input == from.cend());
-}
-
-constexpr uint64_t lowerBitmask(size_t n) {
-  return (static_cast<uint64_t>(1) << n) - 1;
 }
 
 constexpr uint16_t kVersion{ 0x0001 };

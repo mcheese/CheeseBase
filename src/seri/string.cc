@@ -7,84 +7,139 @@
 namespace cheesebase {
 namespace disk {
 
-const size_t kBlockMaxSize = k_page_size - sizeof(DskBlockHdr);
-
 namespace {
 
-static const uint64_t kMagic{ (static_cast<uint64_t>('S') << 48) +
-                              (static_cast<uint64_t>('T') << 56) };
-static const uint64_t kBitmap{ static_cast<uint64_t>(0xFFFF) << 48 };
-
 CB_PACKED(struct DskStringHdr {
+  static constexpr uint64_t kMagic{ (static_cast<uint64_t>('S') << 48) +
+                                    (static_cast<uint64_t>('T') << 56) };
   DskStringHdr() = default;
   DskStringHdr(size_t s) {
     data_ = static_cast<uint64_t>(s);
-    Expects((data_ & kBitmap) == 0);
+    Expects(data_ < lowerBitmask(48));
     data_ += kMagic;
   }
 
   size_t size() const {
     check();
-    return data_ & ~kMagic;
+    return data_ & lowerBitmask(48);
   }
 
   void check() const {
-    if ((data_ & kBitmap) != kMagic) {
-      throw ConsistencyError("Expected string magic bytes");
+    if ((data_ & upperBitmask(16)) != kMagic) {
+      throw ConsistencyError();
     }
   }
 
   uint64_t data_;
 });
 
+using StrNext = DskNext<'S'>;
+
+const size_t kFirstDataSize =
+    k_page_size - (sizeof(StrNext) + sizeof(DskStringHdr));
+const size_t kOtherDataSize = k_page_size - sizeof(StrNext);
+
 } // anonymous namespace
 
-StringW::StringW(Transaction& ta, Addr addr) : ValueW(ta, addr) {
-  auto hdr = gsl::as_span<DskStringHdr>(
-      ta_.load(addr.pageNr())
-          ->subspan(addr.pageOffset() + ssizeof<DskBlockHdr>()))[0];
-  hdr.check();
-  hdr_ = hdr.data_;
-}
+StringW::StringW(Transaction& ta, Addr addr) : ValueW(ta, addr) {}
 
 StringW::StringW(Transaction& ta, model::String str)
     : ValueW(ta), str_{ std::move(str) } {
-  hdr_ = DskStringHdr(str_.size()).data_;
-  if (str_.size() + sizeof(DskStringHdr) < kBlockMaxSize) {
-    blocks_.emplace_back(ta_.alloc(str_.size() + sizeof(DskStringHdr)));
-    addr_ = blocks_.back().addr;
-    Expects(blocks_.back().size >=
-            str_.size() + sizeof(DskStringHdr) + sizeof(DskBlockHdr))
-  } else {
-    blocks_.emplace_back(ta_.alloc(kBlockMaxSize));
-    addr_ = blocks_.back().addr;
-    int size =
-        static_cast<int>(str_.size()) - kBlockMaxSize + sizeof(DskStringHdr);
-    while (size > 0) {
-      blocks_.emplace_back(ta_.allocExtension(
-          blocks_.back().addr,
-          std::min(kBlockMaxSize, static_cast<size_t>(size))));
-      size -= gsl::narrow_cast<int>(blocks_.back().size);
-    }
+
+  auto size = str_.size();
+  auto to_write = std::min(size, kFirstDataSize);
+
+  blocks_.emplace_back(
+      ta_.alloc(to_write + sizeof(StrNext) + sizeof(DskStringHdr)));
+  addr_ = blocks_.back().addr;
+  size -= to_write;
+
+  while (size > 0) {
+    to_write = std::min(size, kOtherDataSize);
+    blocks_.emplace_back(ta_.alloc(to_write + sizeof(StrNext)));
+    size -= to_write;
   }
 }
 
 Writes StringW::getWrites() const {
+  Expects(blocks_.size() >= 1);
+
   Writes ret;
-  ret.push_back({ Addr(addr_.value + sizeof(DskBlockHdr)),
-                  gsl::as_bytes(Span<const uint64_t>(&hdr_, ssizeof(hdr_))) });
+  ret.reserve(blocks_.size() * 2 + 1);
+
+  // Header with string size
+  ret.push_back(
+      { Addr(addr_.value + sizeof(StrNext)), DskStringHdr(str_.size()).data_ });
+  // Reference to next block if multi block string
+  ret.push_back({ addr_, StrNext(blocks_.size() >= 2 ? blocks_[1].addr
+                                                     : Addr(0)).data() });
+
   auto span = gsl::as_bytes(Span<const char>(str_));
-  auto hdr_size = sizeof(DskBlockHdr) + sizeof(DskStringHdr);
-  for (auto& blk : blocks_) {
-    auto sz = std::min(blk.size - hdr_size, static_cast<size_t>(span.size()));
-    ret.push_back({ Addr(blk.addr.value + hdr_size), { span.subspan(0, sz) } });
-    span = span.subspan(sz);
-    hdr_size = sizeof(DskBlockHdr);
+  auto block_it = blocks_.begin();
+
+  // Write first block
+  auto to_write = std::min(static_cast<size_t>(span.size()), kFirstDataSize);
+  Expects(to_write < block_it->size);
+  ret.push_back(
+      { Addr(block_it->addr.value + sizeof(StrNext) + sizeof(DskStringHdr)),
+        span.subspan(0, to_write) });
+  span = span.subspan(to_write);
+
+  // Write all the other blocks
+  while (span.size() > 0) {
+    block_it++;
+    Expects(block_it != blocks_.end());
+
+    ret.push_back({ block_it->addr, StrNext(std::next(block_it) != blocks_.end()
+                                                ? std::next(block_it)->addr
+                                                : Addr(0)).data() });
+    to_write = std::min(static_cast<size_t>(span.size()), kOtherDataSize);
+    Expects(to_write < block_it->size);
+    ret.push_back({ Addr(block_it->addr.value + sizeof(StrNext)),
+                    span.subspan(0, to_write) });
+    span = span.subspan(to_write);
   }
+  Ensures(span.size() == 0);
+
   return ret;
 }
 
-void StringW::destroy() { ta_.free(addr_); }
+void StringW::destroy() {
+  if (!blocks_.empty()) {
+    // String was just created and is not yet on disk.
+
+    for (const auto& b : blocks_) {
+      ta_.free(b.addr, b.size);
+    }
+    blocks_.clear();
+    addr_ = Addr(0);
+    return;
+  }
+  Expects(!addr_.isNull());
+
+  auto ref = ta_.loadBlock<ssizeof<StrNext>() + ssizeof<DskStringHdr>()>(addr_);
+  auto next = getFromSpan<StrNext>(*ref).next();
+  auto size =
+      getFromSpan<DskStringHdr>(ref->subspan(ssizeof<StrNext>())).size();
+  ref.free();
+
+  auto size_here = std::min(size, kFirstDataSize);
+  ta_.free(addr_, size_here + sizeof(DskStringHdr) + sizeof(StrNext));
+  size -= size_here;
+
+  while (!next.isNull()) {
+    if (size <= 0) throw ConsistencyError();
+
+    auto block = ta_.loadBlock<ssizeof<StrNext>()>(next);
+    auto new_next = getFromSpan<StrNext>(*block).next();
+
+    size_here = std::min(size, kOtherDataSize);
+    ta_.free(next, size_here + sizeof(StrNext));
+
+    size -= size_here;
+  }
+  if (size != 0) throw ConsistencyError();
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // StringR
@@ -92,38 +147,40 @@ void StringW::destroy() { ta_.free(addr_); }
 StringR::StringR(Database& db, Addr addr) : ValueR(db, addr) {}
 
 model::PValue StringR::getValue() {
-  auto addr = addr_;
-  auto page = db_.loadPage(addr.pageNr());
-  DskBlockHdr hdr =
-      gsl::as_span<DskBlockHdr>(page->subspan(addr.pageOffset()))[0];
-  auto span = page->subspan(addr.pageOffset(), toBlockSize(hdr.type()));
-  auto next = hdr.next();
+  auto page = db_.loadPage(addr_.pageNr());
+  auto span = page->subspan(addr_.pageOffset());
 
-  auto size = gsl::as_span<DskStringHdr>(span.subspan(
-      sizeof(DskBlockHdr), sizeof(DskStringHdr)))[0].size();
+  auto next = getFromSpan<StrNext>(span).next();
+  span = span.subspan(ssizeof<StrNext>());
+  auto size = getFromSpan<DskStringHdr>(span).size();
+  span = span.subspan(ssizeof<DskStringHdr>());
+
   std::string str;
   str.reserve(size);
 
-  span = span.subspan(sizeof(DskBlockHdr) + sizeof(DskStringHdr));
-  while (size > 0) {
-    auto sz = std::min(static_cast<size_t>(span.size()), size);
-    str.append(gsl::as_span<const char>(span).data(), sz);
-    size -= sz;
-    if (!next.isNull()) {
-      if (addr.pageNr() != next.pageNr()) {
-        page = db_.loadPage(next.pageNr());
-      }
-      addr = next;
+  auto size_here = std::min(size, kFirstDataSize);
+  auto char_span = gsl::as_span<const char>(span.subspan(0, size_here));
+  str.append(char_span.begin(), char_span.end());
+  page.free();
+  size -= size_here;
 
-      hdr = gsl::as_span<DskBlockHdr>(page->subspan(addr.pageOffset()))[0];
-      span = page->subspan(addr.pageOffset() + sizeof(DskBlockHdr),
-                           toBlockSize(hdr.type()) - sizeof(DskBlockHdr));
-      next = hdr.next();
-    } else {
-      if (size != 0)
-        throw ConsistencyError("String longer than allocated space");
-    }
+  while (!next.isNull()) {
+    if (size <= 0) throw ConsistencyError();
+
+    page = db_.loadPage(next.pageNr());
+    span = page->subspan(next.pageOffset());
+
+    auto new_next = getFromSpan<StrNext>(span).next();
+    span = span.subspan(ssizeof<StrNext>());
+
+    size_here = std::min(size, kOtherDataSize);
+    char_span = gsl::as_span<const char>(span.subspan(0, size_here));
+    str.append(char_span.begin(), char_span.end());
+    size -= size_here;
+
+    next = new_next;
   }
+  if (size != 0) throw ConsistencyError();
 
   return std::make_unique<model::Scalar>(std::move(str));
 }

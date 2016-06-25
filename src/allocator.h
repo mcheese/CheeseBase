@@ -3,6 +3,7 @@
 #pragma once
 
 #include "block_alloc.h"
+#include <boost/container/flat_map.hpp>
 
 namespace cheesebase {
 
@@ -15,15 +16,12 @@ public:
   MOVE_ONLY(AllocTransaction)
   ~AllocTransaction();
 
-  // Allocates one block of at least size bytes. The first 8 byte of the block
-  // are contains the header, DO NOT CHANGE.
+  // Allocates one block of at least size bytes.
   Block alloc(size_t size);
 
-  // Append one block of at least size bytes to the provided one.
-  Block allocExtension(Addr block, size_t size);
-
-  // Free block and every block that it links to.
-  void free(Addr block);
+  // Free block.
+  void free(Addr addr, size_t size);
+  void free(Block block);
 
   // Get writes of all done changes to pass to the storage.
   std::vector<Write> commit();
@@ -33,13 +31,14 @@ public:
   void end();
 
 private:
-  AllocTransaction(gsl::not_null<Allocator*> alloc, ExLock<Mutex> lock);
-  std::pair<Block, AllocWrites> allocBlock(size_t size);
-  AllocWrites freeBlock(Addr block);
+  AllocTransaction(Allocator& alloc, ExLock<Mutex> lock);
+
+  std::pair<Block, std::vector<AllocWrite>> allocBlock(size_t size);
+  std::vector<AllocWrite> freeBlock(Addr addr, size_t size);
 
   Allocator* alloc_;
   ExLock<Mutex> lock_;
-  std::map<Addr, uint64_t> writes_;
+  boost::container::flat_map<Addr, uint64_t> writes_;
 };
 
 class Allocator {

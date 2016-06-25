@@ -92,9 +92,10 @@ Writes KeyTransaction::commit() {
                 gsl::as_bytes<const DskKeyCacheSize>({ s_terminator }) });
         }
 
-        block = alloc_->allocExtension(block.addr,
-                                       k_page_size - sizeof(DskBlockHdr));
-        off = sizeof(DskBlockHdr);
+        auto new_block = alloc_->alloc(k_page_size);
+        writes.push_back({ block.addr, KeyNext(new_block.addr).data() });
+        block = new_block;
+        off = sizeof(KeyNext);
       }
       Ensures(block.size >= off + sizeof(DskKeyCacheSize) + len);
 
@@ -112,6 +113,8 @@ Writes KeyTransaction::commit() {
         { Addr(block.addr.value + off),
           gsl::as_bytes<const DskKeyCacheSize>({ s_terminator }) });
   }
+
+  writes.push_back({ block.addr, KeyNext(Addr(0)).data() });
 
   cache_->cur_block_ = block;
   cache_->offset_ = off;
@@ -134,14 +137,11 @@ KeyCache::KeyCache(Block first_block, Storage& store)
   // go through all linked blocks adding every string
   auto next = first_block.addr;
   while (!next.isNull()) {
-    cur_block_.addr = next;
     auto page = store_.loadPage(cur_block_.addr.pageNr());
     auto block = page->subspan(cur_block_.addr.pageOffset());
-    auto hdr = gsl::as_span<DskBlockHdr>(block)[0];
-    cur_block_.size = toBlockSize(hdr.type());
+    next = getFromSpan<KeyNext>(block).next();
     block = block.subspan(0, cur_block_.size);
-    next = hdr.next();
-    offset_ = sizeof(DskBlockHdr);
+    offset_ = sizeof(KeyNext);
 
     while (offset_ + sizeof(DskKeyCacheSize) <= cur_block_.size) {
       auto size = gsl::as_span<DskKeyCacheSize>(
@@ -152,6 +152,11 @@ KeyCache::KeyCache(Block first_block, Storage& store)
       std::string str{ str_span.begin(), str_span.end() };
       offset_ += size;
       cache_[hashString(str)].emplace_back(std::move(str));
+    }
+
+    if (!next.isNull()) {
+      cur_block_.addr = next;
+      cur_block_.size = k_page_size;
     }
   }
 }
