@@ -429,6 +429,8 @@ void InternalW::balance() {
 
   auto first_key = entries_.begin()->entry.key.key();
   auto& sibl = static_cast<InternalW&>(parent_->getSibling(first_key));
+  sibl.entries_.init();
+  sibl.parent_ = parent_;
   auto sibl_key = sibl.entries_.begin()->entry.key.key();
 
   if (sibl.entries_.size() <= kMinInternalEntries) {
