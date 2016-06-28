@@ -1,8 +1,8 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
 #pragma once
 
-#include "../model.h"
 #include "../exceptions.h"
+#include "../model.h"
 
 namespace cheesebase {
 namespace disk {

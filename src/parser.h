@@ -3,9 +3,9 @@
 #pragma once
 
 #include "common.h"
+#include "exceptions.h"
 #include "model.h"
 #include <boost/locale/encoding_utf.hpp>
-#include "exceptions.h"
 
 namespace cheesebase {
 

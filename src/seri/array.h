@@ -1,10 +1,10 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
 #pragma once
 
-#include "value.h"
-#include "btree/btree.h"
-#include "../model.h"
 #include "../exceptions.h"
+#include "../model.h"
+#include "btree/btree.h"
+#include "value.h"
 
 namespace cheesebase {
 namespace disk {

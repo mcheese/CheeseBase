@@ -1,11 +1,11 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
 #include "btree.h"
 
+#include "../array.h"
+#include "../object.h"
 #include "common.h"
 #include "leaf.h"
 #include "read.h"
-#include "../object.h"
-#include "../array.h"
 
 namespace cheesebase {
 namespace disk {

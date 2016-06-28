@@ -9,11 +9,11 @@
 #include "sync.h"
 #include <vector>
 
-#include <unordered_map>
 #include <boost/interprocess/file_mapping.hpp>
 #include <boost/interprocess/mapped_region.hpp>
 #include <fstream>
 #include <list>
+#include <unordered_map>
 
 namespace cheesebase {
 

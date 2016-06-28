@@ -15,9 +15,9 @@
 #include "common.h"
 #include "macros.h"
 
-#include <map>
-#include <boost/variant.hpp>
 #include <boost/optional.hpp>
+#include <boost/variant.hpp>
+#include <map>
 #include <memory>
 #include <string>
 
@@ -124,8 +124,7 @@ class Scalar final : public Value {
 public:
   using value_type = boost::variant<String, Number, Bool, Null>;
   template <typename T>
-  Scalar(T a)
-      : data_{ a } {}
+  Scalar(T a) : data_{ a } {}
 
   Scalar(const char* s) : data_{ std::string(s) } {}
 

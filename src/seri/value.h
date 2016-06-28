@@ -1,8 +1,8 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
 #pragma once
 
-#include "../common.h"
 #include "../block_locks.h"
+#include "../common.h"
 #include "../core.h"
 
 namespace cheesebase {

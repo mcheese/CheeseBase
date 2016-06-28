@@ -3,10 +3,10 @@
 #include "cheesebase.h"
 
 #include "core.h"
-#include "seri/object.h"
-#include "seri/array.h"
-#include "parser.h"
 #include "exceptions.h"
+#include "parser.h"
+#include "seri/array.h"
+#include "seri/object.h"
 #include <sstream>
 
 namespace cheesebase {

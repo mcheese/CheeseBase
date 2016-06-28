@@ -5,8 +5,8 @@
 
 #pragma once
 
-#include "common.h"
 #include "cache.h"
+#include "common.h"
 
 #include <string>
 

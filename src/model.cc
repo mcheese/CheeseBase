@@ -2,8 +2,8 @@
 
 #include "model.h"
 #include "exceptions.h"
-#include <sstream>
 #include <iomanip>
+#include <sstream>
 
 namespace cheesebase {
 namespace model {
@@ -95,8 +95,8 @@ namespace {
 
 std::string escapeJson(const std::string& s) {
   std::ostringstream o;
-  for (auto c = s.cbegin(); c != s.cend(); c++) {
-    switch (*c) {
+  for (auto c : s) {
+    switch (c) {
     case '"':
       o << "\\\"";
       break;
@@ -119,11 +119,11 @@ std::string escapeJson(const std::string& s) {
       o << "\\t";
       break;
     default:
-      if ('\x00' <= *c && *c <= '\x1f') {
+      if ('\x00' <= c && c <= '\x1f') {
         o << "\\u" << std::hex << std::setw(4) << std::setfill('0')
-          << static_cast<int>(*c);
+          << static_cast<int>(c);
       } else {
-        o << *c;
+        o << c;
       }
     }
   }

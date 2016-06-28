@@ -1,14 +1,14 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
 #include "leaf.h"
 
-#include "internal.h"
-#include "../model.h"
-#include "../value.h"
-#include "../string.h"
-#include "../object.h"
-#include "../array.h"
 #include "../../core.h"
 #include "../../model.h"
+#include "../array.h"
+#include "../model.h"
+#include "../object.h"
+#include "../string.h"
+#include "../value.h"
+#include "internal.h"
 #include <algorithm>
 
 namespace cheesebase {

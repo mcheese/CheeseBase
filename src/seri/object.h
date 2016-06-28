@@ -2,11 +2,11 @@
 
 #pragma once
 
-#include "value.h"
-#include "btree/btree.h"
+#include "../core.h"
 #include "../exceptions.h"
 #include "../model.h"
-#include "../core.h"
+#include "btree/btree.h"
+#include "value.h"
 
 namespace cheesebase {
 namespace disk {
