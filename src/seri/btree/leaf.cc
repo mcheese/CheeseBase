@@ -20,10 +20,10 @@ namespace btree {
 
 AbsLeafW::AbsLeafW(AllocateNew, AbsLeafW&& o, Addr next)
     : NodeW(o.ta_.alloc(kBlockSize).addr)
+    , linked_(std::move(o.linked_))
     , ta_{ o.ta_ }
     , node_{ std::move(o.node_) }
-    , size_{ o.size_ }
-    , linked_(std::move(o.linked_)) {
+    , size_{ o.size_ } {
   node_->hdr.fromAddr(next);
 }
 

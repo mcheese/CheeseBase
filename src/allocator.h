@@ -52,7 +52,6 @@ public:
 private:
   void clearCache();
 
-  Storage& store_;
   Mutex mutex_;
   PageAllocator pg_alloc_;
   T1Allocator t1_alloc_;
