@@ -2,7 +2,6 @@
 #include "internal.h"
 
 #include "../../core.h"
-#include "../../model.h"
 #include "../array.h"
 #include "../model.h"
 #include "../object.h"

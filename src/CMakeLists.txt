@@ -6,11 +6,12 @@ set(SRC
   allocator.cc
   block_alloc.cc
   block_locks.cc
-  model.cc
   keycache.cc
   murmurhash3.cc
   core.cc
   cheesebase.cc
+  parser.cc
+  model/model.cc
   seri/string.cc
   seri/btree/btree.cc
   seri/btree/common.cc

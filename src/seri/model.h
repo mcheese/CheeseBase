@@ -1,8 +1,9 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
 #pragma once
 
+#include "../common.h"
 #include "../exceptions.h"
-#include "../model.h"
+#include "../model/model.h"
 
 namespace cheesebase {
 namespace disk {
@@ -16,34 +17,40 @@ enum ValueType : uint8_t {
   string = 'S',
   boolean_true = 'T',
   boolean_false = 'F',
-  null = '0'
+  null = '0',
+  missing = 'M'
 };
 
 inline ValueType valueType(const model::Value& val) {
-  auto t = val.type();
-  switch (t) {
-  case model::Type::Object:
-    return ValueType::object;
-  case model::Type::Array:
-    return ValueType::array;
-  case model::Type::Number:
-    return ValueType::number;
-  case model::Type::Null:
-    return ValueType::null;
-  case model::Type::Bool:
-    return (dynamic_cast<const model::Scalar&>(val).getBool()
-                ? ValueType::boolean_true
-                : ValueType::boolean_false);
-  case model::Type::String:
-    auto len = dynamic_cast<const model::Scalar&>(val).getString().size();
-    if (len > kShortStringMaxLen) {
-      return ValueType::string;
-    } else {
-      return ValueType(gsl::narrow_cast<uint8_t>(0b10000000 + len));
+  struct Visitor {
+    ValueType operator()(const model::STuple&) const {
+      return ValueType::object;
     }
-  }
+    ValueType operator()(const model::SCollection&) const {
+      return ValueType::array;
+    }
+    ValueType operator()(const model::Number&) const {
+      return ValueType::number;
+    }
+    ValueType operator()(const model::String& s) const {
+      if (s.size() > kShortStringMaxLen) {
+        return ValueType::string;
+      } else {
+        return ValueType(gsl::narrow_cast<uint8_t>(0b10000000 + s.size()));
+      }
+    }
+    ValueType operator()(const model::Bool& b) const {
+      return b ? ValueType::boolean_true : ValueType::boolean_false;
+    }
+    ValueType operator()(const model::Null&) const {
+      return ValueType::null;
+    }
+    ValueType operator()(const model::Missing&) const {
+      return ValueType::missing;
+    }
+  };
 
-  throw ConsistencyError("Unknown type");
+  return boost::apply_visitor(Visitor{}, val);
 }
 
 inline size_t nrExtraWords(uint8_t t) {
@@ -62,6 +69,7 @@ inline size_t nrExtraWords(uint8_t t) {
   case ValueType::null:
     return 0;
   default:
+    // Missing should be excluded earlier
     throw ConsistencyError("Unknown value type");
   }
 }
@@ -70,14 +78,14 @@ inline size_t nrExtraWords(const model::Value& val) {
   return nrExtraWords(valueType(val));
 }
 
-inline std::vector<uint64_t> extraWords(const model::Scalar& val) {
+inline std::vector<uint64_t> extraWords(const model::Value& val) {
   std::vector<uint64_t> ret;
 
-  if (val.type() == model::Type::Number) {
-    double n = val.getNumber();
+  if (val.get().type() == typeid(model::Number)) {
+    double n = boost::get<model::Number>(val);
     ret.push_back(*(reinterpret_cast<uint64_t*>(&n)));
-  } else if (val.type() == model::Type::String) {
-    auto& str = val.getString();
+  } else if (val.get().type() == typeid(model::String)) {
+    auto& str = boost::get<model::String>(val);
     if (str.size() > kShortStringMaxLen) {
       ret.push_back(0);
     } else {

@@ -4,16 +4,13 @@
 #include "../block_locks.h"
 #include "../common.h"
 #include "../core.h"
+#include "../model/model.h"
 
 namespace cheesebase {
 
 // Forward declarations
 class Transaction;
 class Database;
-
-namespace model {
-class Value;
-}
 
 namespace disk {
 
@@ -45,7 +42,7 @@ public:
 
   Addr addr() const { return addr_; }
 
-  virtual std::unique_ptr<model::Value> getValue() = 0;
+  virtual model::Value getValue() = 0;
 
 protected:
   ValueR(Database& db, Addr addr)

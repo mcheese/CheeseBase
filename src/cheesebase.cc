@@ -4,7 +4,7 @@
 
 #include "core.h"
 #include "exceptions.h"
-#include "parser.h"
+#include "model/parser.h"
 #include "seri/array.h"
 #include "seri/object.h"
 #include <sstream>
@@ -195,7 +195,7 @@ uint64_t Query::append(const model::Value& val) {
   return cb_->append(val, location_);
 }
 
-std::unique_ptr<model::Value> Query::get() const { return cb_->get(location_); }
+model::Value Query::get() const { return cb_->get(location_); }
 
 void Query::remove() { cb_->remove(location_); }
 
@@ -264,28 +264,22 @@ uint64_t CheeseBase::append(const model::Value& val, const Location& loc) {
   return ret.value;
 }
 
-std::unique_ptr<model::Value> CheeseBase::get(const Location& location) const {
-  std::unique_ptr<model::Value> ret;
-
+model::Value CheeseBase::get(const Location& location) const {
   if (location.empty()) {
-    ret = disk::ObjectR(*db_, kRoot).getValue();
-
-  } else {
-    auto coll = openReadonly(*db_, location.begin(), location.end() - 1);
-
-    if (location.back().which() == 0) {
-      auto obj = dynamic_cast<disk::ObjectR*>(coll.get());
-      if (obj == nullptr) throw NotFoundError();
-      ret = obj->getChildValue(boost::get<std::string>(location.back()));
-    } else {
-      auto arr = dynamic_cast<disk::ArrayR*>(coll.get());
-      if (arr == nullptr) throw NotFoundError();
-      ret = arr->getChildValue(boost::get<uint64_t>(location.back()));
-    }
+    return disk::ObjectR(*db_, kRoot).getValue();
   }
 
-  if (!ret) throw NotFoundError();
-  return ret;
+  auto coll = openReadonly(*db_, location.begin(), location.end() - 1);
+
+  if (location.back().which() == 0) {
+    auto obj = dynamic_cast<disk::ObjectR*>(coll.get());
+    if (obj == nullptr) throw NotFoundError();
+    return obj->getChildValue(boost::get<std::string>(location.back()));
+  } else {
+    auto arr = dynamic_cast<disk::ArrayR*>(coll.get());
+    if (arr == nullptr) throw NotFoundError();
+    return arr->getChildValue(boost::get<uint64_t>(location.back()));
+  }
 }
 
 void CheeseBase::remove(const Location& location) {

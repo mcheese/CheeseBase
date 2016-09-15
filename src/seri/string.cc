@@ -149,7 +149,7 @@ void StringW::destroy() {
 
 StringR::StringR(Database& db, Addr addr) : ValueR(db, addr) {}
 
-model::PValue StringR::getValue() {
+model::Value StringR::getValue() {
   auto page = db_.loadPage(addr_.pageNr());
   auto span = page->subspan(addr_.pageOffset());
 
@@ -185,7 +185,7 @@ model::PValue StringR::getValue() {
   }
   if (size != 0) throw ConsistencyError();
 
-  return std::make_unique<model::Scalar>(std::move(str));
+  return std::move(str); // constructs Value
 }
 
 } // namespace disk

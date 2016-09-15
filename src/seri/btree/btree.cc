@@ -46,19 +46,19 @@ Writes BtreeWritable::getWrites() const { return root_->getWrites(); }
 
 BtreeReadOnly::BtreeReadOnly(Database& db, Addr root) : db_(db), root_(root) {}
 
-model::Object BtreeReadOnly::getObject() {
-  model::Object obj;
+model::Tuple BtreeReadOnly::getObject() {
+  model::Tuple obj;
   NodeR::getAll(db_, root_, obj);
   return obj;
 }
 
-model::Array BtreeReadOnly::getArray() {
-  model::Array obj;
-  NodeR::getAll(db_, root_, obj);
-  return obj;
+ArrayMap BtreeReadOnly::getArray() {
+  ArrayMap arr;
+  NodeR::getAll(db_, root_, arr);
+  return arr;
 }
 
-std::unique_ptr<model::Value> BtreeReadOnly::getChildValue(Key key) {
+model::Value BtreeReadOnly::getChildValue(Key key) {
   return NodeR::getChildValue(db_, root_, key);
 }
 

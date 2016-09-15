@@ -2,7 +2,6 @@
 #include "leaf.h"
 
 #include "../../core.h"
-#include "../../model.h"
 #include "../array.h"
 #include "../model.h"
 #include "../object.h"
@@ -111,6 +110,7 @@ Key AbsLeafW::append(const model::Value& val, AbsInternalW* parent) {
     it += 1 + e.extraWords();
   }
 
+
   auto ins = insert(key, val, Overwrite::Insert, parent);
   Ensures(ins == true);
   return key;
@@ -119,9 +119,13 @@ Key AbsLeafW::append(const model::Value& val, AbsInternalW* parent) {
 bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
                       AbsInternalW* parent) {
   parent_ = parent;
-  init();
 
-  int extra_words = gsl::narrow_cast<int>(nrExtraWords(val));
+  auto type = valueType(val);
+  if (type == ValueType::missing) return true;
+
+  int extra_words = gsl::narrow_cast<int>(nrExtraWords(type));
+
+  init();
 
   // find position to insert
   auto it = node_->search(key);
@@ -150,42 +154,46 @@ bool AbsLeafW::insert(Key key, const model::Value& val, Overwrite ow,
     }
 
     // put the first word
-    auto t = valueType(val);
-    *it = DskLeafEntry{ key, t }.word();
+    *it = DskLeafEntry{ key, type }.word();
 
     // put extra words
     // recurse into inserting remotely stored elements if needed
     it++;
-    if (t == ValueType::object) {
-      auto& obj = dynamic_cast<const model::Object&>(val);
+    if (type == ValueType::object) {
+      auto& obj = boost::get<model::STuple>(val);
       auto el = std::make_unique<ObjectW>(ta_);
-      for (auto& c : obj) {
-        el->insert(ta_.key(c.first), *c.second, Overwrite::Insert);
+      for (auto& c : *obj) {
+        el->insert(ta_.key(c.first), c.second, Overwrite::Insert);
       }
       *it = el->addr().value;
       auto emp = linked_.emplace(key, std::move(el));
       Expects(emp.second);
 
-    } else if (t == ValueType::array) {
-      auto& arr = dynamic_cast<const model::Array&>(val);
+    } else if (type == ValueType::array) {
+      auto& arr = boost::get<model::SCollection>(val);
       auto el = std::make_unique<ArrayW>(ta_);
-      for (auto& c : arr) {
-        el->insert(Key(c.first), *c.second, Overwrite::Insert);
+
+      Key idx{ 0 };
+      for (auto& c : *arr) {
+        if (c.get().type() != typeid(model::Missing)) {
+          el->insert(idx, c, Overwrite::Insert);
+        }
+        idx.value++;
       }
+
       *it = el->addr().value;
       auto emp = linked_.emplace(key, std::move(el));
       Expects(emp.second);
 
-    } else if (t == ValueType::string) {
-      auto& str = dynamic_cast<const model::Scalar&>(val);
-      auto el =
-          std::make_unique<StringW>(ta_, boost::get<model::String>(str.data()));
+    } else if (type == ValueType::string) {
+      auto& str = boost::get<model::String>(val);
+      auto el = std::make_unique<StringW>(ta_, str);
       *it = el->addr().value;
       auto emp = linked_.emplace(key, std::move(el));
       Expects(emp.second);
 
     } else {
-      auto extras = extraWords(dynamic_cast<const model::Scalar&>(val));
+      auto extras = extraWords(val);
       std::copy(extras.begin(), extras.end(), it);
     }
 

@@ -2,6 +2,7 @@
 #include "seri/object.h"
 #include "seri/array.h"
 #include "parser.h"
+#include "model/json_print.h"
 #include <boost/filesystem.hpp>
 
 using namespace cheesebase;
@@ -17,13 +18,13 @@ TEST_CASE("array") {
       auto ta = db.startTransaction();
       disk::ObjectW tree(ta);
       root = tree.addr();
-      tree.insert(ta.key("arr"), *val, disk::Overwrite::Upsert);
+      tree.insert(ta.key("arr"), val, disk::Overwrite::Upsert);
       ta.commit(tree.getWrites());
     }
     {
       disk::ObjectR tree(db, root);
       auto read = tree.getChildValue("arr");
-      REQUIRE(*val == *read);
+      REQUIRE(val == read);
     }
   }
 
@@ -38,9 +39,9 @@ TEST_CASE("array") {
     {
       auto ta = db.startTransaction();
       disk::ArrayW arr(ta, root);
-      auto i1 = arr.append(model::Scalar(std::string("a")));
-      auto i2 = arr.append(model::Scalar(std::string("b")));
-      auto i3 = arr.append(model::Scalar(std::string("c")));
+      auto i1 = arr.append(model::Value(std::string("a")));
+      auto i2 = arr.append(model::Value(std::string("b")));
+      auto i3 = arr.append(model::Value(std::string("c")));
       REQUIRE(i1 == Key(0));
       REQUIRE(i2 == Key(1));
       REQUIRE(i3 == Key(2));
@@ -50,21 +51,21 @@ TEST_CASE("array") {
       disk::ArrayR arr(db, root);
       auto read = arr.getValue();
       auto val = parseJson(R"( [ "a", "b", "c" ] )");
-      REQUIRE(*val == *read);
+      REQUIRE(val == read);
     }
     {
       auto ta = db.startTransaction();
       disk::ArrayW arr(ta, root);
       arr.remove(Key(1));
-      arr.insert(Key(4), model::Scalar(true), disk::Overwrite::Insert);
-      arr.append(model::Scalar(false));
+      arr.insert(Key(4), model::Value(true), disk::Overwrite::Insert);
+      arr.append(model::Value(false));
       ta.commit(arr.getWrites());
     }
     {
       disk::ArrayR arr(db, root);
       auto read = arr.getValue();
-      auto val = parseJson(R"( [ "a", null, "c", null, true, false ] )");
-      REQUIRE(*val == *read);
+      auto val = parseJson(R"( [ "a", missing, "c", missing, true, false ] )");
+      REQUIRE(val == read);
     }
   }
 }

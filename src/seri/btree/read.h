@@ -2,22 +2,23 @@
 #pragma once
 
 #include "common.h"
+#include "../../model/model.h"
 
 namespace cheesebase {
 class Database;
 class Transaction;
-namespace model {
-class Value;
-}
+
 namespace disk {
+
 class ValueW;
 class ValueR;
+
 namespace btree {
 namespace NodeR {
 
 template <class C>
 void getAll(Database& db, Addr addr, C& obj);
-std::unique_ptr<model::Value> getChildValue(Database& db, Addr addr, Key key);
+model::Value getChildValue(Database& db, Addr addr, Key key);
 std::unique_ptr<ValueW> getChildCollectionW(Transaction& ta, Addr addr, Key);
 std::unique_ptr<ValueR> getChildCollectionR(Database& db, Addr addr, Key key);
 

@@ -22,7 +22,7 @@ std::string stringGen(size_t s) {
 }
 
 void insertTest(Database& db, const std::string& str) {
-  auto input = model::Scalar(str);
+  auto input = model::Value(str);
   Addr root;
   {
     auto ta = db.startTransaction();
@@ -33,7 +33,7 @@ void insertTest(Database& db, const std::string& str) {
   }
   {
     auto read = disk::ObjectR(db, root).getChildValue("X");
-    REQUIRE(*read == input);
+    REQUIRE(read == input);
   }
 }
 
@@ -57,8 +57,8 @@ TEST_CASE("update string") {
   boost::filesystem::remove("test.db");
   Database db("test.db");
 
-  auto longinput = model::Scalar(stringGen(100));
-  auto shortinput = model::Scalar(stringGen(10));
+  auto longinput = model::Value(stringGen(100));
+  auto shortinput = model::Value(stringGen(10));
   Addr root;
   {
     auto ta = db.startTransaction();
@@ -81,9 +81,9 @@ TEST_CASE("update string") {
   }
   {
     disk::ObjectR tree{ db, root };
-    REQUIRE(*tree.getChildValue("LL") == longinput);
-    REQUIRE(*tree.getChildValue("LS") == shortinput);
-    REQUIRE(*tree.getChildValue("SL") == longinput);
-    REQUIRE(*tree.getChildValue("SS") == shortinput);
+    REQUIRE(tree.getChildValue("LL") == longinput);
+    REQUIRE(tree.getChildValue("LS") == shortinput);
+    REQUIRE(tree.getChildValue("SL") == longinput);
+    REQUIRE(tree.getChildValue("SS") == shortinput);
   }
 }
