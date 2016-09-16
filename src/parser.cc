@@ -1,11 +1,11 @@
 #include "parser.h"
-//#include "query_parser.h"
+#include "query/parser.h"
 #include "model/parser.h"
 #include "exceptions.h"
 
 namespace cheesebase {
 
-/*
+
 query::Expr parseQuery(const std::string& q) {
   auto iter = std::begin(q);
   auto end = std::end(q);
@@ -16,9 +16,10 @@ query::Expr parseQuery(const std::string& q) {
 
   if (!success) throw ParserError { "Parse unsuccessful" };
   if (iter != end) throw ParserError { "Did not consume all input" };
+
   return query;
 }
-*/
+
 
 model::Value parseValue(const std::string& q) {
   auto iter = std::begin(q);

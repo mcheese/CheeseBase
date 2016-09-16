@@ -12,6 +12,10 @@ set(SRC
   cheesebase.cc
   parser.cc
   model/model.cc
+  query/eval.cc
+  query/eval/expr.cc
+  query/eval/sfw.cc
+  query/eval/from.cc
   seri/string.cc
   seri/btree/btree.cc
   seri/btree/common.cc
