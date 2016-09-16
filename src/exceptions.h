@@ -34,6 +34,7 @@ DEF_EXCEPTION(BlockLockError);
 DEF_EXCEPTION(ModelError);
 DEF_EXCEPTION(KeyCacheError);
 DEF_EXCEPTION(ParserError);
+DEF_EXCEPTION(QueryError);
 
 #undef DEF_EXCEPTION
 

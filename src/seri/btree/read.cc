@@ -1,11 +1,11 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
 #include "read.h"
 
-#include "leaf.h"
-#include "internal.h"
-#include "../object.h"
 #include "../array.h"
+#include "../object.h"
 #include "../string.h"
+#include "internal.h"
+#include "leaf.h"
 
 namespace cheesebase {
 namespace disk {
@@ -14,9 +14,9 @@ namespace NodeR {
 namespace {
 
 template <typename ConstIt>
-std::pair<Key, model::PValue> readValue(Database& db, ConstIt& it) {
+std::pair<Key, model::Value> readValue(Database& db, ConstIt& it) {
   auto entry = DskLeafEntry(*it++);
-  std::pair<Key, model::PValue> ret;
+  std::pair<Key, model::Value> ret;
   ret.first = entry.key.key();
 
   if (entry.value.type & 0b10000000) {
@@ -30,7 +30,7 @@ std::pair<Key, model::PValue> readValue(Database& db, ConstIt& it) {
       str.push_back(static_cast<char>(word));
       word >>= 8;
     }
-    ret.second = std::make_unique<model::Scalar>(std::move(str));
+    ret.second = std::move(str);
   } else {
     switch (entry.value.type) {
     case ValueType::object:
@@ -45,19 +45,19 @@ std::pair<Key, model::PValue> readValue(Database& db, ConstIt& it) {
         model::Number number;
       } num;
       num.word = *it++;
-      ret.second = std::make_unique<model::Scalar>(num.number);
+      ret.second = num.number;
       break;
     case ValueType::string:
       ret.second = StringR(db, Addr(*it++)).getValue();
       break;
     case ValueType::boolean_true:
-      ret.second = std::make_unique<model::Scalar>(true);
+      ret.second = model::Bool{ true };
       break;
     case ValueType::boolean_false:
-      ret.second = std::make_unique<model::Scalar>(false);
+      ret.second = model::Bool{ false };
       break;
     case ValueType::null:
-      ret.second = std::make_unique<model::Scalar>(model::Null());
+      ret.second = model::Null{};
       break;
     default:
       throw ConsistencyError("Unknown value type");
@@ -71,28 +71,27 @@ const DskLeafNode& leafView(ReadRef<kBlockSize>& block) {
   return getFromSpan<DskLeafNode>(*block);
 }
 
-Addr getAllInLeaf(Database& db, ReadRef<kBlockSize>& block,
-                  model::Object& obj) {
+Addr getAllInLeaf(Database& db, ReadRef<kBlockSize>& block, model::Tuple& obj) {
   auto node = leafView(block);
   auto it = node.begin();
   auto next = node.hdr.next();
 
   while (it != node.end() && *it != 0) {
     auto pair = readValue(db, it);
-    obj.append(db.resolveKey(pair.first), std::move(pair.second));
+    obj.emplace(db.resolveKey(pair.first), std::move(pair.second));
   }
 
   return next;
 }
 
-Addr getAllInLeaf(Database& db, ReadRef<kBlockSize>& block, model::Array& arr) {
+Addr getAllInLeaf(Database& db, ReadRef<kBlockSize>& block, ArrayMap& arr) {
   auto node = leafView(block);
   auto it = node.begin();
   auto next = node.hdr.next();
 
   while (it < node.end() && *it != 0) {
     auto pair = readValue(db, it);
-    arr.append(pair.first.value, std::move(pair.second));
+    arr.emplace(pair.first.value, std::move(pair.second));
   }
 
   return next;
@@ -158,19 +157,18 @@ void getAll(Database& db, Addr addr, C& obj) {
 }
 
 // explicit instantiation
-template void getAll<model::Object>(Database& db, Addr addr,
-                                    model::Object& obj);
-template void getAll<model::Array>(Database& db, Addr addr, model::Array& obj);
+template void getAll<model::Tuple>(Database& db, Addr addr, model::Tuple& obj);
+template void getAll<ArrayMap>(Database& db, Addr addr, ArrayMap& obj);
 
-std::unique_ptr<model::Value> getChildValue(Database& db, Addr addr, Key key) {
+model::Value getChildValue(Database& db, Addr addr, Key key) {
   auto block = db.loadBlock<kBlockSize>(addr);
 
   if (isNodeLeaf(block)) {
     auto node = leafView(block);
     auto it = node.search(key);
 
-    if (it >= node.end() || *it == 0) return nullptr;
-    if (DskLeafEntry(*it).key.key() != key) return nullptr;
+    if (it >= node.end() || *it == 0) return model::Missing{};
+    if (DskLeafEntry(*it).key.key() != key) return model::Missing{};
 
     // TODO: should free block here, but readValue needs it and may recurse
     return readValue(db, it).second;

@@ -2,19 +2,14 @@
 #pragma once
 
 #include "../../common.h"
+#include "../../model/model.h"
 
 namespace cheesebase {
 
 class Transaction;
 class Database;
 
-namespace model {
-
-class Value;
-class Object;
-class Array;
-
-} // namespace model
+using ArrayMap = std::map<uint64_t, model::Value>;
 
 namespace disk {
 
@@ -55,9 +50,9 @@ class BtreeReadOnly {
 public:
   BtreeReadOnly(Database& db, Addr root);
 
-  model::Object getObject();
-  model::Array getArray();
-  std::unique_ptr<model::Value> getChildValue(Key key);
+  model::Tuple getObject();
+  ArrayMap getArray();
+  model::Value getChildValue(Key key);
   std::unique_ptr<ValueW> getChildCollectionW(Transaction&, Key key);
   std::unique_ptr<ValueR> getChildCollectionR(Key key);
   std::unique_ptr<ValueW> getChild(Key key);

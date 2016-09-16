@@ -1,9 +1,9 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
 #pragma once
 
-#include "value.h"
-#include "../model.h"
+#include "../model/model.h"
 #include "../types.h"
+#include "value.h"
 
 namespace cheesebase {
 namespace disk {
@@ -27,7 +27,7 @@ public:
   virtual ~StringR() = default;
 
   StringR(Database& db, Addr addr);
-  model::PValue getValue() override;
+  model::Value getValue() override;
 };
 
 } // namespace disk

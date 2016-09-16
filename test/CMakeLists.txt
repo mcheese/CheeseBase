@@ -10,6 +10,7 @@ add_executable(test-cheesebase
   cheesebase.cc
   keycache.cc
   parser.cc
+  query.cc
   storage.cc
 )
 

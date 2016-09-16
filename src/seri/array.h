@@ -1,10 +1,10 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
 #pragma once
 
-#include "value.h"
-#include "btree/btree.h"
-#include "../model.h"
 #include "../exceptions.h"
+#include "../model/model.h"
+#include "btree/btree.h"
+#include "value.h"
 
 namespace cheesebase {
 namespace disk {
@@ -35,27 +35,41 @@ class ArrayR : public ValueR {
 public:
   ArrayR(Database& db, Addr addr) : ValueR(db, addr), tree_{ db, addr } {}
 
-  model::PValue getValue() override {
-    return std::make_unique<model::Array>(tree_.getArray());
+  model::Value getValue() override {
+    return getArray();
   }
 
-  model::PValue getChildValue(model::Index index) {
+  model::Value getChildValue(uint64_t index) {
     if (index > Key::sMaxKey) throw IndexOutOfRangeError();
     return tree_.getChildValue(Key(index));
   }
 
-  std::unique_ptr<ValueW> getChildCollectionW(Transaction& ta,
-                                              model::Index index) {
+  std::unique_ptr<ValueW> getChildCollectionW(Transaction& ta, uint64_t index) {
     if (index > Key::sMaxKey) throw IndexOutOfRangeError();
     return tree_.getChildCollectionW(ta, Key(index));
   }
 
-  std::unique_ptr<ValueR> getChildCollectionR(model::Index index) {
+  std::unique_ptr<ValueR> getChildCollectionR(uint64_t index) {
     if (index > Key::sMaxKey) throw IndexOutOfRangeError();
     return tree_.getChildCollectionR(Key(index));
   }
 
-  model::Array getArray() { return tree_.getArray(); }
+  model::Collection getArray() { 
+    model::Collection val;
+    val.has_order_ = true;
+
+    auto arr = tree_.getArray();
+    auto last = arr.rbegin();
+    if (last != arr.rend()) {
+      val.resize(last->first + 1, model::Missing{});
+
+      for (auto& e : arr) {
+        val[e.first] = std::move(e.second);
+      }
+    }
+
+    return val;
+  }
 
 private:
   btree::BtreeReadOnly tree_;

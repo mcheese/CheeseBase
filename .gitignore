@@ -29,3 +29,5 @@
 
 # Own
 /build/*
+__pycache__/*
+.ycm_extra_conf.*

@@ -4,13 +4,13 @@
 
 #pragma once
 
-#include "common.h"
-#include "sync.h"
-#include "storage.h"
 #include "allocator.h"
-#include <unordered_map>
+#include "common.h"
+#include "storage.h"
+#include "sync.h"
 #include <boost/container/flat_map.hpp>
 #include <boost/optional.hpp>
+#include <unordered_map>
 
 namespace cheesebase {
 
@@ -80,8 +80,9 @@ private:
   ExLock<UgMutex> ex_lck_;
   boost::container::flat_map<
       StringKey::Hash,
-      boost::container::flat_map<
-          StringKey::Index, std::pair<std::string, DskKeyCacheSize>>> local_;
+      boost::container::flat_map<StringKey::Index,
+                                 std::pair<std::string, DskKeyCacheSize>>>
+      local_;
 };
 
 class KeyCache {

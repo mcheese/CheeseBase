@@ -71,8 +71,9 @@ Writes StringW::getWrites() const {
   ret.push_back(
       { Addr(addr_.value + sizeof(StrNext)), DskStringHdr(str_.size()).data_ });
   // Reference to next block if multi block string
-  ret.push_back({ addr_, StrNext(blocks_.size() >= 2 ? blocks_[1].addr
-                                                     : Addr(0)).data() });
+  ret.push_back(
+      { addr_,
+        StrNext(blocks_.size() >= 2 ? blocks_[1].addr : Addr(0)).data() });
 
   auto span = gsl::as_bytes(Span<const char>(str_));
   auto block_it = blocks_.begin();
@@ -92,7 +93,8 @@ Writes StringW::getWrites() const {
 
     ret.push_back({ block_it->addr, StrNext(std::next(block_it) != blocks_.end()
                                                 ? std::next(block_it)->addr
-                                                : Addr(0)).data() });
+                                                : Addr(0))
+                                        .data() });
     to_write = std::min(static_cast<size_t>(span.size()), kOtherDataSize);
     Expects(to_write < block_it->size);
     ret.push_back({ Addr(block_it->addr.value + sizeof(StrNext)),
@@ -147,7 +149,7 @@ void StringW::destroy() {
 
 StringR::StringR(Database& db, Addr addr) : ValueR(db, addr) {}
 
-model::PValue StringR::getValue() {
+model::Value StringR::getValue() {
   auto page = db_.loadPage(addr_.pageNr());
   auto span = page->subspan(addr_.pageOffset());
 
@@ -183,7 +185,7 @@ model::PValue StringR::getValue() {
   }
   if (size != 0) throw ConsistencyError();
 
-  return std::make_unique<model::Scalar>(std::move(str));
+  return std::move(str); // constructs Value
 }
 
 } // namespace disk

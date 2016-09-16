@@ -1,11 +1,29 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
 
 #include <cheesebase.h>
-#include <parser.h>
+#include <model/json_print.h>
+#include <model/parser.h>
+#include <boost/variant.hpp>
+#include <boost/spirit/include/support_multi_pass.hpp>
 #include <iostream>
 #include <algorithm>
 #include <cwctype>
 #include <cctype>
+
+using namespace cheesebase;
+
+template <class It>
+model::Value parseValue(It& it, It& end) {
+  auto it_m = boost::spirit::make_default_multi_pass(it);
+  auto end_m = boost::spirit::make_default_multi_pass(end);
+  model::Value val;
+  auto success =
+      x3::phrase_parse(it_m, end_m, parser::value, x3::ascii::space, val);
+
+  if (!success) throw std::runtime_error { "Parse unsuccessful" };
+
+  return val;
+}
 
 template <class It>
 uint64_t parseIndex(It& it, It& end) {
@@ -54,6 +72,8 @@ cheesebase::Query parseLocation(cheesebase::CheeseBase& cb, It& it, It& end) {
   }
 }
 
+auto json_printer = model::JsonPrinter{ std::cout };
+
 void inputLoop(cheesebase::CheeseBase& cb) {
   std::string command;
   std::string where;
@@ -72,19 +92,21 @@ void inputLoop(cheesebase::CheeseBase& cb) {
 
     try {
       if (command == "insert") {
-        parseLocation(cb, it, end).insert(*cheesebase::parseJson(&it, end));
+        parseLocation(cb, it, end).insert(parseValue(it, end));
       } else if (command == "update") {
-        parseLocation(cb, it, end).update(*cheesebase::parseJson(&it, end));
+        parseLocation(cb, it, end).update(parseValue(it, end));
       } else if (command == "upsert") {
-        parseLocation(cb, it, end).upsert(*cheesebase::parseJson(&it, end));
+        parseLocation(cb, it, end).upsert(parseValue(it, end));
       } else if (command == "getall") {
-        cb.get({})->prettyPrint(std::cout);
+        auto val = cb.get({});
+        boost::apply_visitor(json_printer, val);
       } else if (command == "get") {
-        parseLocation(cb, it, end).get()->prettyPrint(std::cout);
+        auto val = parseLocation(cb, it, end).get();
+        boost::apply_visitor(json_printer, val);
       } else if (command == "remove") {
         parseLocation(cb, it, end).remove();
       } else if (command == "append") {
-        parseLocation(cb, it, end).append(*cheesebase::parseJson(&it, end));
+        parseLocation(cb, it, end).append(parseValue(it, end));
       } else {
         std::cerr << "Unknown command";
       }

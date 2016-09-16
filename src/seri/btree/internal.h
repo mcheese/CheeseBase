@@ -1,10 +1,10 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
 #pragma once
 
+#include "../../cache.h"
+#include "../../common.h"
 #include "btree.h"
 #include "common.h"
-#include "../../common.h"
-#include "../../cache.h"
 #include <boost/container/flat_map.hpp>
 
 namespace cheesebase {

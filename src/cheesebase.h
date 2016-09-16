@@ -3,7 +3,7 @@
 // API
 
 #pragma once
-#include "model.h"
+#include "model/model.h"
 #include <memory>
 #include <string>
 
@@ -30,7 +30,7 @@ public:
   void upsert(const uint64_t, const model::Value&);
   void upsert(const model::Value&);
   uint64_t append(const model::Value&);
-  std::unique_ptr<model::Value> get() const;
+  model::Value get() const;
   void remove();
 
 private:
@@ -64,7 +64,7 @@ public:
   void upsert(uint64_t index, const model::Value&, const Location& = {});
   uint64_t append(const model::Value&, const Location&);
 
-  std::unique_ptr<model::Value> get(const Location&) const;
+  model::Value get(const Location&) const;
 
   void remove(const Location&);
 

@@ -1,14 +1,13 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
 #include "internal.h"
 
-#include "leaf.h"
-#include "../model.h"
-#include "../value.h"
-#include "../string.h"
-#include "../object.h"
-#include "../array.h"
 #include "../../core.h"
-#include "../../model.h"
+#include "../array.h"
+#include "../model.h"
+#include "../object.h"
+#include "../string.h"
+#include "../value.h"
+#include "leaf.h"
 #include <algorithm>
 
 namespace cheesebase {
@@ -429,6 +428,8 @@ void InternalW::balance() {
 
   auto first_key = entries_.begin()->entry.key.key();
   auto& sibl = static_cast<InternalW&>(parent_->getSibling(first_key));
+  sibl.entries_.init();
+  sibl.parent_ = parent_;
   auto sibl_key = sibl.entries_.begin()->entry.key.key();
 
   if (sibl.entries_.size() <= kMinInternalEntries) {

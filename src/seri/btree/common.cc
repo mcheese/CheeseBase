@@ -1,9 +1,9 @@
 // Licensed under the Apache License 2.0 (see LICENSE file).
 #include "common.h"
 
-#include "leaf.h"
-#include "internal.h"
 #include "../../core.h"
+#include "internal.h"
+#include "leaf.h"
 
 namespace cheesebase {
 namespace disk {

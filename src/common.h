@@ -4,12 +4,12 @@
 
 #pragma once
 
-#include "macros.h"
 #include "exceptions.h"
-#include <gsl.h>
+#include "macros.h"
 #include <boost/cstdint.hpp>
-#include <vector>
 #include <boost/variant.hpp>
+#include <gsl.h>
+#include <vector>
 
 namespace cheesebase {
 

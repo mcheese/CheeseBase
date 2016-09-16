@@ -2,11 +2,11 @@
 
 #pragma once
 
-#include "value.h"
-#include "btree/btree.h"
-#include "../exceptions.h"
-#include "../model.h"
 #include "../core.h"
+#include "../exceptions.h"
+#include "../model/model.h"
+#include "btree/btree.h"
+#include "value.h"
 
 namespace cheesebase {
 namespace disk {
@@ -45,13 +45,13 @@ class ObjectR : public ValueR {
 public:
   ObjectR(Database& db, Addr addr) : ValueR(db, addr), tree_{ db, addr } {}
 
-  model::PValue getValue() override {
-    return std::make_unique<model::Object>(tree_.getObject());
+  model::Value getValue() override {
+    return tree_.getObject();
   }
 
-  model::PValue getChildValue(const std::string& key) {
+  model::Value getChildValue(const std::string& key) {
     auto k = db_.getKey(key);
-    if (!k) return nullptr;
+    if (!k) return model::Missing{};
     return tree_.getChildValue(*k);
   }
 
@@ -68,7 +68,7 @@ public:
     return tree_.getChildCollectionR(*k);
   }
 
-  model::Object getObject() { return tree_.getObject(); }
+  model::Tuple getObject() { return tree_.getObject(); }
 
 private:
   btree::BtreeReadOnly tree_;

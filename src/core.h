@@ -5,9 +5,9 @@
 #include "common.h"
 
 #include "allocator.h"
+#include "block_locks.h"
 #include "keycache.h"
 #include "storage.h"
-#include "block_locks.h"
 
 #include <memory>
 #include <string>

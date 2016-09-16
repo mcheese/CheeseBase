@@ -6,6 +6,7 @@
 #include <iostream>
 #include <boost/filesystem.hpp>
 #include <parser.h>
+#include <model/json_print.h>
 
 using namespace cheesebase;
 
@@ -127,25 +128,23 @@ TEST_CASE("db insert") {
     boost::filesystem::remove("test.db");
     {
       CheeseBase cb{ "test.db" };
-      cb.insert("test", *doc);
+      cb.insert("test", doc);
       auto read = cb["test"].get();
-      REQUIRE(*read == *doc);
+      REQUIRE(read == doc);
     }
     // reopen
     {
       CheeseBase cb{ "test.db" };
-      REQUIRE(*cb["test"].get() == *doc);
-      REQUIRE(cb["test"]["web-app"]["servlet"][0]["servlet-name"]
-                  .get()
-                  ->toString() == R"("cofaxCDS")");
-      cb["test"]["web-app"]["servlet"][0]["servlet-name"].update(
-          model::Scalar("test"));
-      REQUIRE(cb["test"]["web-app"]["servlet"][0]["servlet-name"]
-                  .get()
-                  ->toString() == R"("test")");
+      REQUIRE(cb["test"].get() == doc);
+      REQUIRE(cb["test"]["web-app"]["servlet"][0]["servlet-name"].get() ==
+              "cofaxCDS");
+      cb["test"]["web-app"]["servlet"][0]["servlet-name"].update("test");
+      REQUIRE(cb["test"]["web-app"]["servlet"][0]["servlet-name"].get() ==
+              "test");
 
       cb["test"]["web-app"]["servlet"][0]["servlet-name"].remove();
-      REQUIRE_THROWS(cb["test"]["web-app"]["servlet"][0]["servlet-name"].get());
+      REQUIRE(cb["test"]["web-app"]["servlet"][0]["servlet-name"].get() ==
+              model::Missing{});
     }
   }
 }
