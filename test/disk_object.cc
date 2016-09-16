@@ -124,7 +124,7 @@ TEST_CASE("B+Tree insert") {
         }
       }
     }
-    const int times = 1000;
+    const int times = 200;
     SECTION("extend with split to many leafs") {
       for (size_t i = 0; i < times; ++i) {
         auto ta = db.startTransaction();
