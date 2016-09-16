@@ -46,7 +46,6 @@ Database::Database(const std::string& file)
     hdr.end_of_file = Addr(k_page_size);
 
     // manually create first block of KeyCache
-    DskKeyCacheSize cache_term = 0;
     store_->storeWrite(
         Writes{ { Addr(0), gsl::as_bytes<DskDatabaseHdr>({ hdr }) },
                 { Addr(sizeof(DskDatabaseHdr)), KeyNext(Addr(0)).data() },

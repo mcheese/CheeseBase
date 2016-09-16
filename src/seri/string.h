@@ -20,7 +20,6 @@ public:
 private:
   model::String str_;
   std::vector<Block> blocks_;
-  uint64_t hdr_;
 };
 
 class StringR : public ValueR {

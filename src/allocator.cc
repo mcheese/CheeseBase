@@ -6,8 +6,7 @@
 namespace cheesebase {
 
 Allocator::Allocator(const DskDatabaseHdr& h, Storage& store)
-    : store_(store)
-    , pg_alloc_(store, h.free_alloc_pg, h.end_of_file)
+    : pg_alloc_(store, h.free_alloc_pg, h.end_of_file)
     , t1_alloc_(store, h.free_alloc_t1, pg_alloc_)
     , t2_alloc_(store, h.free_alloc_t2, t1_alloc_)
     , t3_alloc_(store, h.free_alloc_t3, t2_alloc_)

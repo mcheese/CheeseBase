@@ -137,6 +137,7 @@ void StringW::destroy() {
     ta_.free(next, size_here + sizeof(StrNext));
 
     size -= size_here;
+    next = new_next;
   }
   if (size != 0) throw ConsistencyError();
 }
