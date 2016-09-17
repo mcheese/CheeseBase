@@ -1,3 +1,6 @@
 [submodule "external/GSL"]
 	path = external/GSL
 	url = https://github.com/Microsoft/GSL
+[submodule "tools/webserver/Simple-Web-Server"]
+	path = tools/webserver/Simple-Web-Server
+	url = https://github.com/eidheim/Simple-Web-Server
