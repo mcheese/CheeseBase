@@ -13,6 +13,7 @@ set(SRC
   parser.cc
   model/model.cc
   query/eval.cc
+  query/db_session.cc
   query/eval/expr.cc
   query/eval/sfw.cc
   query/eval/from.cc

@@ -4,10 +4,12 @@
 #include "eval/expr.h"
 
 namespace cheesebase {
+namespace query {
 
-model::Value evalQuery(const query::Expr& expr) {
-  return query::eval::evalExpr(expr,
-                               query::eval::Env{ model::Tuple(), nullptr });
+model::Value evalQuery(const query::Expr& expr, DbSession* session) {
+  return query::eval::evalExpr(
+      expr, query::eval::Env{ model::Tuple(), nullptr }, session);
 }
 
-} // cheesebase
+} // namespace query
+} // namespace cheesebase

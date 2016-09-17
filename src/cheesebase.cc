@@ -4,7 +4,8 @@
 
 #include "core.h"
 #include "exceptions.h"
-#include "model/parser.h"
+#include "parser.h"
+#include "query/eval.h"
 #include "seri/array.h"
 #include "seri/object.h"
 #include <sstream>
@@ -302,6 +303,12 @@ void CheeseBase::remove(const Location& location) {
     ta.commit(parent->getWrites());
   else
     throw NotFoundError();
+}
+
+model::Value CheeseBase::query(const std::string& query) const {
+  auto e = parseQuery(query);
+  query::DbSession session{ *db_ };
+  return query::evalQuery(e, &session);
 }
 
 } // namespace cheesebase

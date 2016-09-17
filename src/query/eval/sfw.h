@@ -1,5 +1,6 @@
 #pragma once
 #include "../ast.h"
+#include "../db_session.h"
 #include "env.h"
 
 namespace cheesebase {
@@ -14,7 +15,7 @@ struct Bindings : public Bindings_base {
   bool has_order_{ false };
 };
 
-model::Value evalSfw(const SfwQuery& sfw, const Env& env);
+model::Value evalSfw(const SfwQuery& sfw, const Env& env, DbSession* session);
 
 } // namespace eval
 } // namespace query

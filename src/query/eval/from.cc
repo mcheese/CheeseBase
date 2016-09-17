@@ -1,6 +1,6 @@
 #include "from.h"
-#include "expr.h"
 #include "../../exceptions.h"
+#include "expr.h"
 #include <algorithm>
 
 namespace cheesebase {
@@ -8,15 +8,16 @@ namespace query {
 namespace eval {
 namespace {
 
-Bindings evalFrom(const FromEmpty&, const Env& env) {
+Bindings evalFrom(const FromEmpty&, const Env& env, DbSession* session) {
   return { model::Tuple() };
 }
 
 // <coll> AS <name> AT <idx>
-Bindings evalFrom(const FromCollection& from, const Env& env) {
+Bindings evalFrom(const FromCollection& from, const Env& env,
+                  DbSession* session) {
   Bindings output;
 
-  auto val = evalExpr(from.expr_, env);
+  auto val = evalExpr(from.expr_, env, session);
   auto collection = boost::get<model::Shared<model::Collection>>(&val);
   if (collection == nullptr)
     throw QueryError("FROM collection: non-collection");
@@ -40,11 +41,11 @@ Bindings evalFrom(const FromCollection& from, const Env& env) {
 }
 
 // <tuple> AS <key>:<val>
-Bindings evalFrom(const FromTuple& from, const Env& env) {
+Bindings evalFrom(const FromTuple& from, const Env& env, DbSession* session) {
   Bindings output{};
   output.has_order_ = false;
 
-  auto val = evalExpr(from.expr_, env);
+  auto val = evalExpr(from.expr_, env, session);
   auto tuple = boost::get<model::Shared<model::Tuple>>(&val);
   if (tuple == nullptr) throw QueryError("FROM tuple: non-tuple");
 
@@ -60,13 +61,13 @@ Bindings evalFrom(const FromTuple& from, const Env& env) {
 }
 
 // <left> INNER CORRELATE <right>
-Bindings evalFrom(const FromInner& from, const Env& env) {
+Bindings evalFrom(const FromInner& from, const Env& env, DbSession* session) {
   Bindings output;
   output.has_order_ = false;
 
-  auto left = evalFrom(from.left_, env);
+  auto left = evalFrom(from.left_, env, session);
   for (auto& l : left) {
-    auto right = eval::evalFrom(from.right_, { l, &env });
+    auto right = eval::evalFrom(from.right_, l + env, session);
     output.reserve(output.size() + right.size());
     for (auto& r : right) {
       r.insert(std::begin(l), std::end(l));
@@ -78,13 +79,13 @@ Bindings evalFrom(const FromInner& from, const Env& env) {
 }
 
 // <left> LEFT OUTER CORRELATE <right>
-Bindings evalFrom(const FromLeft& from, const Env& env) {
+Bindings evalFrom(const FromLeft& from, const Env& env, DbSession* session) {
   Bindings output;
   output.has_order_ = false;
 
-  auto left = evalFrom(from.left_, env);
+  auto left = evalFrom(from.left_, env, session);
   for (auto& l : left) {
-    auto right = eval::evalFrom(from.right_, { l, &env });
+    auto right = eval::evalFrom(from.right_, l + env, session);
     output.reserve(output.size() + right.size());
 
     if (!right.empty()) {
@@ -101,12 +102,12 @@ Bindings evalFrom(const FromLeft& from, const Env& env) {
 }
 
 // <left> FULL OUTER CORRELATE <right> ON <cond>
-Bindings evalFrom(const FromFull& from, const Env& env) {
+Bindings evalFrom(const FromFull& from, const Env& env, DbSession* session) {
   Bindings output;
   output.has_order_ = false;
 
-  auto left = evalFrom(from.left_, env);
-  auto right = evalFrom(from.right_, env);
+  auto left = evalFrom(from.left_, env, session);
+  auto right = evalFrom(from.right_, env, session);
   std::vector<bool> right_used(right.size(), false);
 
   for (auto& l : left) {
@@ -116,7 +117,7 @@ Bindings evalFrom(const FromFull& from, const Env& env) {
       auto& r = right[r_idx];
 
       Env r_env{ r, &env };
-      auto cond_val = evalExpr(from.cond_, {l, &r_env});
+      auto cond_val = evalExpr(from.cond_, l + r_env, session);
       auto cond_bool = boost::get<model::Bool>(&cond_val);
       if (cond_bool && *cond_bool) {
         output.emplace_back();
@@ -135,7 +136,7 @@ Bindings evalFrom(const FromFull& from, const Env& env) {
   }
 
   for (size_t r_idx = 0; r_idx < right.size(); r_idx++) {
-    if(!right_used[r_idx]) {
+    if (!right_used[r_idx]) {
       auto& r = right[r_idx];
       output.emplace_back();
       output.back().insert(std::begin(r), std::end(r));
@@ -146,15 +147,15 @@ Bindings evalFrom(const FromFull& from, const Env& env) {
 }
 
 template <typename T>
-Bindings evalFrom(T, const Env& env) {
+Bindings evalFrom(T, const Env& env, DbSession* session) {
   return {};
 }
 
 } // anonymous namespace
 
-Bindings evalFrom(const From& from, const Env& env) {
-  return boost::apply_visitor([&env](auto& ctx) { return evalFrom(ctx, env); },
-                              from);
+Bindings evalFrom(const From& from, const Env& env, DbSession* session) {
+  return boost::apply_visitor(
+      [&env, session](auto& ctx) { return evalFrom(ctx, env, session); }, from);
 }
 
 } // eval

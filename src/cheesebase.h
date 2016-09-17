@@ -68,8 +68,11 @@ public:
 
   void remove(const Location&);
 
+  model::Value query(const std::string& query) const;
+
+
 private:
-  std::unique_ptr<cheesebase::Database> db_;
+  std::unique_ptr<Database> db_;
 };
 
 } // namespace cheesebase

@@ -1,9 +1,10 @@
-#include "expr.h"
-#include "../ast.h"
 #include "../../exceptions.h"
-#include <unordered_map>
+#include "../ast.h"
+#include "expr.h"
 #include <algorithm>
 #include <numeric>
+#include <cmath>
+#include <unordered_map>
 
 namespace cheesebase {
 namespace query {
@@ -39,12 +40,12 @@ inline model::Value funcFloor(const std::vector<model::Value>& args) {
   return std::floor(*num);
 }
 
-inline model::Value evalFunction(const Function& func, const Env& env) {
+inline model::Value evalFunction(const Function& func, const Env& env,
+                                 DbSession* session) {
   typedef model::Value (*FuncPtr)(const std::vector<model::Value>&);
   typedef model::Value (*FuncAggrPtr)(const model::Collection&);
-  static const std::unordered_map<std::string, FuncPtr> funcs{
-    { "floor", &funcFloor } 
-  };
+  static const std::unordered_map<std::string, FuncPtr> funcs{ { "floor",
+                                                                 &funcFloor } };
   static const std::unordered_map<std::string, FuncAggrPtr> aggr_funcs{
     { "sum", &funcSum }, { "max", &funcMax }
   };
@@ -59,7 +60,7 @@ inline model::Value evalFunction(const Function& func, const Env& env) {
     std::vector<model::Value> args;
     args.reserve(func.arguments_.size());
     for (auto& e : func.arguments_) {
-      args.emplace_back(evalExpr(e, env));
+      args.emplace_back(evalExpr(e, env, session));
     }
     return func_lookup->second(args);
   }
@@ -88,7 +89,8 @@ inline model::Value evalFunction(const Function& func, const Env& env) {
                 "Invalid element in group used by aggregate function");
           }
 
-          coll.emplace_back(evalExpr(func.arguments_[0], **tuple + env));
+          coll.emplace_back(
+              evalExpr(func.arguments_[0], **tuple + env, session));
         }
 
         return aggr_lookup->second(coll);
@@ -96,7 +98,7 @@ inline model::Value evalFunction(const Function& func, const Env& env) {
     }
 
     // Since it is not a use after GROUP BY the argument has to be a collection.
-    auto val = evalExpr(func.arguments_[0], env);
+    auto val = evalExpr(func.arguments_[0], env, session);
     auto coll = boost::get<model::SCollection>(&val);
     if (!coll) {
       throw QueryError(
@@ -107,8 +109,6 @@ inline model::Value evalFunction(const Function& func, const Env& env) {
 
   throw QueryError("Unknown function: " + func.name_);
 }
-
-
 
 } // namespace eval
 } // namespace query

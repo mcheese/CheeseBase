@@ -1,9 +1,9 @@
 #include "expr.h"
-#include "operators.h"
-#include "functions.h"
-#include "from.h"
-#include "sfw.h"
 #include "conf.h"
+#include "from.h"
+#include "functions.h"
+#include "operators.h"
+#include "sfw.h"
 
 namespace cheesebase {
 namespace query {
@@ -11,54 +11,60 @@ namespace eval {
 namespace {
 
 // literal value
-model::Value evalExpr(const model::Value& val, const Env& env) { return val; }
+model::Value evalExpr(const model::Value& val, const Env& env,
+                      DbSession* session) {
+  return val;
+}
 
 // select-from-where
-model::Value evalExpr(const SfwQuery& sfw, const Env& env) {
-  return evalSfw(sfw, env);
+model::Value evalExpr(const SfwQuery& sfw, const Env& env, DbSession* session) {
+  return evalSfw(sfw, env, session);
 }
 
 // variable name
-model::Value evalExpr(const Var& var, const Env& env) {
+model::Value evalExpr(const Var& var, const Env& env, DbSession* session) {
   for (auto e = &env; e != nullptr; e = e->next) {
     auto lookup = e->self.find(var);
     if (lookup != std::end(e->self)) return lookup->second;
   }
-  return model::Missing();
+
+  if (!session) return model::Missing{};
+
+  return session->getNamedVal(var);
 }
 
 // { <name>:<expr>, ... }
-model::Value evalExpr(const Tuple& tuple, const Env& env) {
+model::Value evalExpr(const Tuple& tuple, const Env& env, DbSession* session) {
   model::Tuple output;
   for (auto& e : tuple) {
-    output.emplace(e.first, evalExpr(e.second, env));
+    output.emplace(e.first, evalExpr(e.second, env, session));
   }
   return std::move(output);
 }
 
 // [ <expr>, ... ]
-model::Value evalExpr(const Array& array, const Env& env) {
+model::Value evalExpr(const Array& array, const Env& env, DbSession* session) {
   model::Collection output;
   output.has_order_ = true;
   for (auto& e : array) {
-    output.emplace_back(evalExpr(e, env));
+    output.emplace_back(evalExpr(e, env, session));
   }
   return std::move(output);
 }
 
 // {{ <expr>, <expr>, ... }}
-model::Value evalExpr(const Bag& bag, const Env& env) {
+model::Value evalExpr(const Bag& bag, const Env& env, DbSession* session) {
   model::Collection output;
   output.has_order_ = false;
   for (auto& e : bag) {
-    output.emplace_back(evalExpr(e, env));
+    output.emplace_back(evalExpr(e, env, session));
   }
   return std::move(output);
 }
 
 // <expr>.<name>
-model::Value evalExpr(const TupleNav& nav, const Env& env) {
-  auto base = evalExpr(nav.base_, env);
+model::Value evalExpr(const TupleNav& nav, const Env& env, DbSession* session) {
+  auto base = evalExpr(nav.base_, env, session);
 
   // base has to be a tuple
 
@@ -94,9 +100,9 @@ model::Value evalExpr(const TupleNav& nav, const Env& env) {
 }
 
 // <expr>[<expr>]
-model::Value evalExpr(const ArrayNav& nav, const Env& env) {
-  auto base = evalExpr(nav.base_, env);
-  auto key = evalExpr(nav.idx_, env);
+model::Value evalExpr(const ArrayNav& nav, const Env& env, DbSession* session) {
+  auto base = evalExpr(nav.base_, env, session);
+  auto key = evalExpr(nav.idx_, env, session);
 
   // key needs to be a whole number
 
@@ -148,26 +154,29 @@ model::Value evalExpr(const ArrayNav& nav, const Env& env) {
 }
 
 // <expr> <op> <expr>
-model::Value evalExpr(const InfixOp& infix, const Env& env) {
-  return evalOperator(infix.op_, evalExpr(infix.left_, env),
-                      evalExpr(infix.right_, env));
+model::Value evalExpr(const InfixOp& infix, const Env& env,
+                      DbSession* session) {
+  return evalOperator(infix.op_, evalExpr(infix.left_, env, session),
+                      evalExpr(infix.right_, env, session));
 }
 
 // <op> <expr>
-model::Value evalExpr(const PrefixOp& prefix, const Env& env) {
-  return evalOperator(prefix.op_, evalExpr(prefix.val_, env));
+model::Value evalExpr(const PrefixOp& prefix, const Env& env,
+                      DbSession* session) {
+  return evalOperator(prefix.op_, evalExpr(prefix.val_, env, session));
 }
 
 // <func>(<arg0> .. <argn>)
-model::Value evalExpr(const Function& func, const Env& env) {
-  return evalFunction(func, env);
+model::Value evalExpr(const Function& func, const Env& env,
+                      DbSession* session) {
+  return evalFunction(func, env, session);
 }
 
 } // anonymous namespace
 
-model::Value evalExpr(const Expr& expr, const Env& env) {
-  return boost::apply_visitor([&env](auto& ctx) { return evalExpr(ctx, env); },
-                              expr);
+model::Value evalExpr(const Expr& expr, const Env& env, DbSession* session) {
+  return boost::apply_visitor(
+      [&env, session](auto& ctx) { return evalExpr(ctx, env, session); }, expr);
 }
 
 } // namespace eval

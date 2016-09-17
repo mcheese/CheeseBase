@@ -1,19 +1,20 @@
 #include "sfw.h"
-#include "from.h"
-#include "expr.h"
-#include "operators.h"
 #include "../../exceptions.h"
+#include "expr.h"
+#include "from.h"
+#include "operators.h"
 
 namespace cheesebase {
 namespace query {
 namespace eval {
 namespace {
 
-void applyWhere(const Where& where, Bindings& bindings, const Env& env) {
+void applyWhere(const Where& where, Bindings& bindings, const Env& env,
+                DbSession* session) {
   auto last =
       std::remove_if(std::begin(bindings), std::end(bindings),
-                     [&where, &env](const model::Tuple& ctx) {
-                       auto val = evalExpr(where.expr_, { ctx, &env });
+                     [&where, &env, session](const model::Tuple& ctx) {
+                       auto val = evalExpr(where.expr_, ctx + env, session);
                        if (auto b = boost::get<model::Bool>(&val)) {
                          return !(*b);
                        }
@@ -22,7 +23,8 @@ void applyWhere(const Where& where, Bindings& bindings, const Env& env) {
   bindings.resize(std::distance(std::begin(bindings), last));
 }
 
-void applyGroupBy(const GroupBy& group_by, Bindings& bindings, const Env& env) {
+void applyGroupBy(const GroupBy& group_by, Bindings& bindings, const Env& env,
+                  DbSession* session) {
   using GroupKey = std::vector<model::Value>;
   const auto cmp = [](const GroupKey& a, const GroupKey& b) {
     if (a.size() != b.size()) return a.size() < b.size();
@@ -40,7 +42,7 @@ void applyGroupBy(const GroupBy& group_by, Bindings& bindings, const Env& env) {
     GroupKey key;
     key.reserve(group_by.size());
     for (auto& term : group_by) {
-      key.emplace_back(evalExpr(term.expr_, b + env));
+      key.emplace_back(evalExpr(term.expr_, b + env, session));
     }
 
     groups[key].emplace_back(std::move(b));
@@ -64,13 +66,14 @@ void applyGroupBy(const GroupBy& group_by, Bindings& bindings, const Env& env) {
   }
 }
 
-void applyOrderBy(const OrderBy& order_by, Bindings& bindings, const Env& env) {
+void applyOrderBy(const OrderBy& order_by, Bindings& bindings, const Env& env,
+                  DbSession* session) {
   std::sort(std::begin(bindings), std::end(bindings),
             [&](const auto& a, const auto& b) {
               // optimization possible: cache expr value for each binding
               for (auto& term : order_by) {
-                auto val_a = evalExpr(term.expr_, a + env);
-                auto val_b = evalExpr(term.expr_, b + env);
+                auto val_a = evalExpr(term.expr_, a + env, session);
+                auto val_b = evalExpr(term.expr_, b + env, session);
                 if (opLt(val_a, val_b)) return (term.desc_ ? false : true); // <
                 if (opGt(val_a, val_b)) return (term.desc_ ? true : false); // >
               }
@@ -82,10 +85,10 @@ void applyOrderBy(const OrderBy& order_by, Bindings& bindings, const Env& env) {
 
 void applyLimitOffset(boost::optional<Limit> limit,
                       boost::optional<Offset> offset, Bindings& bindings,
-                      const Env& env) {
+                      const Env& env, DbSession* session) {
   size_t offset_nr = 0;
   if (offset) {
-    auto val = evalExpr(offset->expr_, env);
+    auto val = evalExpr(offset->expr_, env, session);
     auto nr = boost::get<model::Number>(&val);
     if (!nr || *nr != static_cast<size_t>(*nr))
       throw QueryError{ "OFFSET: require positive integer" };
@@ -94,7 +97,7 @@ void applyLimitOffset(boost::optional<Limit> limit,
 
   size_t limit_nr = bindings.size();
   if (limit) {
-    auto val = evalExpr(limit->expr_, env);
+    auto val = evalExpr(limit->expr_, env, session);
     auto nr = boost::get<model::Number>(&val);
     if (!nr || *nr != static_cast<size_t>(*nr))
       throw QueryError{ "LIMIT: require positive integer" };
@@ -112,12 +115,12 @@ void applyLimitOffset(boost::optional<Limit> limit,
 
 // SELECT ELEMENT <expr>
 model::Value applySelect(const SelectElement& sel, const Env& env,
-                         Bindings&& input) {
+                         DbSession* session, Bindings&& input) {
   model::Collection output;
   output.has_order_ = input.has_order_;
 
   for (auto& tuple : input) {
-    output.emplace_back(evalExpr(sel.expr_, { tuple, &env }));
+    output.emplace_back(evalExpr(sel.expr_, tuple + env, session));
   }
 
   return std::move(output);
@@ -125,17 +128,17 @@ model::Value applySelect(const SelectElement& sel, const Env& env,
 
 // SELECT ATTRIBUTE <name> : <expr>
 model::Value applySelect(const SelectAttribute& sel, const Env& env,
-                         Bindings&& input) {
+                         DbSession* session, Bindings&& input) {
   model::Tuple output;
 
   for (auto& tuple : input) {
-    auto attr = evalExpr(sel.attr_, { tuple, &env });
+    auto attr = evalExpr(sel.attr_, tuple + env, session);
     auto name = boost::get<model::String>(&attr);
     if (name == nullptr) {
       throw QueryError("SELECT ATTRIBUTE: expected string as name");
     }
 
-    auto value = evalExpr(sel.value_, { tuple, &env });
+    auto value = evalExpr(sel.value_, tuple + env, session);
 
     if (boost::get<model::Missing>(&value) == nullptr) {
       output.emplace(std::move(*name), std::move(value));
@@ -145,27 +148,27 @@ model::Value applySelect(const SelectAttribute& sel, const Env& env,
   return std::move(output);
 }
 
-model::Value applySelect(const Select& sel, const Env& env,
+model::Value applySelect(const Select& sel, const Env& env, DbSession* session,
                          Bindings&& bindings) {
   return boost::apply_visitor(
-      [&env, &bindings](auto& ctx) {
-        return applySelect(ctx, env, std::move(bindings));
+      [&env, &bindings, session](auto& ctx) {
+        return applySelect(ctx, env, session, std::move(bindings));
       },
       sel);
 }
 
 } // anonymous namespace
 
-model::Value evalSfw(const SfwQuery& sfw, const Env& env) {
-  auto bindings = evalFrom(sfw.from_, env);
+model::Value evalSfw(const SfwQuery& sfw, const Env& env, DbSession* session) {
+  auto bindings = evalFrom(sfw.from_, env, session);
 
-  if (sfw.where_) applyWhere(*sfw.where_, bindings, env);
-  if (sfw.group_by_) applyGroupBy(*sfw.group_by_, bindings, env);
-  if (sfw.order_by_) applyOrderBy(*sfw.order_by_, bindings, env);
+  if (sfw.where_) applyWhere(*sfw.where_, bindings, env, session);
+  if (sfw.group_by_) applyGroupBy(*sfw.group_by_, bindings, env, session);
+  if (sfw.order_by_) applyOrderBy(*sfw.order_by_, bindings, env, session);
   if (sfw.limit_ || sfw.offset_)
-    applyLimitOffset(sfw.limit_, sfw.offset_, bindings, env);
+    applyLimitOffset(sfw.limit_, sfw.offset_, bindings, env, session);
 
-  return applySelect(sfw.select_, env, std::move(bindings));
+  return applySelect(sfw.select_, env, session, std::move(bindings));
 }
 
 } // namespace eval
