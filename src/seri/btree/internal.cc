@@ -83,7 +83,7 @@ auto searchSiblingAddrHelper(const DskInternalNode& node, Key key) {
 Addr InternalEntriesW::searchChildAddr(Key key) {
   if (!node_) {
     auto ref = ta_.loadBlock<kBlockSize>(addr_);
-    return getFromSpan<DskInternalNode>(*ref).searchAddr(key);
+    return bytesAsType<DskInternalNode>(*ref).searchAddr(key);
   }
   return node_->searchAddr(key);
 }
@@ -91,7 +91,7 @@ Addr InternalEntriesW::searchChildAddr(Key key) {
 Addr InternalEntriesW::searchSiblingAddr(Key key) {
   if (!node_) {
     auto ref = ta_.loadBlock<kBlockSize>(addr_);
-    return searchSiblingAddrHelper(getFromSpan<DskInternalNode>(*ref), key);
+    return searchSiblingAddrHelper(bytesAsType<DskInternalNode>(*ref), key);
   }
   return searchSiblingAddrHelper(*node_, key);
 }
@@ -100,7 +100,8 @@ void InternalEntriesW::init() {
   if (!node_) {
     node_ = std::make_unique<DskInternalNode>();
     auto ref = ta_.loadBlock<kBlockSize>(addr_);
-    auto target = gsl::as_writeable_bytes(Span<DskInternalNode>(*node_));
+    auto target =
+        gsl::as_writeable_bytes(gsl::span<DskInternalNode>(node_.get(), 1));
     std::copy(ref->begin(), ref->end(), target.begin());
     node_->hdr.check();
   }
@@ -241,14 +242,15 @@ Key InternalEntriesW::update(Key key, Key new_key) {
 void InternalEntriesW::addWrite(Writes& writes) const noexcept {
   if (node_) {
     node_->hdr.check();
-    writes.push_back({ addr_, gsl::as_bytes(Span<DskInternalNode>(*node_)) });
+    writes.push_back(
+        { addr_, gsl::as_bytes(gsl::span<DskInternalNode>(node_.get(), 1)) });
   }
 }
 
 void InternalEntriesW::destroy() {
   if (!node_) {
     auto ref = ta_.loadBlock<kBlockSize>(addr_);
-    auto& node = getFromSpan<DskInternalNode>(*ref);
+    auto& node = bytesAsType<DskInternalNode>(*ref);
 
     openNodeW(ta_, node.first)->destroy();
     for (auto& e : node) {

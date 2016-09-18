@@ -16,8 +16,8 @@ SCENARIO("CACHE") {
       const std::string test{ "ABCDEFGHIJKLMNOP" };
       {
         auto p = cache.writePage(page);
-        copySpan(gsl::as_bytes(gsl::span<const char>(test)),
-                 p->subspan(offset));
+        auto bytes = gsl::as_bytes(gsl::span<const char>(test));
+        std::copy(bytes.begin(), bytes.end(), p->subspan(offset).begin());
       }
 
       THEN("same data can be read") {

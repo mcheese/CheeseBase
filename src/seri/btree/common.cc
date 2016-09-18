@@ -12,7 +12,7 @@ namespace btree {
 bool isNodeLeaf(const ReadRef<kBlockSize>& block) {
   // first byte of Addr is always 0
   // next-ptr of leafs put a flag in the first byte, marking the node as leaf
-  return getFromSpan<const DskLeafHdr>(*block).hasMagic();
+  return bytesAsType<const DskLeafHdr>(*block).hasMagic();
 }
 
 std::unique_ptr<NodeW> openNodeW(Transaction& ta, Addr addr) {

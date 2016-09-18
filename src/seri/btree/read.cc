@@ -68,7 +68,7 @@ std::pair<Key, model::Value> readValue(Database& db, ConstIt& it) {
 }
 
 const DskLeafNode& leafView(ReadRef<kBlockSize>& block) {
-  return getFromSpan<DskLeafNode>(*block);
+  return bytesAsType<DskLeafNode>(*block);
 }
 
 Addr getAllInLeaf(Database& db, ReadRef<kBlockSize>& block, model::Tuple& obj) {
@@ -98,7 +98,7 @@ Addr getAllInLeaf(Database& db, ReadRef<kBlockSize>& block, ArrayMap& arr) {
 }
 
 const DskInternalNode& internalView(ReadRef<kBlockSize>& block) {
-  auto& n = getFromSpan<DskInternalNode>(*block);
+  auto& n = bytesAsType<DskInternalNode>(*block);
   n.hdr.check();
   return n;
 }

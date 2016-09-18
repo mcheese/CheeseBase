@@ -25,9 +25,9 @@ TEST_CASE("KeyCache single") {
   KeyNext cache_hdr{ Addr(0) };
   uint64_t term{ 0 };
   store.storeWrite(Writes{
-      { Addr(kc_pos), gsl::as_bytes(gsl::span<KeyNext>(cache_hdr)) },
+      { Addr(kc_pos), gsl::as_bytes(gsl::span<KeyNext>(&cache_hdr, 1)) },
       { Addr(kc_pos + sizeof(KeyNext)),
-        gsl::as_bytes(gsl::span<uint64_t>(term)) } });
+        gsl::as_bytes(gsl::span<uint64_t>(&term, 1)) } });
 
   KeyCache keys{ Block{ Addr(kc_pos), kc_pos }, store };
   Allocator alloc{ hdr, store };

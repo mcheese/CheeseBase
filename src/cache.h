@@ -40,7 +40,7 @@ struct CachePage {
   template <typename View>
   View getView() const {
     return View(static_cast<Byte*>(region.get_address()),
-                static_cast<typename View::size_type>(region.get_size()));
+                static_cast<typename View::index_type>(region.get_size()));
   }
 };
 
@@ -122,9 +122,9 @@ private:
 };
 
 template <std::ptrdiff_t S>
-using ReadRef = PageRef<Span<const Byte, S>>;
+using ReadRef = PageRef<gsl::span<const Byte, S>>;
 template <std::ptrdiff_t S>
-using WriteRef = PageRef<Span<Byte, S>>;
+using WriteRef = PageRef<gsl::span<Byte, S>>;
 
 class Cache {
 public:

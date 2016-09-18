@@ -17,11 +17,9 @@ template <typename S>
 void writeToSpan(const decltype(Write::data)& data, S target) {
   if (data.type() == typeid(uint64_t)) {
     Expects(sizeof(uint64_t) <= target.size());
-    auto word = boost::get<uint64_t>(data);
-    auto source = gsl::as_bytes<uint64_t>({ word });
-    std::copy(source.begin(), source.end(), target.begin());
+    bytesAsType<uint64_t>(target) = boost::get<uint64_t>(data);
   } else {
-    auto& span = boost::get<Span<const Byte>>(data);
+    auto& span = boost::get<gsl::span<const Byte>>(data);
     Expects(span.size() <= target.size());
     std::copy(span.begin(), span.end(), target.begin());
   }

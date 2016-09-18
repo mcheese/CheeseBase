@@ -1,6 +1,3 @@
-#ifdef _MSC_VER
-#define _SCL_SECURE_NO_WARNINGS
-#endif
 #include "allocator.h"
 #include "catch.hpp"
 #include "common.h"
@@ -36,7 +33,7 @@ TEST_CASE("allocate and free blocks") {
   hdr.end_of_file.value = k_page_size;
   Storage store{ "test.db", OpenMode::create_always };
   store.storeWrite(
-      Write({ Addr(0), gsl::as_bytes(gsl::span<DskDatabaseHdr>(hdr)) }));
+      Write({ Addr(0), gsl::as_bytes(gsl::span<DskDatabaseHdr>(&hdr, 1)) }));
 
   Allocator alloc{ hdr, store };
 

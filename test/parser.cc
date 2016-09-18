@@ -4,7 +4,7 @@
 #include "catch.hpp"
 #include "model/model.h"
 #include "parser.h"
-#include <gsl.h>
+#include <gsl>
 #include <iostream>
 #include <memory>
 

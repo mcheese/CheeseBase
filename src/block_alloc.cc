@@ -38,7 +38,7 @@ std::pair<Block, std::vector<AllocWrite>> PageAllocator::allocBlock() {
         return lookup->second;
       }
       auto block = store_.loadBlock<size()>(free_);
-      auto next = getFromSpan<Next>(*block);
+      auto& next = bytesAsType<Next>(*block);
       if (next.next().pageOffset() != 0)
         throw ConsistencyError("Invalid header in block of free list");
       return next.next();
@@ -76,7 +76,7 @@ std::pair<Block, std::vector<AllocWrite>> TierAllocator<P, T>::allocBlock() {
       }
 
       auto block = store_.loadBlock<size()>(free_);
-      auto next = getFromSpan<Next>(*block);
+      auto& next = bytesAsType<Next>(*block);
 
       if (next.next().value % size() != 0)
         throw ConsistencyError("Invalid header in block of free list");

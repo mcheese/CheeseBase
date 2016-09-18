@@ -8,7 +8,8 @@
 #include "macros.h"
 #include <boost/cstdint.hpp>
 #include <boost/variant.hpp>
-#include <gsl.h>
+#include <span>
+#include <gsl>
 #include <vector>
 
 namespace cheesebase {
@@ -22,12 +23,7 @@ const size_t k_page_size{ 1u << k_page_size_power };
 //! Maximum size of pages kept in cache. Memory usage will be higher than this.
 const size_t k_default_cache_size{ k_page_size * 1024 * 10 }; // 40 MB - test
 
-//! Byte type. Use \c Span to convert.
 using Byte = gsl::byte;
-
-//! Bounds checked memory view. Like a smart pointer+size.
-template <class T, std::ptrdiff_t R = gsl::dynamic_range>
-using Span = gsl::span<T, R>;
 
 constexpr uint64_t lowerBitmask(size_t n) {
   return (static_cast<uint64_t>(1) << n) - 1;
@@ -142,15 +138,44 @@ constexpr auto ssizeof(const T&) {
   return ssizeof<T>();
 }
 
-template <typename T, typename S>
-auto& getFromSpan(S span) {
-  return gsl::as_span<T>(span.subspan(0, ssizeof<T>()))[0];
+// interpret byte span as writeable object of type T
+template <typename T, std::ptrdiff_t Extend>
+T& bytesAsType(gsl::span<Byte, Extend> span) {
+  Expects(
+      (Extend == gsl::dynamic_extent && span.size_bytes() >= ssizeof<T>()) ||
+      Extend >= ssizeof<T>());
+  return *reinterpret_cast<T*>(span.data());
+}
+
+// interpret byte span as object of type T
+template <typename T, std::ptrdiff_t Extend>
+const T& bytesAsType(gsl::span<const Byte, Extend> span) {
+  Expects(
+      (Extend == gsl::dynamic_extent && span.size_bytes() >= ssizeof<T>()) ||
+      Extend >= ssizeof<T>());
+  return *reinterpret_cast<const T*>(span.data());
+}
+
+// interpret byte span as span of writeable Ts
+template <typename T, std::ptrdiff_t Extend>
+gsl::span<T> bytesAsSpan(gsl::span<Byte, Extend> span) {
+  Expects(span.size_bytes() >= ssizeof<T>());
+  return { reinterpret_cast<T*>(span.data()),
+           span.size_bytes() / ssizeof<T>() };
+}
+
+// interpret byte span as span of Ts
+template <typename T, std::ptrdiff_t Extend>
+gsl::span<const T> bytesAsSpan(gsl::span<const Byte, Extend> span) {
+  Expects(span.size_bytes() >= ssizeof<T>());
+  return { reinterpret_cast<const T*>(span.data()),
+           span.size_bytes() / ssizeof<T>() };
 }
 
 //! Represents a write to disk.
 struct Write {
   Addr addr;
-  boost::variant<Span<const Byte>, uint64_t> data;
+  boost::variant<gsl::span<const Byte>, uint64_t> data;
 };
 
 //! Collection of writes.
@@ -167,23 +192,6 @@ using PageReadView = gsl::span<const Byte, k_page_size>;
 //! View of one read-write memory page.
 using PageWriteView = gsl::span<Byte, k_page_size>;
 
-//! Copy content of \c Spans.
-/**
- * @param from  Source of the copy.
- * @param to    Target of the copy.
- */
-template <typename T>
-void copySpan(Span<const T> from, Span<T> to) {
-  Expects(from.size() <= to.size());
-  auto output = to.begin();
-  auto input = from.cbegin();
-  while (input != from.cend() && output != to.end()) {
-    *output = *input;
-    ++output;
-    ++input;
-  }
-  Ensures(input == from.cend());
-}
 
 constexpr uint16_t kVersion{ 0x0001 };
 constexpr uint64_t k_magic{ 0x0000455342534843 + // CHSBSExx
@@ -198,7 +206,5 @@ CB_PACKED(struct DskDatabaseHdr {
   Addr free_alloc_t3;
   Addr free_alloc_t4;
 });
-static_assert(sizeof(DskDatabaseHdr) <= k_page_size / 2,
-              "Database header should be smaller than half of the page size");
 
 } // namespace cheesebase

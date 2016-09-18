@@ -40,7 +40,9 @@ Writes AbsLeafW::getWrites() const {
   Writes w;
   w.reserve(1 + linked_.size()); // may be more, but a good guess
 
-  if (node_) w.push_back({ addr_, gsl::as_bytes(Span<DskLeafNode>(*node_)) });
+  if (node_)
+    w.push_back(
+        { addr_, gsl::as_bytes(gsl::span<DskLeafNode>(node_.get(), 1)) });
 
   for (auto& c : linked_) {
     auto cw = c.second->getWrites();
@@ -60,7 +62,7 @@ void AbsLeafW::destroy() {
     dstr(*node_);
   } else {
     auto ref = ta_.loadBlock<kBlockSize>(addr_);
-    dstr(getFromSpan<DskLeafNode>(*ref));
+    dstr(bytesAsType<DskLeafNode>(*ref));
   }
 
   ta_.free(addr_, kBlockSize);
@@ -249,7 +251,8 @@ void AbsLeafW::init() {
     node_ = std::make_unique<DskLeafNode>();
     auto block = ta_.loadBlock<kBlockSize>(addr_);
     std::copy(block->begin(), block->end(),
-              gsl::as_writeable_bytes(Span<DskLeafNode, 1>(*node_)).begin());
+              gsl::as_writeable_bytes(gsl::span<DskLeafNode>(node_.get(), 1))
+                  .begin());
     size_ = node_->findSize();
   }
 }

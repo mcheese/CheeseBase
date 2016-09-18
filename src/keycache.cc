@@ -139,16 +139,15 @@ KeyCache::KeyCache(Block first_block, Storage& store)
   while (!next.isNull()) {
     auto page = store_.loadPage(cur_block_.addr.pageNr());
     auto block = page->subspan(cur_block_.addr.pageOffset());
-    next = getFromSpan<KeyNext>(block).next();
+    next = bytesAsType<KeyNext>(block).next();
     block = block.subspan(0, cur_block_.size);
     offset_ = sizeof(KeyNext);
 
     while (offset_ + sizeof(DskKeyCacheSize) <= cur_block_.size) {
-      auto size = gsl::as_span<DskKeyCacheSize>(
-          block.subspan(offset_, sizeof(DskKeyCacheSize)))[0];
+      auto size = bytesAsType<DskKeyCacheSize>(block.subspan(offset_));
       if (size == 0) break;
       offset_ += sizeof(DskKeyCacheSize);
-      auto str_span = gsl::as_span<const char>(block.subspan(offset_, size));
+      auto str_span = bytesAsSpan<const char>(block.subspan(offset_, size));
       std::string str{ str_span.begin(), str_span.end() };
       offset_ += size;
       cache_[hashString(str)].emplace_back(std::move(str));

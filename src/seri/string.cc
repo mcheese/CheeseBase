@@ -75,7 +75,7 @@ Writes StringW::getWrites() const {
       { addr_,
         StrNext(blocks_.size() >= 2 ? blocks_[1].addr : Addr(0)).data() });
 
-  auto span = gsl::as_bytes(Span<const char>(str_));
+  auto span = gsl::as_bytes(gsl::span<const char>(str_));
   auto block_it = blocks_.begin();
 
   // Write first block
@@ -120,9 +120,9 @@ void StringW::destroy() {
   Expects(!addr_.isNull());
 
   auto ref = ta_.loadBlock<ssizeof<StrNext>() + ssizeof<DskStringHdr>()>(addr_);
-  auto next = getFromSpan<StrNext>(*ref).next();
+  auto next = bytesAsType<StrNext>(*ref).next();
   auto size =
-      getFromSpan<DskStringHdr>(ref->subspan(ssizeof<StrNext>())).size();
+      bytesAsType<DskStringHdr>(ref->subspan(ssizeof<StrNext>())).size();
   ref.free();
 
   auto size_here = std::min(size, kFirstDataSize);
@@ -133,7 +133,7 @@ void StringW::destroy() {
     if (size <= 0) throw ConsistencyError();
 
     auto block = ta_.loadBlock<ssizeof<StrNext>()>(next);
-    auto new_next = getFromSpan<StrNext>(*block).next();
+    auto new_next = bytesAsType<StrNext>(*block).next();
 
     size_here = std::min(size, kOtherDataSize);
     ta_.free(next, size_here + sizeof(StrNext));
@@ -153,16 +153,16 @@ model::Value StringR::getValue() {
   auto page = db_.loadPage(addr_.pageNr());
   auto span = page->subspan(addr_.pageOffset());
 
-  auto next = getFromSpan<StrNext>(span).next();
+  auto next = bytesAsType<StrNext>(span).next();
   span = span.subspan(ssizeof<StrNext>());
-  auto size = getFromSpan<DskStringHdr>(span).size();
+  auto size = bytesAsType<DskStringHdr>(span).size();
   span = span.subspan(ssizeof<DskStringHdr>());
 
   std::string str;
   str.reserve(size);
 
   auto size_here = std::min(size, kFirstDataSize);
-  auto char_span = gsl::as_span<const char>(span.subspan(0, size_here));
+  auto char_span = bytesAsSpan<const char>(span.subspan(0, size_here));
   str.append(char_span.begin(), char_span.end());
   page.free();
   size -= size_here;
@@ -173,11 +173,11 @@ model::Value StringR::getValue() {
     page = db_.loadPage(next.pageNr());
     span = page->subspan(next.pageOffset());
 
-    auto new_next = getFromSpan<StrNext>(span).next();
+    auto new_next = bytesAsType<StrNext>(span).next();
     span = span.subspan(ssizeof<StrNext>());
 
     size_here = std::min(size, kOtherDataSize);
-    char_span = gsl::as_span<const char>(span.subspan(0, size_here));
+    char_span = bytesAsSpan<const char>(span.subspan(0, size_here));
     str.append(char_span.begin(), char_span.end());
     size -= size_here;
 

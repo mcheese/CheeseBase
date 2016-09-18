@@ -5,7 +5,6 @@
 #include "common.h"
 #include "sync.h"
 #include "types.h"
-#include <gsl.h>
 
 #include <map>
 

@@ -18,11 +18,10 @@ Database::Database(const std::string& file)
   if (boost::filesystem::exists(file)) {
     store_ = std::make_unique<Storage>(file, OpenMode::open_existing);
     auto page = store_->loadPage(PageNr(0));
-    hdr = gsl::as_span<const DskDatabaseHdr>(
-        page->subspan(0, ssizeof<DskDatabaseHdr>()))[0];
+    hdr = bytesAsType<DskDatabaseHdr>(*page);
 
     auto kc_blk =
-        gsl::as_span<KeyNext>(page->subspan(ssizeof<DskDatabaseHdr>()))[0];
+        bytesAsType<KeyNext>(page->subspan(ssizeof<DskDatabaseHdr>()));
     kc_blk.check();
     if (hdr.magic != k_magic || hdr.free_alloc_pg.value % k_page_size != 0 ||
         hdr.free_alloc_t1.value % (k_page_size / 2) != 0 ||
@@ -46,10 +45,10 @@ Database::Database(const std::string& file)
     hdr.end_of_file = Addr(k_page_size);
 
     // manually create first block of KeyCache
-    store_->storeWrite(
-        Writes{ { Addr(0), gsl::as_bytes<DskDatabaseHdr>({ hdr }) },
-                { Addr(sizeof(DskDatabaseHdr)), KeyNext(Addr(0)).data() },
-                { Addr(sizeof(DskDatabaseHdr) + sizeof(KeyNext)), 0 } });
+    store_->storeWrite(Writes{
+        { Addr(0), gsl::as_bytes(gsl::span<DskDatabaseHdr>{ &hdr, 1 }) },
+        { Addr(sizeof(DskDatabaseHdr)), KeyNext(Addr(0)).data() },
+        { Addr(sizeof(DskDatabaseHdr) + sizeof(KeyNext)), 0 } });
     alloc_ = std::make_unique<Allocator>(hdr, *store_);
     keycache_ = std::make_unique<KeyCache>(
         Block{ Addr(sizeof(DskDatabaseHdr)),
