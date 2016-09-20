@@ -37,7 +37,7 @@ InternalEntriesW::InternalEntriesW(Transaction& ta, Addr first,
     : ta_{ ta }
     , addr_{ ta.alloc(kBlockSize).addr }
     , node_{ std::make_unique<DskInternalNode>() } {
-  auto amount = std::distance(begin, end);
+  auto amount = gsl::narrow_cast<size_t>(std::distance(begin, end));
   Expects(amount <= kMaxInternalEntries);
   Expects(amount > 0);
 

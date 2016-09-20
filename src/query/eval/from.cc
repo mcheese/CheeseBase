@@ -8,7 +8,7 @@ namespace query {
 namespace eval {
 namespace {
 
-Bindings evalFrom(const FromEmpty&, const Env& env, DbSession* session) {
+Bindings evalFrom(const FromEmpty&, const Env&, DbSession*) {
   return { model::Tuple() };
 }
 
@@ -144,11 +144,6 @@ Bindings evalFrom(const FromFull& from, const Env& env, DbSession* session) {
   }
 
   return output;
-}
-
-template <typename T>
-Bindings evalFrom(T, const Env& env, DbSession* session) {
-  return {};
 }
 
 } // anonymous namespace

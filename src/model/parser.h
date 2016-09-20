@@ -43,6 +43,7 @@ const auto value_def = tuple_val | collection | scalar;
 
 ///////////////////////////////////////////////////////////////////////////////
 
+#pragma GCC diagnostic ignored  "-Wunused-parameter"
 BOOST_SPIRIT_DEFINE(null, missing, number, bool_val, string, scalar, tuple_mem,
                     tuple_val, collection, value);
 

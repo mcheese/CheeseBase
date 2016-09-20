@@ -8,7 +8,7 @@ add_definitions(-DBOOST_ALL_NO_LIB)
 set(Boost_USE_STATIC_LIBS ON)
 
 find_package(Boost COMPONENTS system thread filesystem regex REQUIRED)
-include_directories(
+include_directories(SYSTEM
   external/GSL/gsl
   ${Boost_INCLUDE_DIRS}
 )

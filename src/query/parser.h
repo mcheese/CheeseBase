@@ -312,6 +312,7 @@ const auto bag_def = x3::lit("{{") > -(expr % ',') > "}}";
 
 ///////////////////////////////////////////////////////////////////////////////
 
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 BOOST_SPIRIT_DEFINE(expr, expr0, expr1, expr2, expr3, expr4, expr5, expr6,
                     expr7, function, prefix1, infix1, infix2, infix3, infix4,
                     query, from, from_item, from_item0, from_item1, from_item2,

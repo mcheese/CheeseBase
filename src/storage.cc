@@ -16,7 +16,7 @@ namespace {
 template <typename S>
 void writeToSpan(const decltype(Write::data)& data, S target) {
   if (data.type() == typeid(uint64_t)) {
-    Expects(sizeof(uint64_t) <= target.size());
+    Expects(ssizeof<uint64_t>() <= target.size());
     bytesAsType<uint64_t>(target) = boost::get<uint64_t>(data);
   } else {
     auto& span = boost::get<gsl::span<const Byte>>(data);

@@ -11,8 +11,7 @@ namespace eval {
 namespace {
 
 // literal value
-model::Value evalExpr(const model::Value& val, const Env& env,
-                      DbSession* session) {
+model::Value evalExpr(const model::Value& val, const Env&, DbSession*) {
   return val;
 }
 
