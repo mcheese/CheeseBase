@@ -6,8 +6,22 @@ using Server = SimpleWeb::Server<SimpleWeb::HTTP>;
 
 const std::vector<std::string> examples {
   "SELECT ELEMENT x FROM [1,2,3,4,5,6,7,8] AS x WHERE x % 2 = 0",
+
   "SELECT x AS nr FROM [1,2,3,4] AS x",
-  "SELECT ELEMENT [x,y] FROM { a:1, b:2, c:3 } AS { x:y }"
+
+  "SELECT ELEMENT [x,y] FROM { a:1, b:2, c:3 } AS { x:y }",
+
+  R"(SELECT ELEMENT  { "odd": odd, "sum": SUM(x), "group": group }
+          FROM  numbers AS x
+      GROUP BY  x % 2 AS odd)",
+R"(    SELECT  o.product AS product,
+            o.amount  AS amount,
+            s.name    AS supplier
+
+      FROM  orders AS o
+INNER JOIN  suppliers AS s
+        ON  s.id == o.supplier)"
+
 };
 
 const std::string getExFuncs() {
@@ -16,8 +30,8 @@ const std::string getExFuncs() {
   for (auto& e : examples) {
     output += "function ex" + std::to_string(nr++) +
               "() { "
-              "document.getElementById(\"query-text\").value = \"" +
-              e + "\"; }";
+              "document.getElementById(\"query-text\").value = `" +
+              e + "`; }";
   }
   return output;
 }
