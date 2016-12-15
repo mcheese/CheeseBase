@@ -2,6 +2,7 @@
 #include "../ast.h"
 #include "../db_session.h"
 #include "env.h"
+#include <boost/container/flat_set.hpp>
 
 namespace cheesebase {
 namespace query {
@@ -13,6 +14,7 @@ struct Bindings : public Bindings_base {
   using Bindings_base::operator=;
 
   bool has_order_{ false };
+  boost::container::flat_set<Var> names_;
 };
 
 model::Value evalSfw(const SfwQuery& sfw, const Env& env, DbSession* session);

@@ -16,6 +16,8 @@ Bindings evalFrom(const FromEmpty&, const Env&, DbSession*) {
 Bindings evalFrom(const FromCollection& from, const Env& env,
                   DbSession* session) {
   Bindings output;
+  output.names_.insert(from.as_);
+  if (!from.at_.empty()) output.names_.insert(from.at_);
 
   auto val = evalExpr(from.expr_, env, session);
   auto collection = boost::get<model::Shared<model::Collection>>(&val);
@@ -44,6 +46,8 @@ Bindings evalFrom(const FromCollection& from, const Env& env,
 Bindings evalFrom(const FromTuple& from, const Env& env, DbSession* session) {
   Bindings output{};
   output.has_order_ = false;
+  output.names_.insert(from.as_name_);
+  output.names_.insert(from.as_value_);
 
   auto val = evalExpr(from.expr_, env, session);
   auto tuple = boost::get<model::Shared<model::Tuple>>(&val);
@@ -66,8 +70,17 @@ Bindings evalFrom(const FromInner& from, const Env& env, DbSession* session) {
   output.has_order_ = false;
 
   auto left = evalFrom(from.left_, env, session);
+
+  bool names_inserted = false;
   for (auto& l : left) {
     auto right = eval::evalFrom(from.right_, l + env, session);
+
+    if (!names_inserted) {
+      output.names_.insert(std::begin(left.names_), std::end(left.names_));
+      output.names_.insert(std::begin(right.names_), std::end(right.names_));
+      names_inserted = true;
+    }
+
     output.reserve(output.size() + right.size());
     for (auto& r : right) {
       r.insert(std::begin(l), std::end(l));
@@ -84,8 +97,18 @@ Bindings evalFrom(const FromLeft& from, const Env& env, DbSession* session) {
   output.has_order_ = false;
 
   auto left = evalFrom(from.left_, env, session);
+
+  bool names_inserted = false;
+
   for (auto& l : left) {
     auto right = eval::evalFrom(from.right_, l + env, session);
+
+    if (!names_inserted) {
+      output.names_.insert(std::begin(left.names_), std::end(left.names_));
+      output.names_.insert(std::begin(right.names_), std::end(right.names_));
+      names_inserted = true;
+    }
+
     output.reserve(output.size() + right.size());
 
     if (!right.empty()) {
@@ -94,7 +117,10 @@ Bindings evalFrom(const FromLeft& from, const Env& env, DbSession* session) {
         output.emplace_back(std::move(r));
       }
     } else {
-      output.emplace_back(l);
+      output.emplace_back();
+      auto& bindings = output.back();
+      for (auto& n : right.names_) bindings.emplace(n, model::Missing());
+      bindings.insert(std::begin(l), std::end(l));
     }
   }
 
@@ -108,6 +134,10 @@ Bindings evalFrom(const FromFull& from, const Env& env, DbSession* session) {
 
   auto left = evalFrom(from.left_, env, session);
   auto right = evalFrom(from.right_, env, session);
+
+  output.names_.insert(std::begin(left.names_), std::end(left.names_));
+  output.names_.insert(std::begin(right.names_), std::end(right.names_));
+
   std::vector<bool> right_used(right.size(), false);
 
   for (auto& l : left) {
@@ -131,6 +161,7 @@ Bindings evalFrom(const FromFull& from, const Env& env, DbSession* session) {
 
     if (!left_used) {
       output.emplace_back();
+      for (auto& n : right.names_) output.back().emplace(n, model::Missing());
       output.back().insert(std::begin(l), std::end(l));
     }
   }
@@ -140,6 +171,7 @@ Bindings evalFrom(const FromFull& from, const Env& env, DbSession* session) {
       auto& r = right[r_idx];
       output.emplace_back();
       output.back().insert(std::begin(r), std::end(r));
+      for (auto& n : left.names_) output.back().emplace(n, model::Missing());
     }
   }
 
