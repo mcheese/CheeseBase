@@ -15,6 +15,8 @@ namespace {
 
 template <typename ConstIt>
 std::pair<Key, model::Value> readValue(Database& db, ConstIt& it) {
+  gCountReads++;
+
   auto entry = DskLeafEntry(*it++);
   std::pair<Key, model::Value> ret;
   ret.first = entry.key.key();
@@ -34,10 +36,10 @@ std::pair<Key, model::Value> readValue(Database& db, ConstIt& it) {
   } else {
     switch (entry.value.type) {
     case ValueType::object:
-      ret.second = ObjectR(db, Addr(*it++)).getValue();
+      ret.second = model::Tuple(std::make_unique<ObjectR>(db, Addr(*it++)));
       break;
     case ValueType::array:
-      ret.second = ArrayR(db, Addr(*it++)).getValue();
+      ret.second = model::Collection(std::make_unique<ArrayR>(db, Addr(*it++)));
       break;
     case ValueType::number:
       union {

@@ -4,7 +4,7 @@
 
 #include "allocator.h"
 #include "keycache.h"
-#include "seri/object.h"
+#include "model/model.h"
 #include "storage.h"
 
 #include <boost/filesystem.hpp>

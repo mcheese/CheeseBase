@@ -10,11 +10,11 @@ namespace query {
 class DbSession {
 public:
   DbSession(Database& db) : db_{ db } {}
-
-  model::Value getNamedVal(const std::string& name);
+  const model::Tuple& getRoot();
 
 private:
   Database& db_;
+  boost::optional<model::Tuple> val_;
 };
 
 } // namespace query

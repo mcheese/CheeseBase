@@ -4,7 +4,6 @@
 
 #include "../core.h"
 #include "../exceptions.h"
-#include "../model/model.h"
 #include "btree/btree.h"
 #include "value.h"
 
@@ -45,30 +44,12 @@ class ObjectR : public ValueR {
 public:
   ObjectR(Database& db, Addr addr) : ValueR(db, addr), tree_{ db, addr } {}
 
-  model::Value getValue() override {
-    return tree_.getObject();
-  }
-
-  model::Value getChildValue(const std::string& key) {
-    auto k = db_.getKey(key);
-    if (!k) return model::Missing{};
-    return tree_.getChildValue(*k);
-  }
-
+  model::Value getValue() override;
+  model::Value getChildValue(const std::string& key);
   std::unique_ptr<disk::ValueW> getChildCollectionW(Transaction& ta,
-                                                    const std::string& key) {
-    auto k = db_.getKey(key);
-    if (!k) throw UnknownKeyError();
-    return tree_.getChildCollectionW(ta, *k);
-  }
-
-  std::unique_ptr<disk::ValueR> getChildCollectionR(const std::string& key) {
-    auto k = db_.getKey(key);
-    if (!k) throw UnknownKeyError();
-    return tree_.getChildCollectionR(*k);
-  }
-
-  model::Tuple getObject() { return tree_.getObject(); }
+                                                    const std::string& key);
+  std::unique_ptr<disk::ValueR> getChildCollectionR(const std::string& key);
+  model::Tuple getObject();
 
 private:
   btree::BtreeReadOnly tree_;

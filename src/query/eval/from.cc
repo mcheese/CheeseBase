@@ -9,7 +9,7 @@ namespace eval {
 namespace {
 
 Bindings evalFrom(const FromEmpty&, const Env&, DbSession*) {
-  return { model::Tuple() };
+  return { {} };
 }
 
 // <coll> AS <name> AT <idx>

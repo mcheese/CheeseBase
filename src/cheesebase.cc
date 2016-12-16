@@ -275,11 +275,11 @@ model::Value CheeseBase::get(const Location& location) const {
   if (location.back().which() == 0) {
     auto obj = dynamic_cast<disk::ObjectR*>(coll.get());
     if (obj == nullptr) throw NotFoundError();
-    return obj->getChildValue(boost::get<std::string>(location.back()));
+    return obj->getChildValue(boost::get<std::string>(location.back())).fetch();
   } else {
     auto arr = dynamic_cast<disk::ArrayR*>(coll.get());
     if (arr == nullptr) throw NotFoundError();
-    return arr->getChildValue(boost::get<uint64_t>(location.back()));
+    return arr->getChildValue(boost::get<uint64_t>(location.back())).fetch();
   }
 }
 
@@ -307,8 +307,14 @@ void CheeseBase::remove(const Location& location) {
 
 model::Value CheeseBase::query(const std::string& query) const {
   auto e = parseQuery(query);
+
+  auto count = disk::gCountReads;
   query::DbSession session{ *db_ };
-  return query::evalQuery(e, &session);
+  auto ret = query::evalQuery(e, &session);
+  ret.fetch();
+  std::cout << "\nQuery executed reading [" << disk::gCountReads - count
+            << "] values.\n";
+  return ret;
 }
 
 } // namespace cheesebase

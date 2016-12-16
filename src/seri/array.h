@@ -2,7 +2,6 @@
 #pragma once
 
 #include "../exceptions.h"
-#include "../model/model.h"
 #include "btree/btree.h"
 #include "value.h"
 
@@ -34,42 +33,11 @@ private:
 class ArrayR : public ValueR {
 public:
   ArrayR(Database& db, Addr addr) : ValueR(db, addr), tree_{ db, addr } {}
-
-  model::Value getValue() override {
-    return getArray();
-  }
-
-  model::Value getChildValue(uint64_t index) {
-    if (index > Key::sMaxKey) throw IndexOutOfRangeError();
-    return tree_.getChildValue(Key(index));
-  }
-
-  std::unique_ptr<ValueW> getChildCollectionW(Transaction& ta, uint64_t index) {
-    if (index > Key::sMaxKey) throw IndexOutOfRangeError();
-    return tree_.getChildCollectionW(ta, Key(index));
-  }
-
-  std::unique_ptr<ValueR> getChildCollectionR(uint64_t index) {
-    if (index > Key::sMaxKey) throw IndexOutOfRangeError();
-    return tree_.getChildCollectionR(Key(index));
-  }
-
-  model::Collection getArray() { 
-    model::Collection val;
-    val.has_order_ = true;
-
-    auto arr = tree_.getArray();
-    auto last = arr.rbegin();
-    if (last != arr.rend()) {
-      val.resize(last->first + 1, model::Missing{});
-
-      for (auto& e : arr) {
-        val[e.first] = std::move(e.second);
-      }
-    }
-
-    return val;
-  }
+  model::Value getValue() override;
+  model::Value getChildValue(uint64_t index);
+  std::unique_ptr<ValueW> getChildCollectionW(Transaction& ta, uint64_t index);
+  std::unique_ptr<ValueR> getChildCollectionR(uint64_t index);
+  model::Collection getArray();
 
 private:
   btree::BtreeReadOnly tree_;

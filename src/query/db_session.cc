@@ -5,10 +5,10 @@
 namespace cheesebase {
 namespace query {
 
-model::Value DbSession::getNamedVal(const std::string& name) {
-  // TODO: store disk Values, lazy Value
-  disk::ObjectR root_obj{ db_, kRoot };
-  return root_obj.getChildValue(name);
+const model::Tuple& DbSession::getRoot() {
+  if (!val_) val_ = model::Tuple(std::make_unique<disk::ObjectR>(db_, kRoot));
+
+  return val_.value();
 }
 
 

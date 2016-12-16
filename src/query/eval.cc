@@ -8,7 +8,7 @@ namespace query {
 
 model::Value evalQuery(const query::Expr& expr, DbSession* session) {
   return query::eval::evalExpr(
-      expr, query::eval::Env{ model::Tuple(), nullptr }, session);
+      expr, query::eval::Env{ {}, nullptr }, session);
 }
 
 } // namespace query

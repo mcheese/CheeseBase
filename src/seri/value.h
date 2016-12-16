@@ -4,7 +4,6 @@
 #include "../block_locks.h"
 #include "../common.h"
 #include "../core.h"
-#include "../model/model.h"
 
 namespace cheesebase {
 

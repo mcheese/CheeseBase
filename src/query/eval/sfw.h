@@ -8,7 +8,7 @@ namespace cheesebase {
 namespace query {
 namespace eval {
 
-using Bindings_base = std::vector<model::Tuple>;
+using Bindings_base = std::vector<model::Tuple_base>;
 struct Bindings : public Bindings_base {
   using Bindings_base::Bindings_base;
   using Bindings_base::operator=;

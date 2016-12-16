@@ -22,8 +22,10 @@ const x3::rule<class bool_val, model::Bool> bool_val = "bool_val";
 const x3::rule<class string, model::String> string = "string";
 const x3::rule<class scalar, model::Value> scalar = "scalar";
 const x3::rule<class tuple_mem, model::Tuple_member> tuple_mem = "tuple_mem";
-const x3::rule<class tuple_val, model::Tuple> tuple_val =  "tuple_val";
-const x3::rule<class collection, model::Collection> collection = "collection";
+const x3::rule<class tuple_val, model::STuple> tuple_val =  "tuple_val";
+const x3::rule<class tuple_base_val, model::Tuple_base> tuple_base_val =  "tuple_base_val";
+const x3::rule<class collection_base, model::Collection_base> collection_base = "collection_base";
+const x3::rule<class collection, model::SCollection> collection = "collection";
 const x3::rule<class value, model::Value> value = "value";
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -37,15 +39,17 @@ const auto bool_val_def = x3::lit("true") >> x3::attr(true) |
 const auto string_def = x3::lexeme['"' >> *(~x3::char_('"')) >> '"'];
 const auto scalar_def = missing | null | number | bool_val | string;
 const auto tuple_mem_def = string > ':' > value;
-const auto tuple_val_def = x3::lit('{') > -(tuple_mem % ',') > '}';
-const auto collection_def = x3::lit('[') > -(value % ',') > ']';
+const auto tuple_base_val_def = x3::lit('{') > -(tuple_mem % ',') > '}';
+const auto tuple_val_def = tuple_base_val;
+const auto collection_base_def = x3::lit('[') > -(value % ',') > ']';
+const auto collection_def = collection_base;
 const auto value_def = tuple_val | collection | scalar;
 
 ///////////////////////////////////////////////////////////////////////////////
 
 #pragma GCC diagnostic ignored  "-Wunused-parameter"
 BOOST_SPIRIT_DEFINE(null, missing, number, bool_val, string, scalar, tuple_mem,
-                    tuple_val, collection, value);
+                    tuple_val, tuple_base_val, collection, collection_base, value);
 
 } // namespace parser
 } // namespace cheesebase

@@ -18,6 +18,8 @@ set(SRC
   query/eval/sfw.cc
   query/eval/from.cc
   seri/string.cc
+  seri/object.cc
+  seri/array.cc
   seri/btree/btree.cc
   seri/btree/common.cc
   seri/btree/leaf.cc

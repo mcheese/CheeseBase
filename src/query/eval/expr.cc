@@ -29,7 +29,7 @@ model::Value evalExpr(const Var& var, const Env& env, DbSession* session) {
 
   if (!session) return model::Missing{};
 
-  return session->getNamedVal(var);
+  return session->getRoot().at(var);
 }
 
 // { <name>:<expr>, ... }
@@ -82,8 +82,7 @@ model::Value evalExpr(const TupleNav& nav, const Env& env, DbSession* session) {
 
   // find the member in the tuple
 
-  auto lookup = (*tuple)->find(nav.key_);
-  if (lookup == std::end(**tuple)) {
+  const auto nav_failure = [&nav]() -> model::Value {
     switch (kConf.tuple_nav.absent) {
     case Config::NavFailure::missing:
       return model::Missing{};
@@ -93,9 +92,15 @@ model::Value evalExpr(const TupleNav& nav, const Env& env, DbSession* session) {
       throw QueryError("Tuple navigation '." + nav.key_ +
                        "' failed: name not found");
     }
-  }
+  };
 
-  return lookup->second;
+  try {
+    return (*tuple)->at(nav.key_);
+  } catch (std::out_of_range&) {
+    return nav_failure();
+  } catch (UnknownKeyError&) {
+    return nav_failure();
+  }
 }
 
 // <expr>[<expr>]
@@ -137,7 +142,7 @@ model::Value evalExpr(const ArrayNav& nav, const Env& env, DbSession* session) {
 
   // find index in array
 
-  if (index >= (*coll)->size()) {
+  const auto nav_failure = [&index]() -> model::Value {
     switch (kConf.array_nav.absent) {
     case Config::NavFailure::missing:
       return model::Missing{};
@@ -147,9 +152,15 @@ model::Value evalExpr(const ArrayNav& nav, const Env& env, DbSession* session) {
       throw QueryError("Array navigation '[" + std::to_string(index) +
                        "]' failed: index out of bounds");
     }
-  }
+  };
 
-  return (**coll)[index];
+  try {
+    return (**coll).at(index);
+  } catch (std::out_of_range&) {
+    return nav_failure();
+  } catch (IndexOutOfRangeError&) {
+    return nav_failure();
+  }
 }
 
 // <expr> <op> <expr>
