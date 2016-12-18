@@ -28,6 +28,15 @@ inline model::Value funcSum(const model::Collection& input) {
   return std::accumulate(std::begin(input), std::end(input), 0.0, val_sum);
 }
 
+inline model::Value funcAvg(const model::Collection& input) {
+  if (input.empty()) return model::Null();
+  try {
+    return boost::get<model::Number>(funcSum(input)) / input.size();
+  } catch (QueryError&) {
+    throw QueryError("avg(): unsupported type");
+  }
+}
+
 inline model::Value funcMax(const model::Collection& input) {
   auto el = std::max_element(std::begin(input), std::end(input));
   return el != std::end(input) ? *el : model::Missing();
@@ -47,7 +56,7 @@ inline model::Value evalFunction(const Function& func, const Env& env,
   static const std::unordered_map<std::string, FuncPtr> funcs{ { "floor",
                                                                  &funcFloor } };
   static const std::unordered_map<std::string, FuncAggrPtr> aggr_funcs{
-    { "sum", &funcSum }, { "max", &funcMax }
+    { "sum", &funcSum }, { "max", &funcMax }, { "avg", &funcAvg }
   };
 
   std::string lower_name;
