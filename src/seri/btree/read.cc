@@ -15,8 +15,6 @@ namespace {
 
 template <typename ConstIt>
 std::pair<Key, model::Value> readValue(Database& db, ConstIt& it) {
-  gCountReads++;
-
   auto entry = DskLeafEntry(*it++);
   std::pair<Key, model::Value> ret;
   ret.first = entry.key.key();

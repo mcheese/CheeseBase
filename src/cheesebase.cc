@@ -307,14 +307,8 @@ void CheeseBase::remove(const Location& location) {
 
 model::Value CheeseBase::query(const std::string& query) const {
   auto e = parseQuery(query);
-
-  auto count = disk::gCountReads;
   query::DbSession session{ *db_ };
-  auto ret = query::evalQuery(e, &session);
-  ret.fetch();
-  std::cout << "\nQuery executed reading [" << disk::gCountReads - count
-            << "] values.\n";
-  return ret;
+  return query::evalQuery(e, &session).fetch();
 }
 
 } // namespace cheesebase

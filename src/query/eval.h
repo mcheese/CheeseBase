@@ -4,6 +4,7 @@
 
 namespace cheesebase {
 namespace query {
+
 struct Expr;
 
 model::Value evalQuery(const query::Expr& query, DbSession* db = nullptr);

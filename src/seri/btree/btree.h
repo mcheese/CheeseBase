@@ -22,10 +22,6 @@ using ArrayMap = std::map<uint64_t, model::Value>;
 
 namespace disk {
 
-// temporary debug counter, nobody but me should ever see this!
-// anti pattern hurts pain pain
-extern size_t gCountReads;
-
 class ValueW;
 class ValueR;
 
