@@ -20,7 +20,13 @@ R"(    SELECT  o.product AS product,
 
       FROM  orders AS o
 INNER JOIN  suppliers AS s
-        ON  s.id == o.supplier)"
+        ON  s.id == o.supplier)",
+R"( SELECT  p.fname AS first_name,
+          p.lname AS last_name
+    FROM  people AS p
+   WHERE  p.age < AVG(SELECT ELEMENT p.age
+                                FROM people AS p)
+ORDER BY  p.age)",
 
 };
 
