@@ -123,7 +123,7 @@ const auto name_def = x3::lexeme[x3::lit('`') >> +(~x3::char_('`')) >> '`'] |
                       x3::lexeme[x3::alpha >> *(x3::alnum | x3::char_('_'))];
 const auto var_def = name;
 
-const auto function_def = name >> '(' >> -(expr % ',') >> ')';
+const auto function_def = name >> '(' >> -(query % ',') >> ')';
 
 // operator by precedence
 
